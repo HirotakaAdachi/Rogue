@@ -1,0 +1,212 @@
+:root {
+    --bg-color: #0a0a0a;
+    --text-color: #e0e0e0;
+    --border-color: #333333;
+    --accent-color: #ffffff;
+    --font-mono: 'Courier New', Courier, monospace;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-mono);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+}
+
+.game-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border: 1px solid var(--border-color);
+    padding: 20px;
+}
+
+.stats-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: start;
+    font-size: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stats-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stats-group-right {
+    text-align: right;
+    padding-right: 40px;
+}
+
+.stats-group-right .equip-row {
+    justify-content: flex-end;
+}
+
+.stats-center {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 2px;
+}
+
+.equip-row {
+    display: inline-flex;
+    gap: 10px;
+}
+
+#lv {
+    color: #fbbf24;
+}
+
+#floor {
+    color: #fff;
+    font-size: 12px;
+}
+
+#game-canvas {
+    border: 1px solid var(--border-color);
+    background-color: #000;
+    cursor: default;
+}
+
+.log-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.game-log {
+    flex: 1;
+    height: 80px;
+    font-size: 12px;
+    overflow-y: hidden;
+    line-height: 1.4;
+    padding-top: 10px;
+    color: #888;
+    mask-image: linear-gradient(to bottom, transparent 0%, black 20%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 20%);
+}
+
+.best-floor-panel {
+    font-size: 11px;
+    color: #555;
+    text-align: right;
+    line-height: 1.4;
+    white-space: nowrap;
+    padding-top: 10px;
+    padding-bottom: 2px;
+}
+
+#minimap {
+    display: none;
+    text-align: center;
+}
+
+.minimap-row {
+    display: flex;
+    justify-content: center;
+}
+
+.minimap-row span {
+    display: inline-block;
+    width: 16px;
+    height: 9px;
+    line-height: 9px;
+    text-align: center;
+    font-size: 8px;
+}
+
+.best-floor-panel span {
+    color: #666;
+    font-size: 13px;
+}
+
+#room-type-label {
+    display: none;
+    text-align: right;
+    white-space: nowrap;
+    padding-top: 10px;
+    padding-bottom: 2px;
+    line-height: 1.6;
+    border-left: 1px solid #2a2a2a;
+    padding-left: 16px;
+    min-width: 130px;
+}
+#room-type-label .rtl-tag {
+    font-size: 9px;
+    color: #444;
+    letter-spacing: 2px;
+}
+#room-type-label .rtl-en {
+    font-size: 12px;
+    color: #38bdf8;
+}
+#room-type-label .rtl-theme-detail {
+    color: #777;
+}
+
+.game-log div:last-child {
+    color: var(--text-color);
+}
+
+/* Stamina Gauge */
+.stamina-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 18px;
+    /* 高さを固定 */
+}
+
+.stamina-gauge-bg {
+    display: inline-block;
+    width: 60px;
+    height: 6px;
+    /* 少し太くして見やすく */
+    background-color: #333;
+    border: 1px solid #444;
+    position: relative;
+    overflow: hidden;
+}
+
+#stamina-bar {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #38bdf8;
+    transition: width 0.2s ease-out;
+}
+
+@keyframes stamina-glow {
+    0% {
+        box-shadow: 0 0 2px #fbbf24;
+        filter: brightness(1);
+    }
+
+    100% {
+        box-shadow: 0 0 10px #fbbf24, 0 0 15px #fbbf24;
+        filter: brightness(1.5);
+    }
+}
+
+.stamina-glow-active {
+    animation: stamina-glow 0.8s infinite alternate !important;
+    border: 1px solid #fff;
+    box-sizing: border-box;
+}
