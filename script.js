@@ -243,7 +243,7 @@ function _checkRingConflict(idA, idB) {
 
 // 地形の指輪: 現在の塗り替えモード (0〜5 でサイクル)
 let _terrainRingMode = 0;
-const _TERRAIN_CYCLE  = ['~', '▢', '≈', 'ⅲ', '×', '⊘', '⊞', '·', '▲'];   // LAVA,ICE,POISON,LEECH_WEED,WEB,DISPEL,HEAL,FLOOR,ICICLE(→wrap)
+const _TERRAIN_CYCLE  = ['~', '▢', '≈', 'ⅲ', '×', '⊘', '⊞', '▲'];   // LAVA,ICE,POISON,LEECH_WEED,WEB,DISPEL,HEAL,ICICLE(→FLOOR→wrap)
 const _TERRAIN_NAMES  = ['LAVA', 'ICE', 'POISON', 'GRASS', 'WEB', 'DISPEL', 'HEAL', 'FLOOR'];
 const _TERRAIN_COLORS = ['#ef4444', '#7dd3fc', '#a855f7', '#4ade80', '#d4a574', '#c084fc', '#fde68a', '#94a3b8'];
 const _TERRAIN_NAMES_JA = ['溶岩', '氷', '毒沼', '寄生草', '蜘蛛の巣', 'ディスペル', '回復', '通常床'];
@@ -358,6 +358,9 @@ let wallDropCount = 0; // 壁破壊アイテムドロップのフロア内カウ
 let isXWallStage = false; // 壁の中からXが出てくるステージフラグ（1%確率）
 let _wallBreakPlayedThisTurn = false; // 同一ターン内でBREAKER壁破壊音・シェイクを1回だけ鳴らすフラグ
 let _queenSpawnedThisFloor = false;   // フロアごとに女王は1体まで
+let _f50KillsThisAction = 0;          // floor 50: 1アクションで倒したpassive E数
+let _f50TauTriggered = false;         // floor 50: τ出現済みフラグ
+let _f50Enraged = false;              // floor 50: プレイヤーが1体攻撃→全E一斉覚醒フラグ
 let _iceCrossMadmanSpawned = false;   // ICE_CROSS部屋で壁破壊→MADMAN出現フラグ（フロアごとにリセット）
 let floor4TomeWalls = []; // 4F: 壁の中に隠された魔導書の位置 [{x, y, sym}]
 let merchantState = null; // { x, y, facing: 'LEFT'|'RIGHT', jumpUntil: 0, nextAction: 0 }
@@ -1028,6 +1031,29 @@ const SOUNDS = {
         osc1.connect(g); osc2.connect(g); g.connect(audioCtx.destination);
         osc1.start(t); osc1.stop(t + 0.5);
         osc2.start(t); osc2.stop(t + 0.5);
+    },
+    TAU_APPEAR: () => {
+        // τ出現: 神秘的な鐘+シマー音
+        const t = audioCtx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+        notes.forEach((f, i) => {
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(f, t + i * 0.07);
+            g.gain.setValueAtTime(0, t + i * 0.07);
+            g.gain.linearRampToValueAtTime(0.12, t + i * 0.07 + 0.03);
+            g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.6);
+            osc.connect(g); g.connect(sfxMasterGain);
+            osc.start(t + i * 0.07); osc.stop(t + i * 0.07 + 0.7);
+        });
+        // 低音ベル
+        const bell = audioCtx.createOscillator();
+        const bg = audioCtx.createGain();
+        bell.type = 'sine'; bell.frequency.setValueAtTime(220, t);
+        bg.gain.setValueAtTime(0.18, t); bg.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+        bell.connect(bg); bg.connect(sfxMasterGain);
+        bell.start(t); bell.stop(t + 1.2);
     },
     ENEMY_ATTACK: () => {
         // 短い鋭い攻撃音（低めのsquare波）
@@ -2625,13 +2651,21 @@ function buildEscapeRoomMap() {
         _escapeRoomPageMaps.push(_hMap);
         _escapeRoomPageTempWalls.push([]);
 
-        // ギリシア文字コレクション敵 α〜ω を各島に分散配置（動作テスト用）
-        // 島座標はシード 0x7E4B2D81 から事前計算済み
+        // 下段中央の隠し部屋: α優先、討伐済みなら未収集ランダム（緑色）
         {
-            const _gPick = GREEK_ENEMIES[Math.floor(Math.random() * GREEK_ENEMIES.length)];
-            _escapeRoomPageEnemies.push([
-                { type: _gPick.type, x: 16, y: 5, hp: 80, maxHp: 80, flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 15, stunTurns: 0, flee: true, noFleeAnim: false }
-            ]);
+            const _h10Pool = greekKillCounts['GREEK_ALPHA']
+                ? GREEK_ENEMIES.filter(g => !greekKillCounts[g.type] && g.type !== 'GREEK_OMEGA' && g.type !== 'GREEK_TAU' && g.type !== 'GREEK_RHO')
+                : null;
+            const _h10Pick = _h10Pool
+                ? (_h10Pool.length > 0 ? _h10Pool[Math.floor(Math.random() * _h10Pool.length)] : null)
+                : GREEK_ENEMIES.find(g => g.type === 'GREEK_ALPHA');
+            if (_h10Pick) {
+                _escapeRoomPageEnemies.push([
+                    { type: _h10Pick.type, x: 16, y: 5, hp: 80, maxHp: 80, flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 15, stunTurns: 0, flee: true, noFleeAnim: false, _summonColor: '#4ade80' }
+                ]);
+            } else {
+                _escapeRoomPageEnemies.push([]);
+            }
         }
 
         _escapeRoomPageRings.push([]);
@@ -2770,40 +2804,34 @@ function buildEscapeRoomMap() {
         }
     }
 
-    // 下段右端のLiminal Space部屋: 99Fの名残として下半分に岩の棘をまばらに残す
+    // 下段右端のLiminal Space部屋: 下半分に岩の棘をまばらに散布
     {
         const _spikePage = 9;
         const _spikeMap = _escapeRoomPageMaps[_spikePage];
-        let _seed = 0x99ac1e;
-        const _rand = () => {
-            _seed = (_seed * 1664525 + 1013904223) >>> 0;
-            return _seed / 0x100000000;
-        };
-        const _clusters = [
-            { x: 8,  y: ROWS - 7, r: 6, p: 0.34 },
-            { x: 25, y: ROWS - 5, r: 8, p: 0.28 },
-            { x: 34, y: ROWS - 10, r: 5, p: 0.18 },
-        ];
-        const _spikeSeen = new Set();
-        for (let y = Math.floor(ROWS / 2) + 1; y < ROWS - 1; y++) {
+        const _spikeRng = (() => { let s = 20250523; return () => { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (s >>> 0) / 0x100000000; }; })();
+        for (let y = Math.floor(ROWS / 2); y < ROWS - 1; y++) {
             for (let x = 1; x < COLS - 1; x++) {
                 if (_spikeMap[y][x] !== SYMBOLS.FLOOR) continue;
-                if ((x >= 18 && x <= 21) && y >= ROWS - 2) continue;
-                let prob = 0.035;
-                for (const c of _clusters) {
-                    const d = Math.hypot(x - c.x, y - c.y);
-                    if (d < c.r) prob += c.p * (1 - d / c.r);
-                }
-                if (((x * 7 + y * 11) % 19) === 0) prob += 0.09;
-                if (((x * 5 + y * 3) % 23) === 0) prob -= 0.08;
-                if (_rand() < prob) {
-                    const k = `${x},${y}`;
-                    if (!_spikeSeen.has(k)) {
-                        _spikeSeen.add(k);
-                        _escapeRoomPageTempWalls[_spikePage].push({ x, y, hp: 2, type: 'ICICLE' });
-                    }
+                if (x >= 18 && x <= 21 && y >= ROWS - 3) continue; // 下通路
+                if (_spikeRng() < 0.40) {
+                    _escapeRoomPageTempWalls[_spikePage].push({ x, y, hp: 2, type: 'ICICLE' });
                 }
             }
+        }
+    }
+
+    // 下段右端のLiminal Space部屋: 透明なCOLLECTION敵 LATIN_P を配置
+    {
+        const _lpPage = 9;
+        const _lpMap = _escapeRoomPageMaps[_lpPage];
+        const _lpX = 3, _lpY = 22;
+        if (_lpMap[_lpY][_lpX] === SYMBOLS.FLOOR) {
+            _escapeRoomPageEnemies[_lpPage].push({
+                type: 'LATIN_P', x: _lpX, y: _lpY,
+                hp: 500, maxHp: 500,
+                flashUntil: 0, offsetX: 0, offsetY: 0,
+                expValue: 15, stunTurns: 0
+            });
         }
     }
 
@@ -2842,11 +2870,11 @@ function buildEscapeRoomMap() {
         const _mimicPage = 4;
         const _mimicMap = _escapeRoomPageMaps[_mimicPage];
         const _mimics = [
-            { type: 'MIMIC',      x: 21, y: 18, hp: 50 + 48 * 3, expValue: 80 },
-            { type: 'RING_MIMIC',   x: 18, y: 17, hp: 40 + 48 * 2, expValue: 60 },
-            { type: 'TOME_MIMIC',   x: 23, y: 16, hp: 40 + 48 * 2, expValue: 60, disguiseSymbol: SYMBOLS.HEAL_TOME },
-            { type: 'WEAPON_MIMIC', x: 19, y: 20, hp: 40 + 48 * 2, expValue: 60, disguiseSymbol: SYMBOLS.SWORD },
-            { type: 'ARMOR_MIMIC',  x: 24, y: 19, hp: 40 + 48 * 2, expValue: 60, disguiseSymbol: SYMBOLS.ARMOR },
+            { type: 'MIMIC',        x: 35, y: 22, hp: 50 + 48 * 3, expValue: 80 },
+            { type: 'RING_MIMIC',   x: 33, y: 20, hp: 40 + 48 * 2, expValue: 60 },
+            { type: 'TOME_MIMIC',   x: 37, y: 21, hp: 40 + 48 * 2, expValue: 60, disguiseSymbol: SYMBOLS.HEAL_TOME },
+            { type: 'WEAPON_MIMIC', x: 32, y: 22, hp: 40 + 48 * 2, expValue: 60, disguiseSymbol: SYMBOLS.SWORD },
+            { type: 'ARMOR_MIMIC',  x: 36, y: 19, hp: 40 + 48 * 2, expValue: 60, disguiseSymbol: SYMBOLS.ARMOR },
         ];
         for (const m of _mimics) {
             if (_mimicMap[m.y][m.x] !== SYMBOLS.FLOOR) continue;
@@ -3061,6 +3089,20 @@ function buildEscapeRoomMap() {
     // ベースマップを保存（差分計算の基準）してからlocalStorage復元
     _escapeRoomPageBaseMaps = _escapeRoomPageMaps.map(m => m.map(row => [...row]));
     loadEscapeRoomData();
+
+    // LATIN_P フォールバック: page9から消失かつ未収集なら page11（左端隠し部屋）に出現
+    {
+        const _lpKilled = latinKillCounts['LATIN_P'] > 0;
+        const _lpInPage9  = _escapeRoomPageEnemies[9]?.some(e => e.type === 'LATIN_P');
+        const _lpInPage11 = _escapeRoomPageEnemies[11]?.some(e => e.type === 'LATIN_P');
+        if (!_lpKilled && !_lpInPage9 && !_lpInPage11 && _escapeRoomPageEnemies[11]) {
+            _escapeRoomPageEnemies[11].push({
+                type: 'LATIN_P', x: 8, y: 14, hp: 500, maxHp: 500,
+                flashUntil: 0, offsetX: 0, offsetY: 0,
+                expValue: 15, stunTurns: 0
+            });
+        }
+    }
 
     map = _escapeRoomPageMaps[0];
 }
@@ -3970,6 +4012,18 @@ function _initFloor36() {
                 _rPhase: 1, _faceDir: p.dir, _rgPatrol: true });
         }
 
+        // 右上隅に透明なCOLLECTION敵ρを潜ませる
+        const _rhoX = COLS - 2, _rhoY = 2;
+        _f36Patrol[_rhoY][_rhoX] = SYMBOLS.FLOOR; // 壁が置かれていても強制クリア
+        if (!greekKillCounts['GREEK_RHO']) {
+            _f36PatrolEnemies.push({
+                type: 'GREEK_RHO', x: _rhoX, y: _rhoY,
+                hp: 500, maxHp: 500,
+                flashUntil: 0, offsetX: 0, offsetY: 0,
+                expValue: 15, stunTurns: 0
+            });
+        }
+
         screenGrid.maps[1][0]    = _f36Patrol;
         screenGrid.enemies[1][0] = _f36PatrolEnemies;
         screenGrid.types[1][0]   = 'ROULETTE_GUARD';
@@ -4261,40 +4315,21 @@ function _initFloor50() {
         if (map[ey][ex] !== SYMBOLS.FLOOR) continue;
         enemies.push({
             type: 'NORMAL', x: ex, y: ey, hp: 5, maxHp: 5,
-            flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 2, stunTurns: 0
+            flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 2, stunTurns: 0,
+            _f50Passive: true
         });
         enemyCount++;
     }
 
     map[1][1] = SYMBOLS.KEY;
-    const f50Tomes = [SYMBOLS.SPEED, SYMBOLS.CHARM, SYMBOLS.STEALTH, SYMBOLS.ESCAPE, SYMBOLS.EXPLOSION, SYMBOLS.GUARDIAN, SYMBOLS.HEAL_TOME, SYMBOLS.BREAKER_TOME];
-    map[1][COLS - 2] = f50Tomes[Math.floor(Math.random() * f50Tomes.length)];
 
-    {
-        const spHp = 100 + floorLevel * 5;
-        const candidates = [
-            { x: COLS - 3, y: 2 }, { x: COLS - 3, y: 3 }, { x: COLS - 3, y: 4 },
-            { x: COLS - 4, y: 2 }, { x: COLS - 4, y: 3 }, { x: COLS - 4, y: 4 },
-        ];
-        let spawnPos = null;
-        for (const c of candidates) {
-            if (c.y < 1 || c.y >= ROWS - 1 || c.x < 1 || c.x >= COLS - 1) continue;
-            if (map[c.y][c.x] === SYMBOLS.WALL) map[c.y][c.x] = SYMBOLS.FLOOR;
-            if (enemies.some(en => en.x === c.x && en.y === c.y)) continue;
-            if (c.x === player.x && c.y === player.y) continue;
-            spawnPos = c;
-            break;
-        }
-        if (!spawnPos) spawnPos = { x: COLS - 4, y: 2 };
-        if (map[spawnPos.y][spawnPos.x] !== SYMBOLS.FLOOR) map[spawnPos.y][spawnPos.x] = SYMBOLS.FLOOR;
-        enemies.push({
-            type: 'SPAWNER', x: spawnPos.x, y: spawnPos.y,
-            hp: spHp, maxHp: spHp,
-            flashUntil: 0, offsetX: 0, offsetY: 0,
-            expValue: 50, stunTurns: 0,
-            spawnCooldown: 10, immuneToWind: true
-        });
-    }
+    // 謎のスポーンブロック（τ出現専用。何も生まない）
+    enemies.push({
+        type: 'SPAWNER', x: COLS - 3, y: 3,
+        hp: 9999, maxHp: 9999,
+        flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 0, stunTurns: 0,
+        spawnCooldown: 9999, _f50TauSpawner: true
+    });
 
     map[3][20] = SYMBOLS.DOOR;
     addLog("The exit is SEALED (⊗). Find the KEY (🗝) in the corner!");
@@ -11592,7 +11627,7 @@ function initMap() {
         // _bizTypes はギリシア文字ループでも参照するためブロック外に宣言
         const _bizTypes = new Set(['MONSTER_FLOOD','LAVA_SEA','FROZEN_PRISON','VOID_CELLS','CHAOS_ALTAR','TREASURY','BOMBER_MAZE','SPAWNER_HIVE','MIMIC_GARDEN','ISLAND_HAZARD','RIVER_CROSSING','TIGHT_MAZE','FACTION_WAR','FLEEING_HORDE','CIRCLE_SIEGE','KINGS_COURT','VSCROLL_WALLS','BIG_AMBUSH_HALL','STAGE_39','BOAR_CHAMBER','LAVA_CROSS','VERTICAL_RIVER','MAZE_LAVA_CORNER','WARP_CELLS','WARP_CELLS_V','WARP_CELLS_H','AURA_MAZE','bizarre','turret_gauntlet','poison_wasteland','novel_corridor']);
         {
-            const _lcPool = LATIN_ENEMIES.filter(t => !latinKillCounts[t.type]);
+            const _lcPool = LATIN_ENEMIES.filter(t => !latinKillCounts[t.type] && t.type !== 'LATIN_P');
             if (_lcPool.length > 0) {
                 let _lcSpawned = false;
                 outer: for (let _lcSy = 0; _lcSy < screenGridRows; _lcSy++) {
@@ -11642,7 +11677,7 @@ function initMap() {
         }
         // ギリシア文字コレクション敵: 70F以降・1フロアに最大1体
         if (floorLevel >= 70) {
-            const _gcPool = GREEK_ENEMIES;
+            const _gcPool = GREEK_ENEMIES.filter(g => g.type !== 'GREEK_OMEGA' && g.type !== 'GREEK_TAU' && g.type !== 'GREEK_RHO');
             // ラテン文字敵がすでにフロア内に出現している場合は確率を1/10に抑える
             const _gcLatinPresent = screenGrid.enemies.some(row => row.some(arr => arr.some(e => LATIN_ENEMY_TYPES.has(e.type))));
             const _gcProbScale = _gcLatinPresent ? 0.1 : 1.0;
@@ -19337,7 +19372,7 @@ function initMap() {
         addLog("💨 FLOOR 45: Violent gales tear through this labyrinth!");
     }
     const windChance = 0.015;
-    if (floorLevel >= 10 && !isWindFloor && !fixedStages.includes(floorLevel) && floorLevel !== 37 && !isRoomTestMode && Math.random() < windChance) {
+    if (floorLevel >= 10 && !isWindFloor && !fixedStages.includes(floorLevel) && floorLevel !== 37 && floorLevel !== 50 && !isRoomTestMode && Math.random() < windChance) {
         isWindFloor = false; // wind disabled
         windTimer = 4; // 1ターン目で即発動
         addLog("💨 WARNING: Strong winds blow through this floor!");
@@ -21149,8 +21184,8 @@ function initMap() {
     // === コレクター敵（ギリシア+ラテン）: 101F+・未収集のみ・深さスケーリング確率でスポーン ===
     if (floorLevel >= 101) {
         const _cPool = [
-            ...GREEK_ENEMIES.filter(g => !greekKillCounts[g.type]),
-            ...LATIN_ENEMIES.filter(g => !latinKillCounts[g.type] && floorLevel >= (g.minFloor || 101)),
+            ...GREEK_ENEMIES.filter(g => !greekKillCounts[g.type] && g.type !== 'GREEK_OMEGA' && g.type !== 'GREEK_TAU' && g.type !== 'GREEK_RHO'),
+            ...LATIN_ENEMIES.filter(g => !latinKillCounts[g.type] && g.type !== 'LATIN_P' && floorLevel >= (g.minFloor || 101)),
         ];
         if (_cPool.length > 0) {
             // 101F=30%, 200F≈100% で線形増加
@@ -21586,7 +21621,7 @@ function initMap() {
 // 女王スポーン: 全フロア共通（initMap後に呼ぶ）
 function spawnQueenIfEligible() {
     if (_queenSpawnedThisFloor || floorLevel < 5) return;
-    if (floorLevel === 39) return;
+    if (floorLevel === 39 || floorLevel === 50) return;
     if (Math.random() >= 0.015) return;
     const qCandidates = enemies.filter(e => e.type === 'NORMAL' && !e.isAlly && !e._dead);
     if (qCandidates.length === 0) return;
@@ -25213,10 +25248,20 @@ function draw(now) {
                     const _cd = ALL_COLLECTOR_MAP.get(e.type);
                     eColor = e._summonColor || _cd.color; // 召喚色優先、なければ自然色
                     eChar = _cd.char;
-                    ctx.shadowColor = eColor; ctx.shadowBlur = 10;
-                    ctx.font = GREEK_ENEMY_TYPES.has(e.type)
-                        ? `14px "Courier New", monospace`
-                        : `bold 14px "Courier New", monospace`;
+                    ctx.font = `14px "Courier New", monospace`;
+                    if (e.type === 'LATIN_P' || e.type === 'GREEK_RHO') {
+                        const _lpRevealed = isFlashing || (e._lpRevealTurns > 0);
+                        if (_lpRevealed) {
+                            eColor = '#ef4444';
+                            ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 16;
+                        } else {
+                            ctx.globalAlpha = 0.12;
+                            eColor = '#94a3b8';
+                            ctx.shadowColor = '#94a3b8'; ctx.shadowBlur = 3;
+                        }
+                    } else {
+                        ctx.shadowColor = eColor; ctx.shadowBlur = 10;
+                    }
                 }
                 else if (e.type === 'WALL_MIMIC') {
                     eColor = '#f87171'; eChar = 'M';
@@ -25805,6 +25850,44 @@ function draw(now) {
         }
     }
 
+    // リミナルスペース 棘の間（page 9）: 暗闇オーバーレイ（プレイヤー周辺のみ光源）
+    if (isInEscapeRoom && _escapeRoomPage === 9) {
+        const _spPlx = (player.x + player.offsetX / TILE_SIZE + 0.5) * TILE_SIZE;
+        const _spPly = (player.y + player.offsetY / TILE_SIZE + 0.5) * TILE_SIZE;
+        const _spLR = TILE_SIZE * 4.5; // 光源半径
+        if (!draw._spOff) draw._spOff = document.createElement('canvas');
+        const _spOff = draw._spOff;
+        if (_spOff.width !== CANVAS_W || _spOff.height !== CANVAS_H) {
+            _spOff.width = CANVAS_W; _spOff.height = CANVAS_H;
+        }
+        const _spOCtx = _spOff.getContext('2d');
+        _spOCtx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+        _spOCtx.fillStyle = 'rgba(0,0,0,0.96)';
+        _spOCtx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        if (isPlayerVisible) {
+            _spOCtx.globalCompositeOperation = 'destination-out';
+            const _spGrd = _spOCtx.createRadialGradient(_spPlx, _spPly, 0, _spPlx, _spPly, _spLR);
+            _spGrd.addColorStop(0,    'rgba(0,0,0,1)');
+            _spGrd.addColorStop(0.45, 'rgba(0,0,0,1)');
+            _spGrd.addColorStop(0.75, 'rgba(0,0,0,0.55)');
+            _spGrd.addColorStop(1,    'rgba(0,0,0,0)');
+            _spOCtx.fillStyle = _spGrd;
+            _spOCtx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+            _spOCtx.globalCompositeOperation = 'source-over';
+        }
+        // WARP_PAD tiles show through darkness as sharp cutouts (no surrounding glow)
+        _spOCtx.globalCompositeOperation = 'destination-out';
+        _spOCtx.fillStyle = 'rgba(0,0,0,1)';
+        for (let _wy = 0; _wy < ROWS; _wy++) {
+            for (let _wx = 0; _wx < COLS; _wx++) {
+                if (map[_wy][_wx] !== SYMBOLS.WARP_PAD) continue;
+                _spOCtx.fillRect(_wx * TILE_SIZE, _wy * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
+        }
+        _spOCtx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(_spOff, 0, 0);
+    }
+
     // ROULETTE_GUARD: 薄暗いオーバーレイ（Rの視野・主人公は通常輝度、視野外は暗く・壁はやや明るめ）
     if (multiScreenMode && screenGrid &&
         screenGrid.types?.[currentScreen.y]?.[currentScreen.x] === 'ROULETTE_GUARD') {
@@ -26131,9 +26214,15 @@ function detonateBomb(bomb) {
                     handleEnemyDeath(e, true);
                 } else {
                     // ドラゴンは炎・爆発に強い耐性を持つ（即死を防ぐ）
-                    const eDmg = e.type === 'DRAGON'
+                    let eDmg = e.type === 'DRAGON'
                         ? dragonFireResist(damage)
                         : e.hp;
+                    // LATIN_P / GREEK_RHO: 爆発でも5ヒット耐性を維持
+                    if (e.type === 'LATIN_P' || e.type === 'GREEK_RHO') {
+                        eDmg = Math.min(Math.ceil(e.maxHp / 5), e.hp);
+                        e._lpRevealTurns = 4;
+                        e.flee = true;
+                    }
                     e.hp -= eDmg;
                     spawnFloatingText(e.x, e.y, `-${eDmg}`, "#ef4444");
                     if (e.hp <= 0) {
@@ -26447,8 +26536,16 @@ function tryPlaceBlock(dx, dy) {
         if (_unpaintable.has(t)) return false;
         if (bx < 1 || bx >= COLS - 1 || by < 1 || by >= ROWS - 1) return false;
         if (enemies.some(e => e.x === bx && e.y === by)) return false;
+        // 地形の指輪が置いた棘は再操作で床に戻す
+        const _trIcicle = tempWalls.find(w => w.x === bx && w.y === by && w.type === 'ICICLE' && w._terrainRingPlaced);
+        if (_trIcicle) {
+            tempWalls = tempWalls.filter(w => w !== _trIcicle);
+            map[by][bx] = SYMBOLS.FLOOR;
+            SOUNDS.TERRAIN_RESET();
+            return true;
+        }
         if (tempWalls.some(w => w.x === bx && w.y === by)) return false;
-        // 現在のタイルを起点に次の地形へ切り替える（FLOOR→WALL→LAVA でサイクル）
+        // 現在のタイルを起点に次の地形へ切り替える（床→LAVA→...→ICICLE でサイクル）
         const _curIdx = _TERRAIN_CYCLE.indexOf(t);
         const _nextIdx = _curIdx >= 0
             ? (_curIdx + 1) % _TERRAIN_CYCLE.length
@@ -28909,6 +29006,7 @@ async function handleAction(dx, dy) {
     _syncInputDx = dx;
     _syncInputDy = dy;
     _lavaPlayedThisFullTurn = false; // 毎ターン先頭でリセット
+    _f50KillsThisAction = 0;
 
     if (dx > 0) player.facing = 'RIGHT';
     else if (dx < 0) player.facing = 'LEFT';
@@ -32090,6 +32188,50 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
         }
     }
 
+    // floor 50: passive E 100体撃破でτ出現 — kill source問わず(レーザー含む)
+    if (floorLevel === 50 && enemy._f50Passive && !_f50TauTriggered) {
+        _f50KillsThisAction++;
+        if (_f50KillsThisAction >= 100) {
+            _f50TauTriggered = true;
+            const _tauDef = ALL_COLLECTOR_MAP.get('GREEK_TAU');
+            // τ専用スポーンブロックの隣に出現させる
+            const _tauBlock = enemies.find(e => e._f50TauSpawner && !e._dead);
+            let _tx = -1, _ty = -1;
+            if (_tauBlock) {
+                const _tbDirs = [{x:0,y:1},{x:-1,y:0},{x:0,y:-1},{x:1,y:0}];
+                for (const _d of _tbDirs) {
+                    const _cx = _tauBlock.x + _d.x, _cy = _tauBlock.y + _d.y;
+                    if (map[_cy]?.[_cx] === SYMBOLS.FLOOR && !enemies.some(e => e.x === _cx && e.y === _cy))
+                        { _tx = _cx; _ty = _cy; break; }
+                }
+                if (_tx < 0) { _tx = _tauBlock.x; _ty = _tauBlock.y + 1; } // fallback
+            }
+            if (_tx < 0) {
+                for (let _att = 0; _att < 500 && _tx < 0; _att++) {
+                    const _cx = 5 + Math.floor(Math.random() * (COLS - 10));
+                    const _cy = 13 + Math.floor(Math.random() * 6);
+                    if (map[_cy]?.[_cx] === SYMBOLS.FLOOR && !enemies.some(e => e.x === _cx && e.y === _cy))
+                        { _tx = _cx; _ty = _cy; }
+                }
+            }
+            if (_tx >= 0) {
+                const _tauEnemy = { type: 'GREEK_TAU', x: _tx, y: _ty,
+                    hp: 80, maxHp: 80, flashUntil: 0, offsetX: 0, offsetY: 0,
+                    expValue: 15, stunTurns: 0, flee: true, noFleeAnim: false };
+                enemies.push(_tauEnemy);
+                SOUNDS.TAU_APPEAR();
+                addLog('A rare specimen appeared from the silence: τ!');
+                // 跳びはね演出
+                _tauEnemy.offsetY = -18; draw();
+                setTimeout(() => { _tauEnemy.offsetY = 4; draw(); }, 120);
+                setTimeout(() => { _tauEnemy.offsetY = -10; draw(); }, 220);
+                setTimeout(() => { _tauEnemy.offsetY = 2; draw(); }, 320);
+                setTimeout(() => { _tauEnemy.offsetY = -5; draw(); }, 400);
+                setTimeout(() => { _tauEnemy.offsetY = 0; draw(); }, 470);
+            }
+        }
+    }
+
     if (killedByPlayer || killedByWisp) {
         if (killedByPlayer) {
             player.totalKills++;
@@ -32102,7 +32244,8 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
                     latinKillCounts[enemy.type] = (latinKillCounts[enemy.type] || 0) + 1;
                 }
                 addLog(`You caught the ${_cd.char}! A rare specimen!`);
-                spawnFloatingText(enemy.x, enemy.y, _cd.char, _cd.color, 1500);
+                SOUNDS.TAU_APPEAR();
+                spawnFloatingText(player.x, player.y - 1, _cd.char, _cd.color, 2000);
                 saveGame();
             }
         }
@@ -32485,8 +32628,21 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
         setScreenShake(12, 250);
     }
 
+    // LATIN_P / GREEK_RHO: always survives at least 5 hits regardless of attack power; reveal and flee on hit
+    if (enemy.type === 'LATIN_P' || enemy.type === 'GREEK_RHO') {
+        damage = Math.min(damage, Math.ceil(enemy.maxHp / 5));
+        enemy._lpRevealTurns = 4;
+        enemy.flee = true;
+    }
     enemy.hp -= damage; enemy.flashUntil = performance.now() + 200;
     spawnDamageText(player.x + dx, player.y + dy, damage, isCritical ? '#fbbf24' : '#f87171');
+
+    // floor 50: 最初の攻撃で全passive E が一斉覚醒
+    if (floorLevel === 50 && enemy._f50Passive && !_f50Enraged) {
+        _f50Enraged = true;
+        spawnFloatingText(enemy.x, enemy.y, '!', '#ef4444', 1200);
+        addLog('The E swarm turns hostile!');
+    }
 
     // ROULETTE: 被弾ごとにフェーズを1つ進める（色変化＆状態変化）
     if (enemy.type === 'ROULETTE' && enemy.hp > 0) {
@@ -33859,6 +34015,7 @@ async function enemyTurn() {
         const e = enemies[i];
         if (!e || e.hp <= 0) continue;
         if (e.type === 'LETTER' && e._friendly) continue;
+        if (e._f50Passive && !_f50Enraged) continue; // floor 50: 覚醒前は完全静止
 
         // ===== AI: hostile LETTER — 大文字種別簡易AI =====
         if (e.type === 'LETTER' && !e._friendly) {
@@ -36596,6 +36753,23 @@ async function enemyTurn() {
                 //   score = プレイヤーからのマンハッタン距離
                 //         - 直前逆方向ペナルティ（往復スタック防止）
                 //         + ランダムノイズ（単調ループ回避）
+                // コレクター敵用: 現在アクティブなレーザータイルのSetを生成
+                const _tauLaserTiles = (() => {
+                    if (!ALL_COLLECTOR_TYPES.has(e.type)) return null;
+                    const s = new Set();
+                    for (const t of enemies) {
+                        if ((t.type !== 'TURRET' && t.type !== 'HOPPER_TURRET') || t.hp <= 0 || t._dead) continue;
+                        const ldx = [0,1,0,-1][t.dir], ldy = [-1,0,1,0][t.dir];
+                        let lx = t.x + ldx, ly = t.y + ldy;
+                        while (lx >= 0 && lx < COLS && ly >= 0 && ly < ROWS) {
+                            if (isWallAt(lx, ly)) break;
+                            s.add(`${lx},${ly}`);
+                            lx += ldx; ly += ldy;
+                        }
+                    }
+                    return s;
+                })();
+
                 const pickFleeDir = (ent) => {
                     const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
                     const valid = dirs.filter(d => {
@@ -36617,6 +36791,8 @@ async function enemyTurn() {
                         if (ent.type === 'KEY_RUNNER' && map[ent.y+d.y]?.[ent.x+d.x] === SYMBOLS.WARP_PAD) {
                             score += 30;
                         }
+                        // コレクター敵: レーザー上のタイルを強く回避
+                        if (_tauLaserTiles && _tauLaserTiles.has(`${ent.x+d.x},${ent.y+d.y}`)) score -= 20;
                         score += Math.random() * 2; // ランダムノイズ
                         return { d, score };
                     });
@@ -36625,6 +36801,7 @@ async function enemyTurn() {
                 };
 
                 const _krSx = e.x, _krSy = e.y; // スタック検知用：ターン開始位置
+                if ((e.type === 'LATIN_P' || e.type === 'GREEK_RHO') && e._lpRevealTurns > 0) e._lpRevealTurns--;
                 const _isCollector = ALL_COLLECTOR_TYPES.has(e.type);
                 const chosen = pickFleeDir(e);
                 if (chosen) {
@@ -37217,6 +37394,7 @@ async function enemyTurn() {
 
         // ===== AI: SPAWNER =====
         if (e.type === 'SPAWNER') {
+            if (e._f50TauSpawner) continue; // floor 50: τ専用ブロック、何も生まない
             // 四方（上下左右）がすべて塞がれている場合は生成停止（クールダウンも進まない）
             { const _s4 = [{x:0,y:-1},{x:1,y:0},{x:0,y:1},{x:-1,y:0}];
               if (_s4.every(d => { const bx=e.x+d.x,by=e.y+d.y;
@@ -41350,7 +41528,7 @@ async function applyLaserDamage() {
                     if (oe !== e && oe.hp > 0 && !oe._dead) {
                         if (oe.type === 'WEAVER') return; // WEAVERはレーザー無効
                         if (oe.isAlly && oe.type === 'CLUSTER') return; // 仲間CLUSTERはレーザー無効
-                        if (ALL_COLLECTOR_TYPES.has(oe.type)) return; // コレクター敵はレーザー無効
+                        if (ALL_COLLECTOR_TYPES.has(oe.type) && oe.type !== 'GREEK_TAU') return; // コレクター敵はレーザー無効（τは例外）
                         if (e.isAlly && (oe.isAlly || oe._summonedAlly)) return; // 青色TURRETは仲間・白色を攻撃しない
                         const enemyLaserDmg = 50 + floorLevel * 5;
                         if (oe.x === lx && oe.y === ly) {
@@ -42075,6 +42253,7 @@ async function startGame(startFloor = 1, isTestMode = false) {
     isPlayerVisible = false; // 着地まで隠す
     gameOverAlpha = 0;
     floorLevel = startFloor; turnCount = 0; tempWalls = []; wisps = []; pendingF4Tutorial = false;
+    _f50TauTriggered = false; _f50Enraged = false;
 
     // 演出の準備：最初から画面を真っ暗にしておく（一瞬のチラつき防止）
     transition.active = true;
@@ -42115,6 +42294,12 @@ async function _restoreEscapeRoom() {
     const _savedPage = _escapeRoomPage;
     buildEscapeRoomMap();           // マップ再構築 + loadEscapeRoomData()
     _escapeRoomPage = _savedPage;   // buildEscapeRoomMap が 0 にリセットするので再適用
+
+    // performance.now()はページリロードでリセットされるため、保存済みの
+    // mimicTransitionEnd が未来値のまま残るとフリッカーが永続する。ロード時に全リセット。
+    for (const pageEnemies of _escapeRoomPageEnemies) {
+        for (const e of pageEnemies) { if (e.mimicTransitionEnd) e.mimicTransitionEnd = 0; }
+    }
 
     // ロックされたページに保存されていた場合、最寄りのアンロック済みページへ移動
     {
@@ -43093,62 +43278,6 @@ window.addEventListener('keydown', async e => {
         }
     }
 
-    if (e.key === '4' || e.key.toLowerCase() === 'g') {
-        if (gameState === 'PLAYING' && !isProcessing && player.guardianTomes > 0 && !player.isShielded) {
-            useGuardianTome();
-        }
-        return;
-    }
-
-    if (e.key === '5' || e.key.toLowerCase() === 'r') {
-        if (gameState === 'PLAYING' && !isProcessing && player.escapeTomes > 0) {
-            isProcessing = true;
-            enterEscapeRoom();
-        }
-        return;
-    }
-
-    if (e.key === '6' || e.key.toLowerCase() === 'h') {
-        if (gameState === 'PLAYING' && !isProcessing && player.healTomes > 0) {
-            useHealTome();
-        }
-        return;
-    }
-
-    if (e.key === '7' || e.key.toLowerCase() === 'b') {
-        if (gameState === 'PLAYING' && !isProcessing && player.breakerTomes > 0 && !player.isBreaker) {
-            useBreakerTome();
-        }
-        return;
-    }
-
-    if (e.key === '8' || e.key.toLowerCase() === 'f') {
-        if (gameState === 'PLAYING' && !isProcessing && player.fairyCount > 0) {
-            useFairy();
-        }
-        return;
-    }
-
-    if (e.key === '3' || e.key.toLowerCase() === 'f') {
-        if (gameState === 'PLAYING' && !isProcessing && player.explosionTomes > 0) {
-            useExplosionTome();
-        }
-        return;
-    }
-
-    if (e.key.toLowerCase() === 'c' || e.key === '2' || e.key === 'c') { // 'c' を念のため追加
-        if (gameState === 'PLAYING' && !isProcessing && player.charmTomes > 0) {
-            useCharmTome();
-        }
-        return;
-    }
-
-    if (e.key.toLowerCase() === 'e' || e.key === '1') {
-        if (gameState === 'PLAYING' && !isProcessing && player.hasteTomes > 0 && !player.isSpeeding) {
-            useHasteTome();
-        }
-        return;
-    }
     if (e.key.toLowerCase() === 'x' || e.key.toLowerCase() === 'i') {
         if (gameState === 'PLAYING' && !isProcessing) { gameState = 'MENU'; menuSelection = 0; SOUNDS.SELECT(); }
         else if (gameState === 'MENU') { gameState = 'PLAYING'; SOUNDS.SELECT(); }
