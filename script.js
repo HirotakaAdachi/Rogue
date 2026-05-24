@@ -25146,9 +25146,9 @@ function draw(now) {
             ctx.restore();
         }
 
-        // 2.6. CLUSTER の移動軌跡ライン（本体の色に合わせる）
+        // 2.6. CLUSTER / LATIN_C の移動軌跡ライン
         for (const e of enemies) {
-            if (e.type !== 'CLUSTER' || !e.trail || e.trail.length < 1) continue;
+            if ((e.type !== 'CLUSTER' && e.type !== 'LATIN_C') || !e.trail || e.trail.length < 1) continue;
             // 本体と同じ色決定ロジック
             let _clColor = '#f87171'; // デフォルト赤
             if (e.isAlly) _clColor = '#60a5fa';
@@ -25524,6 +25524,19 @@ function draw(now) {
                     const _cd = ALL_COLLECTOR_MAP.get(e.type);
                     eColor = e._summonColor || _cd.color; // 召喚色優先、なければ自然色
                     eChar = _cd.char;
+                    // LATIN_M: 未発覚時は「。」に擬態
+                    if (e.type === 'LATIN_M' && !e._mRevealed) {
+                        eChar = '。';
+                        eColor = '#94a3b8';
+                        ctx.font = `10px "Courier New", monospace`;
+                    }
+                    // LATIN_J: 起動済みは赤点滅
+                    if (e.type === 'LATIN_J' && e._jArmed) {
+                        const _jaFlash = Math.floor(now / 100) % 2;
+                        eColor = _jaFlash === 0 ? '#ef4444' : '#7f1d1d';
+                        ctx.shadowColor = '#ef4444';
+                        ctx.shadowBlur = _jaFlash === 0 ? 14 : 3;
+                    }
                     ctx.font = `14px "Courier New", monospace`;
                     if (e._collectorDying) {
                         // 消滅演出: 白く輝きながら2.5秒でフェードアウト
@@ -26530,6 +26543,13 @@ function detonateBomb(bomb) {
                     let eDmg = e.type === 'DRAGON'
                         ? dragonFireResist(damage)
                         : e.hp;
+                    // LATIN_J: 爆発で起動（通常爆発ダメージは無効）
+                    if (e.type === 'LATIN_J' && !e._jArmed) {
+                        e._jArmed = true; e._jBoomCounter = 3; e.hp = Math.max(1, e.hp);
+                        spawnFloatingText(e.x, e.y, 'ARMED!', '#ef4444');
+                        addLog('The J is triggered by the explosion!');
+                        return;
+                    }
                     // LATIN_P: 爆発耐性大（1/10ずつしか削れない）; GREEK_RHO: 通常の5ヒット耐性
                     if (e.type === 'LATIN_P') {
                         eDmg = Math.min(Math.ceil(e.maxHp / 10), e.hp);
@@ -32289,7 +32309,11 @@ function moveMadmen() {
             movingMadmen.splice(i, 1);
             enemies.push(m);
             spawnFloatingText(m.x, m.y, "!!!", '#ef4444');
-            addLog("The Wandering Shade has followed you into this room!");
+            if (m.type === 'LATIN_K') {
+                addLog("The k slips back into the room!");
+            } else {
+                addLog("The Wandering Shade has followed you into this room!");
+            }
             continue;
         }
 
@@ -32799,6 +32823,14 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
 }
 
 async function attackEnemy(enemy, dx, dy, isMain = true) {
+    // LATIN_J: 通常攻撃は完全に素通り（環境ダメージ専用）
+    if (enemy.type === 'LATIN_J' && !enemy._jArmed) {
+        spawnFloatingText(enemy.x, enemy.y, 'NO EFFECT', '#fbbf24');
+        SOUNDS.HIT();
+        if (isMain) { player.offsetX = dx * 10; player.offsetY = dy * 10; draw(); await new Promise(r => setTimeout(r, 100)); player.offsetX = 0; player.offsetY = 0; }
+        return;
+    }
+
     // WEAVERは完全無敵 — 攻撃・ノックバック・ダメージすべて無効
     if (enemy.type === 'WEAVER') {
         spawnFloatingText(enemy.x, enemy.y, "IMMUNE!", '#a78bfa');
@@ -33026,6 +33058,20 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
     spawnDamageText(player.x + dx, player.y + dy, damage, isCritical ? '#fbbf24' : '#f87171');
     // 赤い姿をその場で見せてから逃走（描画→450ms待機→enemyTurnで移動）
     if (_lpHit) { draw(); await new Promise(r => setTimeout(r, 450)); }
+
+    // LATIN_M: 攻撃されたら正体を現す
+    if (enemy.type === 'LATIN_M' && !enemy._mRevealed) {
+        enemy._mRevealed = true;
+        spawnFloatingText(enemy.x, enemy.y, '!', '#a3e635');
+    }
+
+    // LATIN_D: 30%の確率で反撃（プレイヤーを壁まで吹き飛ばす）
+    if (enemy.type === 'LATIN_D' && !enemy._dead && enemy.hp > 0 && Math.random() < 0.30) {
+        addLog('The d strikes back!');
+        spawnFloatingText(enemy.x, enemy.y, 'COUNTER!', '#c8e620');
+        SOUNDS.ENEMY_ATTACK();
+        await knockbackPlayer(dx, dy, 0, true);
+    }
 
     // floor 50: 最初の攻撃で全passive E が一斉覚醒
     if (floorLevel === 50 && enemy._f50Passive && !_f50Enraged) {
@@ -37219,6 +37265,339 @@ async function enemyTurn() {
                         continue;
                     }
                 }
+                // ===== LATIN 小文字 個別挙動 =====
+
+                // LATIN_A: 横移動のみ。詰まったら縦
+                if (e.type === 'LATIN_A') {
+                    if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                    const _aAway = player.x >= e.x ? -1 : 1;
+                    const _aDirs = [
+                        { x: _aAway, y: 0 }, { x: -_aAway, y: 0 },
+                        { x: 0, y: player.y >= e.y ? -1 : 1 }, { x: 0, y: player.y >= e.y ? 1 : -1 }
+                    ];
+                    for (let _aStep = 0; _aStep < 2; _aStep++) {
+                        for (const d of _aDirs) {
+                            const nx = e.x + d.x, ny = e.y + d.y;
+                            if (canEnemyMove(nx, ny, e) && !isRealHole(nx, ny)
+                                    && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
+                                e.x = nx; e.y = ny; break;
+                            }
+                        }
+                    }
+                    continue;
+                }
+
+                // LATIN_B: 主人公が6マス以内に近づいたら逆方向へ突進。壁激突でスタン
+                if (e.type === 'LATIN_B') {
+                    const _bDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+                    if (_bDist <= 6 && !e._bCharging && e.stunTurns <= 0) {
+                        const _bDx = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
+                            ? -Math.sign(player.x - e.x) : 0;
+                        const _bDy = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
+                            ? 0 : -Math.sign(player.y - e.y);
+                        e._bCharging = true; e._bDx = _bDx || 1; e._bDy = _bDy;
+                    }
+                    if (e._bCharging && e.stunTurns <= 0) {
+                        if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                        let _bHit = false;
+                        for (let _bs = 0; _bs < 4; _bs++) {
+                            const nx = e.x + e._bDx, ny = e.y + e._bDy;
+                            if (!canEnemyMove(nx, ny, e) || (nx === player.x && ny === player.y)) { _bHit = true; break; }
+                            e.x = nx; e.y = ny;
+                        }
+                        e._bCharging = false;
+                        if (_bHit) { e.stunTurns = 4; spawnFloatingText(e.x, e.y, 'STUNNED!', '#94a3b8'); }
+                    } else {
+                        const _bChosen = pickFleeDir(e);
+                        if (_bChosen) {
+                            if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                            e.x += _bChosen.x; e.y += _bChosen.y;
+                            const _bChosen2 = pickFleeDir(e);
+                            if (_bChosen2) { e.x += _bChosen2.x; e.y += _bChosen2.y; }
+                        }
+                    }
+                    continue;
+                }
+
+                // LATIN_C: 斜め移動のみ。壁で跳ね返る。軌跡を残す
+                if (e.type === 'LATIN_C') {
+                    if (!e.trail) e.trail = [];
+                    if (e._cDx === undefined) {
+                        e._cDx = player.x <= e.x ? 1 : -1;
+                        e._cDy = player.y <= e.y ? 1 : -1;
+                    }
+                    e.trail.unshift({ x: e.x, y: e.y });
+                    if (e.trail.length > 4) e.trail.pop();
+                    for (let _cStep = 0; _cStep < 2; _cStep++) {
+                        const _cXok = canEnemyMove(e.x + e._cDx, e.y, e);
+                        const _cYok = canEnemyMove(e.x, e.y + e._cDy, e);
+                        if (!_cXok) e._cDx = -e._cDx;
+                        if (!_cYok) e._cDy = -e._cDy;
+                        const nx = e.x + e._cDx, ny = e.y + e._cDy;
+                        if (canEnemyMove(nx, ny, e) && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
+                            e.x = nx; e.y = ny;
+                        } else {
+                            e._cDx = -e._cDx; e._cDy = -e._cDy;
+                        }
+                    }
+                    if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                    continue;
+                }
+
+                // LATIN_F: 移動した床が溶岩になる
+                if (e.type === 'LATIN_F') {
+                    if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                    const _fChosen1 = pickFleeDir(e);
+                    if (_fChosen1) {
+                        const _fPx1 = e.x, _fPy1 = e.y;
+                        e.x += _fChosen1.x; e.y += _fChosen1.y;
+                        if (map[_fPy1][_fPx1] === SYMBOLS.FLOOR) map[_fPy1][_fPx1] = SYMBOLS.LAVA;
+                        const _fChosen2 = pickFleeDir(e);
+                        if (_fChosen2) {
+                            const _fPx2 = e.x, _fPy2 = e.y;
+                            e.x += _fChosen2.x; e.y += _fChosen2.y;
+                            if (map[_fPy2][_fPx2] === SYMBOLS.FLOOR) map[_fPy2][_fPx2] = SYMBOLS.LAVA;
+                        }
+                    }
+                    continue;
+                }
+
+                // LATIN_G: 主人公が5マス以内に来たらタックル突進、その後また逃げる
+                if (e.type === 'LATIN_G') {
+                    const _gDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+                    if (_gDist <= 5 && !e._gCharging && (e._gCooldown || 0) <= 0) {
+                        e._gCharging = true;
+                    }
+                    if ((e._gCooldown || 0) > 0) e._gCooldown--;
+                    if (e._gCharging) {
+                        if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                        const _gKx = Math.sign(player.x - e.x), _gKy = Math.sign(player.y - e.y);
+                        const _gDirX = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y);
+                        const _gMx = _gDirX ? _gKx : 0, _gMy = _gDirX ? 0 : _gKy;
+                        for (let _gS = 0; _gS < 3; _gS++) {
+                            const nx = e.x + _gMx, ny = e.y + _gMy;
+                            if (nx === player.x && ny === player.y) {
+                                addLog('The g tackles you!');
+                                SOUNDS.ENEMY_ATTACK();
+                                spawnSlash(player.x, player.y);
+                                setScreenShake(12, 300);
+                                await knockbackPlayer(_gMx, _gMy, 8 + Math.floor(floorLevel / 3), true);
+                                e._gCharging = false; e._gCooldown = 6;
+                                if (player.hp <= 0) { player.hp = 0; updateUI(); triggerGameOver(); return; }
+                                break;
+                            }
+                            if (!canEnemyMove(nx, ny, e)) { e._gCharging = false; e._gCooldown = 4; break; }
+                            e.x = nx; e.y = ny;
+                        }
+                        if (e._gCharging) { e._gCharging = false; e._gCooldown = 4; }
+                    } else {
+                        const _gChosen = pickFleeDir(e);
+                        if (_gChosen) {
+                            if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                            e.x += _gChosen.x; e.y += _gChosen.y;
+                            const _gChosen2 = pickFleeDir(e);
+                            if (_gChosen2) { e.x += _gChosen2.x; e.y += _gChosen2.y; }
+                        }
+                    }
+                    continue;
+                }
+
+                // LATIN_H: 毎ターン周囲2マス以内の敵と主人公をわずかに回復する
+                if (e.type === 'LATIN_H') {
+                    for (const _hT of [player, ...enemies.filter(o => o !== e && !o._dead && o.hp > 0)]) {
+                        const _hD = Math.abs(_hT.x - e.x) + Math.abs(_hT.y - e.y);
+                        if (_hD <= 2 && _hT.hp < (_hT.maxHp || _hT.hp + 1)) {
+                            _hT.hp = Math.min(_hT.maxHp || _hT.hp + 1, _hT.hp + 1);
+                            if (_hT === player) { spawnFloatingText(e.x, e.y, '+1', '#4ade80'); updateUI(); }
+                        }
+                    }
+                    const _hChosen = pickFleeDir(e);
+                    if (_hChosen) {
+                        if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                        e.x += _hChosen.x; e.y += _hChosen.y;
+                        const _hChosen2 = pickFleeDir(e);
+                        if (_hChosen2) { e.x += _hChosen2.x; e.y += _hChosen2.y; }
+                    }
+                    continue;
+                }
+
+                // LATIN_I: 移動した床が氷になる
+                if (e.type === 'LATIN_I') {
+                    if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                    const _iChosen1 = pickFleeDir(e);
+                    if (_iChosen1) {
+                        const _iPx1 = e.x, _iPy1 = e.y;
+                        e.x += _iChosen1.x; e.y += _iChosen1.y;
+                        if (map[_iPy1][_iPx1] === SYMBOLS.FLOOR) map[_iPy1][_iPx1] = SYMBOLS.ICE;
+                        const _iChosen2 = pickFleeDir(e);
+                        if (_iChosen2) {
+                            const _iPx2 = e.x, _iPy2 = e.y;
+                            e.x += _iChosen2.x; e.y += _iChosen2.y;
+                            if (map[_iPy2][_iPx2] === SYMBOLS.FLOOR) map[_iPy2][_iPx2] = SYMBOLS.ICE;
+                        }
+                    }
+                    continue;
+                }
+
+                // LATIN_J: 通常逃走。通常攻撃は完全無効。環境ダメージ（溶岩・爆発）で起動→爆発
+                if (e.type === 'LATIN_J') {
+                    if (e._jArmed) {
+                        if (e._jBoomCounter === undefined) e._jBoomCounter = 3;
+                        e._jBoomCounter--;
+                        spawnFloatingText(e.x, e.y, `💥${e._jBoomCounter + 1}`, '#ef4444');
+                        if (e._jBoomCounter <= 0) {
+                            detonateLeech(e);
+                        }
+                        continue;
+                    }
+                    if (map[e.y][e.x] === SYMBOLS.LAVA && !e._jArmed) {
+                        e._jArmed = true; e._jBoomCounter = 3; e.hp = 1;
+                        spawnFloatingText(e.x, e.y, 'ARMED!', '#ef4444');
+                        addLog('The J is triggered by the lava!');
+                        continue;
+                    }
+                    const _jChosen = pickFleeDir(e);
+                    if (_jChosen) {
+                        if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                        e.x += _jChosen.x; e.y += _jChosen.y;
+                        const _jChosen2 = pickFleeDir(e);
+                        if (_jChosen2) { e.x += _jChosen2.x; e.y += _jChosen2.y; }
+                    }
+                    continue;
+                }
+
+                // LATIN_K: MADMANのように画面端まで逃げると隣スクリーンへ転送
+                if (e.type === 'LATIN_K') {
+                    const _kChosen = pickFleeDir(e);
+                    if (_kChosen) {
+                        if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                        e.x += _kChosen.x; e.y += _kChosen.y;
+                        const _kChosen2 = pickFleeDir(e);
+                        if (_kChosen2) { e.x += _kChosen2.x; e.y += _kChosen2.y; }
+                    }
+                    // 画面端の通路にいたら隣スクリーンへ転送（MADMANと同じロジック）
+                    const _kAtLeft  = e.x <= 1 && e.y >= 11 && e.y <= 13;
+                    const _kAtRight = e.x >= COLS - 2 && e.y >= 11 && e.y <= 13;
+                    const _kAtTop   = e.y <= 1 && e.x >= 18 && e.x <= 21;
+                    const _kAtBot   = e.y >= ROWS - 2 && e.x >= 18 && e.x <= 21;
+                    if (_kAtLeft && _hasLeftScreen(currentScreen.x, currentScreen.y)) {
+                        const _kIdx = enemies.indexOf(e);
+                        if (_kIdx >= 0) {
+                            enemies.splice(_kIdx, 1);
+                            movingMadmen.push({ ...e, screenX: currentScreen.x - 1, screenY: currentScreen.y, x: COLS - 2 });
+                        }
+                        continue;
+                    } else if (_kAtRight && _hasRightScreen(currentScreen.x, currentScreen.y)) {
+                        const _kIdx = enemies.indexOf(e);
+                        if (_kIdx >= 0) {
+                            enemies.splice(_kIdx, 1);
+                            movingMadmen.push({ ...e, screenX: currentScreen.x + 1, screenY: currentScreen.y, x: 1 });
+                        }
+                        continue;
+                    } else if (_kAtTop && _hasUpScreen(currentScreen.x, currentScreen.y)) {
+                        const _kIdx = enemies.indexOf(e);
+                        if (_kIdx >= 0) {
+                            enemies.splice(_kIdx, 1);
+                            movingMadmen.push({ ...e, screenX: currentScreen.x, screenY: currentScreen.y - 1, y: ROWS - 2 });
+                        }
+                        continue;
+                    } else if (_kAtBot && _hasDownScreen(currentScreen.x, currentScreen.y)) {
+                        const _kIdx = enemies.indexOf(e);
+                        if (_kIdx >= 0) {
+                            enemies.splice(_kIdx, 1);
+                            movingMadmen.push({ ...e, screenX: currentScreen.x, screenY: currentScreen.y + 1, y: 1 });
+                        }
+                        continue;
+                    }
+                    continue;
+                }
+
+                // LATIN_L: 逃げながら20%の確率でtempWall（設置ブロック）を置いて道を塞ぐ
+                if (e.type === 'LATIN_L') {
+                    if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                    const _lChosen = pickFleeDir(e);
+                    if (_lChosen) {
+                        e.x += _lChosen.x; e.y += _lChosen.y;
+                        const _lChosen2 = pickFleeDir(e);
+                        if (_lChosen2) { e.x += _lChosen2.x; e.y += _lChosen2.y; }
+                    }
+                    if (Math.random() < 0.20) {
+                        const _lBlockDir = [{x:Math.sign(player.x-e.x)||1,y:0},{x:0,y:Math.sign(player.y-e.y)||1}][Math.floor(Math.random()*2)];
+                        const _lBx = e.x + _lBlockDir.x, _lBy = e.y + _lBlockDir.y;
+                        if (_lBx >= 1 && _lBx < COLS-1 && _lBy >= 1 && _lBy < ROWS-1
+                                && map[_lBy][_lBx] === SYMBOLS.FLOOR
+                                && !tempWalls.some(tw => tw.x === _lBx && tw.y === _lBy)
+                                && !(_lBx === player.x && _lBy === player.y)
+                                && !enemies.some(o => !o._dead && o.hp > 0 && o.x === _lBx && o.y === _lBy)) {
+                            tempWalls.push({ x: _lBx, y: _lBy, hp: 2 });
+                            SOUNDS.BANG();
+                        }
+                    }
+                    continue;
+                }
+
+                // LATIN_M: 「。」に擬態して逃げる。主人公が攻撃すると正体を現す
+                if (e.type === 'LATIN_M') {
+                    if (!e._mRevealed) {
+                        const _mDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+                        if (_mDist <= 1) e._mRevealed = true;
+                    }
+                    if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                    const _mChosen = pickFleeDir(e);
+                    if (_mChosen) {
+                        e.x += _mChosen.x; e.y += _mChosen.y;
+                        const _mChosen2 = pickFleeDir(e);
+                        if (_mChosen2) { e.x += _mChosen2.x; e.y += _mChosen2.y; }
+                    }
+                    continue;
+                }
+
+                // LATIN_N: 主人公と常に2マス以上の距離を保つ。1マスになりそうなら壁を掘って逃げる
+                if (e.type === 'LATIN_N') {
+                    const _nDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+                    if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                    // 距離2以下: 優先的に壁掘り逃げor斜め逃げ
+                    if (_nDist <= 2) {
+                        const _nDirs8 = [{x:1,y:-1},{x:-1,y:-1},{x:1,y:1},{x:-1,y:1},{x:1,y:0},{x:-1,y:0},{x:0,y:-1},{x:0,y:1}];
+                        let _nMoved = false;
+                        // まず壁を掘って移動
+                        for (const d of _nDirs8) {
+                            const nx = e.x + d.x, ny = e.y + d.y;
+                            const newDist = Math.abs(nx - player.x) + Math.abs(ny - player.y);
+                            if (newDist <= _nDist) continue;
+                            if (nx < 1 || nx >= COLS-1 || ny < 1 || ny >= ROWS-1) continue;
+                            if (map[ny][nx] === SYMBOLS.WALL) {
+                                // 壁を掘って脱出
+                                const _nNx2 = nx + d.x, _nNy2 = ny + d.y;
+                                if (_nNx2 >= 1 && _nNx2 < COLS-1 && _nNy2 >= 1 && _nNy2 < ROWS-1
+                                        && map[_nNy2][_nNx2] !== SYMBOLS.WALL) {
+                                    map[ny][nx] = SYMBOLS.FLOOR;
+                                    e.x = nx; e.y = ny; _nMoved = true;
+                                    SOUNDS.WALL_BREAK();
+                                    break;
+                                }
+                            } else if (canEnemyMove(nx, ny, e) && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
+                                e.x = nx; e.y = ny; _nMoved = true; break;
+                            }
+                        }
+                        if (!_nMoved) {
+                            const _nFallen = pickFleeDir(e);
+                            if (_nFallen) { e.x += _nFallen.x; e.y += _nFallen.y; }
+                        }
+                    } else {
+                        // 通常逃走
+                        const _nChosen = pickFleeDir(e);
+                        if (_nChosen) {
+                            e.x += _nChosen.x; e.y += _nChosen.y;
+                            const _nChosen2 = pickFleeDir(e);
+                            if (_nChosen2) { e.x += _nChosen2.x; e.y += _nChosen2.y; }
+                        }
+                    }
+                    continue;
+                }
+
+                // ===== LATIN 個別挙動ここまで =====
+
                 const _isCollector = ALL_COLLECTOR_TYPES.has(e.type);
                 const chosen = pickFleeDir(e);
                 if (chosen) {
