@@ -37961,17 +37961,8 @@ async function enemyTurn() {
                     continue;
                 }
 
-                // LATIN_U: 主人公に隣接したら擬態解除。あとは普通に逃げる
-                if (e.type === 'LATIN_U') {
-                    if (!e._uRevealed) {
-                        const _uDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
-                        if (_uDist <= 1) {
-                            e._uRevealed = true;
-                            spawnFloatingText(e.x, e.y, '!', '#c4b5fd');
-                            addLog('The u was hiding among the shadows!');
-                        }
-                    }
-                }
+                // LATIN_U: ダメージを受けるまで＠擬態を継続（攻撃時のみ解除）
+                if (e.type === 'LATIN_U') { /* reveal handled in attackEnemy only */ }
 
                 // LATIN_Z: 毎ターン攻撃クールダウンをデクリメント（攻撃自体はattackEnemyで処理）
                 if (e.type === 'LATIN_Z' && (e._zCooldown || 0) > 0) {
