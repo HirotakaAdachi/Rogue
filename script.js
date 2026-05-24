@@ -37841,26 +37841,33 @@ async function enemyTurn() {
                     continue;
                 }
 
-                // LATIN_T: 毎ターン主人公方向に炎弾を放ちながら逃げる
+                // LATIN_T: プレイヤーが近づいたら逃走開始→その後だけ炎弾を放つ
                 if (e.type === 'LATIN_T') {
-                    if (!player.isStealth && (e._tCooldown || 0) <= 0) {
-                        const _tdx = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
-                            ? Math.sign(player.x - e.x) : 0;
-                        const _tdy = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
-                            ? 0 : Math.sign(player.y - e.y);
-                        if (_tdx !== 0 || _tdy !== 0) {
-                            infernoProjectiles.push({ x: e.x, y: e.y, dx: _tdx, dy: _tdy, life: 30, owner: e });
-                            SOUNDS.IGNITE();
-                            e._tCooldown = 3;
-                        }
+                    const _tDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+                    if (!e._tFleeing && _tDist <= 7 && !player.isStealth) {
+                        e._tFleeing = true;
+                        spawnFloatingText(e.x, e.y, '!', '#fb923c');
                     }
-                    if ((e._tCooldown || 0) > 0) e._tCooldown--;
-                    const _tChosen = pickFleeDir(e);
-                    if (_tChosen) {
-                        if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
-                        e.x += _tChosen.x; e.y += _tChosen.y;
-                        const _tChosen2 = pickFleeDir(e);
-                        if (_tChosen2) { e.x += _tChosen2.x; e.y += _tChosen2.y; }
+                    if (e._tFleeing) {
+                        if (!player.isStealth && (e._tCooldown || 0) <= 0) {
+                            const _tdx = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
+                                ? Math.sign(player.x - e.x) : 0;
+                            const _tdy = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
+                                ? 0 : Math.sign(player.y - e.y);
+                            if (_tdx !== 0 || _tdy !== 0) {
+                                infernoProjectiles.push({ x: e.x, y: e.y, dx: _tdx, dy: _tdy, life: 30, owner: e });
+                                SOUNDS.IGNITE();
+                                e._tCooldown = 3;
+                            }
+                        }
+                        if ((e._tCooldown || 0) > 0) e._tCooldown--;
+                        const _tChosen = pickFleeDir(e);
+                        if (_tChosen) {
+                            if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                            e.x += _tChosen.x; e.y += _tChosen.y;
+                            const _tChosen2 = pickFleeDir(e);
+                            if (_tChosen2) { e.x += _tChosen2.x; e.y += _tChosen2.y; }
+                        }
                     }
                     continue;
                 }
