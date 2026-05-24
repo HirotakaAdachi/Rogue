@@ -37455,7 +37455,7 @@ async function enemyTurn() {
                         e._cDy = player.y <= e.y ? 1 : -1;
                     }
                     e.trail.unshift({ x: e.x, y: e.y });
-                    if (e.trail.length > 2) e.trail.pop();
+                    if (e.trail.length > 1) e.trail.pop();
                     for (let _cStep = 0; _cStep < 2; _cStep++) {
                         const _cXok = canEnemyMove(e.x + e._cDx, e.y, e);
                         const _cYok = canEnemyMove(e.x, e.y + e._cDy, e);
@@ -37728,7 +37728,7 @@ async function enemyTurn() {
                 if (e.type === 'LATIN_O') {
                     if (!e.trail) e.trail = [];
                     e.trail.unshift({ x: e.x, y: e.y });
-                    if (e.trail.length > 4) e.trail.pop();
+                    if (e.trail.length > 2) e.trail.pop();
                     if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
                     const _oChosen = pickFleeDir(e);
                     if (_oChosen) {
