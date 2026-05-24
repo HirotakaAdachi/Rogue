@@ -4432,6 +4432,69 @@ function resetFloorHazardState() {
     isXWallStage = false;
 }
 
+function _initLatinTestCave() {
+    addLog("🔤 LATIN CAVE — all 26 small-letter enemies");
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) map[y][x] = SYMBOLS.WALL;
+    const _ltCarve = (cx, cy, targetTiles, spread) => {
+        const front = [[cx, cy]];
+        const vis = new Set([`${cx},${cy}`]);
+        let n = 0;
+        while (front.length && n < targetTiles) {
+            const idx = Math.floor(Math.random() * Math.min(front.length, 6));
+            const [fx, fy] = front.splice(idx, 1)[0];
+            if (fx < 1 || fx >= COLS-1 || fy < 1 || fy >= ROWS-1) continue;
+            map[fy][fx] = SYMBOLS.FLOOR; n++;
+            for (const [ddx, ddy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]) {
+                const nx = fx+ddx, ny = fy+ddy, k = `${nx},${ny}`;
+                if (!vis.has(k) && Math.random() < (spread || 0.65)) { vis.add(k); front.push([nx, ny]); }
+            }
+        }
+    };
+    const _ltTunnel = (x1, y1, x2, y2) => {
+        for (let x = Math.min(x1,x2); x <= Math.max(x1,x2); x++)
+            if (x>=1&&x<COLS-1&&y1>=1&&y1<ROWS-1) map[y1][x] = SYMBOLS.FLOOR;
+        for (let y = Math.min(y1,y2); y <= Math.max(y1,y2); y++)
+            if (x2>=1&&x2<COLS-1&&y>=1&&y<ROWS-1) map[y][x2] = SYMBOLS.FLOOR;
+    };
+    _ltCarve(6,  5,  38, 0.60);
+    _ltCarve(20, 4,  42, 0.62);
+    _ltCarve(33, 6,  35, 0.60);
+    _ltCarve(8,  17, 38, 0.60);
+    _ltCarve(22, 18, 42, 0.62);
+    _ltCarve(34, 16, 35, 0.58);
+    _ltTunnel(6, 5, 20, 4);   _ltTunnel(20, 4, 33, 6);
+    _ltTunnel(8, 17, 22, 18); _ltTunnel(22, 18, 34, 16);
+    _ltTunnel(6, 5, 8, 17);   _ltTunnel(20, 4, 22, 18); _ltTunnel(33, 6, 34, 16);
+    player.x = 3; player.y = 12;
+    map[player.y][player.x] = SYMBOLS.FLOOR;
+    _ltTunnel(3, 12, 6, 5);
+    map[20][37] = SYMBOLS.STAIRS;
+    _ltTunnel(34, 16, 37, 20);
+    const _ltFloors = [];
+    for (let y = 1; y < ROWS-1; y++) for (let x = 1; x < COLS-1; x++) {
+        if (map[y][x] === SYMBOLS.FLOOR && (Math.abs(x-player.x)+Math.abs(y-player.y)) > 4) _ltFloors.push({x, y});
+    }
+    for (let i = _ltFloors.length-1; i > 0; i--) {
+        const j = Math.floor(Math.random()*(i+1));
+        [_ltFloors[i], _ltFloors[j]] = [_ltFloors[j], _ltFloors[i]];
+    }
+    let _ltIdx = 0;
+    for (const def of LATIN_ENEMIES) {
+        while (_ltIdx < _ltFloors.length && enemies.some(oe => oe.x === _ltFloors[_ltIdx].x && oe.y === _ltFloors[_ltIdx].y)) _ltIdx++;
+        if (_ltIdx >= _ltFloors.length) break;
+        const pos = _ltFloors[_ltIdx++];
+        const hp = 30;
+        const eObj = { type: def.type, x: pos.x, y: pos.y, hp, maxHp: hp,
+            flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 8, stunTurns: 0, flee: true, noFleeAnim: false };
+        if (def.type === 'LATIN_C' || def.type === 'LATIN_O') eObj.trail = [];
+        enemies.push(eObj);
+    }
+    addLog("🔤 a(horizontal) b(charge) c(bounce) d(counter) e(liminal) f(lava)");
+    addLog("🔤 g(tackle) h(heal) i(ice) J(explodes) k(cross) l(block) m(disguised)");
+    addLog("🔤 n(dig) o(slippery) p(hidden) q(summon) r(fake ally) s(boar)");
+    addLog("🔤 t(fire) u(copy@) v(fire) w(dig) x(bomb) y(diagonal) z(Z-drop)");
+}
+
 function initMap() {
     // 単画面用タレット設置ヘルパー: 周囲1マスの壁を除去し最長射線方向を返す（グローバルmap使用）
     function prepareTurretSpotSingle(x, y) {
@@ -4512,6 +4575,9 @@ function initMap() {
     const isNearMerchantFloor = !isExactMerchantFloor && merchantBaseFloors.some(mf => Math.abs(floorLevel - mf) <= 2);
     const merchantCooldownOk = (floorLevel - lastMerchantFloor) >= 5;
     const isMerchantFloor = floorLevel >= 10 && floorLevel < 100 && !(floorLevel >= 11 && floorLevel <= 19) && merchantCooldownOk && (isExactMerchantFloor || (isNearMerchantFloor && Math.random() < 0.45));
+
+    // ===== テストモード: LATIN洞窟はあらゆる固定フロアより先に判定（floor 1 チュートリアルに飲まれないよう）=====
+    if (isRoomTestMode && forcedLayoutType === 'latin_test') { _initLatinTestCave(); return; }
 
     // フロア20は固定マルチスクリーン（ランダム生成より先に実行して確実に固定レイアウトを使用）
     if (floorLevel === 20) { _initFloor20(); return; }
@@ -18009,86 +18075,6 @@ function initMap() {
             _scN++;
         }
         addLog("🕸 Silk and old bones fill the air...");
-        return;
-    }
-
-    // ===== テストモード: LATIN文字検証洞窟 =====
-    if (isRoomTestMode && forcedLayoutType === 'latin_test' && !multiScreenMode) {
-        addLog("🔤 LATIN CAVE — all 26 small-letter enemies");
-        for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) map[y][x] = SYMBOLS.WALL;
-        // フロンティア拡張で有機的な洞窟を掘る
-        const _ltCarve = (cx, cy, targetTiles, spread) => {
-            const front = [[cx, cy]];
-            const vis = new Set([`${cx},${cy}`]);
-            let n = 0;
-            while (front.length && n < targetTiles) {
-                const idx = Math.floor(Math.random() * Math.min(front.length, 6));
-                const [fx, fy] = front.splice(idx, 1)[0];
-                if (fx < 1 || fx >= COLS-1 || fy < 1 || fy >= ROWS-1) continue;
-                map[fy][fx] = SYMBOLS.FLOOR; n++;
-                for (const [ddx, ddy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]) {
-                    const nx = fx+ddx, ny = fy+ddy, k = `${nx},${ny}`;
-                    if (!vis.has(k) && Math.random() < (spread || 0.65)) { vis.add(k); front.push([nx, ny]); }
-                }
-            }
-        };
-        const _ltTunnel = (x1, y1, x2, y2) => {
-            // L字通路で2点を接続
-            for (let x = Math.min(x1,x2); x <= Math.max(x1,x2); x++)
-                if (x>=1&&x<COLS-1&&y1>=1&&y1<ROWS-1) map[y1][x] = SYMBOLS.FLOOR;
-            for (let y = Math.min(y1,y2); y <= Math.max(y1,y2); y++)
-                if (x2>=1&&x2<COLS-1&&y>=1&&y<ROWS-1) map[y][x2] = SYMBOLS.FLOOR;
-        };
-        // 6つのチェンバーを配置（左→右、上下に分布）
-        _ltCarve(6,  5,  38, 0.60); // 左上チェンバー
-        _ltCarve(20, 4,  42, 0.62); // 中上チェンバー
-        _ltCarve(33, 6,  35, 0.60); // 右上チェンバー
-        _ltCarve(8,  17, 38, 0.60); // 左下チェンバー
-        _ltCarve(22, 18, 42, 0.62); // 中下チェンバー
-        _ltCarve(34, 16, 35, 0.58); // 右下チェンバー
-        // チェンバー間を通路で接続
-        _ltTunnel(6, 5, 20, 4);
-        _ltTunnel(20, 4, 33, 6);
-        _ltTunnel(8, 17, 22, 18);
-        _ltTunnel(22, 18, 34, 16);
-        _ltTunnel(6, 5, 8, 17);
-        _ltTunnel(20, 4, 22, 18);
-        _ltTunnel(33, 6, 34, 16);
-        // プレイヤーと出口を床に確定
-        player.x = 3; player.y = 12;
-        map[player.y][player.x] = SYMBOLS.FLOOR;
-        _ltTunnel(3, 12, 6, 5);
-        map[20][37] = SYMBOLS.STAIRS;
-        _ltTunnel(34, 16, 37, 20);
-        // 床タイル一覧を収集（プレイヤーから3マス以上離れているもの）
-        const _ltFloors = [];
-        for (let y = 1; y < ROWS-1; y++) for (let x = 1; x < COLS-1; x++) {
-            if (map[y][x] === SYMBOLS.FLOOR && (Math.abs(x-player.x)+Math.abs(y-player.y)) > 4) _ltFloors.push({x, y});
-        }
-        // シャッフル
-        for (let i = _ltFloors.length-1; i > 0; i--) {
-            const j = Math.floor(Math.random()*(i+1));
-            [_ltFloors[i], _ltFloors[j]] = [_ltFloors[j], _ltFloors[i]];
-        }
-        // LATIN敵を全26種配置
-        let _ltIdx = 0;
-        for (const def of LATIN_ENEMIES) {
-            while (_ltIdx < _ltFloors.length && enemies.some(oe => oe.x === _ltFloors[_ltIdx].x && oe.y === _ltFloors[_ltIdx].y)) _ltIdx++;
-            if (_ltIdx >= _ltFloors.length) break;
-            const pos = _ltFloors[_ltIdx++];
-            const hp = 20 + floorLevel;
-            const eObj = {
-                type: def.type, x: pos.x, y: pos.y,
-                hp, maxHp: hp, flashUntil: 0, offsetX: 0, offsetY: 0,
-                expValue: 8, stunTurns: 0, flee: true, noFleeAnim: false
-            };
-            if (def.type === 'LATIN_C' || def.type === 'LATIN_O') eObj.trail = [];
-            enemies.push(eObj);
-        }
-        addLog("🔤 26 enemies: a(horizontal) b(charge) c(bounce) d(counter) e(liminal)");
-        addLog("🔤 f(lava trail) g(tackle) h(heal) i(ice trail) J(explodes) k(cross-screen)");
-        addLog("🔤 l(block) m(disguised) n(dig) o(slippery) p(hidden) q(summon) r(fake ally)");
-        addLog("🔤 s(boar) t(fire) u(copy) v(fire) w(dig) x(bomb) y(diagonal) z(Z-drop)");
         return;
     }
 
