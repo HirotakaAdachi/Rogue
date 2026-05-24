@@ -10233,8 +10233,8 @@ function initMap() {
                     allRooms[`${sx},${sy}`] = [{ x: 1, y: 1, w: COLS - 2, h: ROWS - 2, cx: _devCx, cy: _devCy }];
                     continue;
                 }
-                // bizarre_all テストモード: [0,1] は 白紙テンプレートルーム（敵なし・完全フラット）
-                if (isRoomTestMode && forcedLayoutType === 'bizarre_all' && sx === 0 && sy === 1) {
+                // bizarre_all テストモード: [4,2] は 白紙テンプレートルーム（敵なし・完全フラット）旧[0,1]から移動
+                if (isRoomTestMode && forcedLayoutType === 'bizarre_all' && sx === 4 && sy === 2) {
                     const _tmMap = Array.from({ length: ROWS }, () => Array(COLS).fill(SYMBOLS.WALL));
                     // 内部を全床に
                     for (let _y = 1; _y < ROWS - 1; _y++)
@@ -10244,15 +10244,15 @@ function initMap() {
                     for (let _cy = 11; _cy <= 13; _cy++)
                         for (let _cx = 11; _cx <= 28; _cx++)
                             _tmMap[_cy][_cx] = SYMBOLS.WALL;
-                    // 通路（上: [0,0]と接続、下: [0,2]と接続、右: [1,1]と接続）
+                    // 通路（上: [4,1]と接続、下: [4,3]と接続、左: [3,2]と接続）
                     for (let _px = 18; _px <= 21; _px++) { _tmMap[0][_px] = SYMBOLS.FLOOR; _tmMap[1][_px] = SYMBOLS.FLOOR; _tmMap[2][_px] = SYMBOLS.FLOOR; }
                     for (let _px = 18; _px <= 21; _px++) { _tmMap[ROWS-1][_px] = SYMBOLS.FLOOR; _tmMap[ROWS-2][_px] = SYMBOLS.FLOOR; _tmMap[ROWS-3][_px] = SYMBOLS.FLOOR; }
-                    for (let _py = 11; _py <= 13; _py++) { _tmMap[_py][COLS-1] = SYMBOLS.FLOOR; _tmMap[_py][COLS-2] = SYMBOLS.FLOOR; _tmMap[_py][COLS-3] = SYMBOLS.FLOOR; }
+                    for (let _py = 11; _py <= 13; _py++) { _tmMap[_py][0] = SYMBOLS.FLOOR; _tmMap[_py][1] = SYMBOLS.FLOOR; _tmMap[_py][2] = SYMBOLS.FLOOR; }
                     // 25%ランダム迷路壁（pillar+extension方式）
                     const _mzIsPass = (_x, _y) =>
                         (_x >= 17 && _x <= 22 && _y <= 4) ||
                         (_x >= 17 && _x <= 22 && _y >= ROWS - 5) ||
-                        (_y >= 10 && _y <= 14 && _x >= COLS - 6);
+                        (_y >= 10 && _y <= 14 && _x <= 5);
                     for (let _my = 3; _my <= ROWS - 3; _my += 2) {
                         for (let _mx = 3; _mx <= COLS - 3; _mx += 2) {
                             if (Math.random() >= 0.60) continue;
@@ -10277,6 +10277,10 @@ function initMap() {
                     allRooms[`${sx},${sy}`] = [{ x: 1, y: 1, w: COLS - 2, h: ROWS - 2, cx: _tmCx, cy: _tmCy }];
                     if (screenGrid.ambushRooms) screenGrid.ambushRooms[sy][sx] = [];
                     continue;
+                }
+                // bizarre_all テストモード: [0,1] は新テストルーム用（空き予約）
+                if (isRoomTestMode && forcedLayoutType === 'bizarre_all' && sx === 0 && sy === 1) {
+                    // TODO: 新テストルーム実装予定
                 }
                 // bizarre_all テストモード: [0,4] は AURA_MAZE テストルーム（旧[0,1]から移動）
                 if (isRoomTestMode && forcedLayoutType === 'bizarre_all' && sx === 0 && sy === 4) {
