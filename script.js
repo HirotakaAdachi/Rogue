@@ -24845,9 +24845,16 @@ function draw(now) {
                     ctx.beginPath(); ctx.arc(px + TILE_SIZE / 2, py + TILE_SIZE / 2, TILE_SIZE * 0.4, 0, Math.PI * 2); ctx.fill();
                     ctx.restore();
                 } else if (char === SYMBOLS.STAIRS || char === SYMBOLS.DOOR) {
+                    ctx.save();
                     const _scx = px + TILE_SIZE / 2, _scy = py + TILE_SIZE / 2;
                     const _sr = TILE_SIZE * 0.38;
-                    ctx.strokeStyle = '#ededed'; ctx.lineWidth = 2.5;
+                    const _sPulse = Math.sin(now / 400) * 0.5 + 0.5; // 0〜1 で脈動
+                    // 黒塗り（穴感）
+                    ctx.fillStyle = '#000';
+                    ctx.beginPath(); ctx.arc(_scx, _scy, _sr, 0, Math.PI * 2); ctx.fill();
+                    // パルスグロー付き縁取り
+                    ctx.shadowColor = '#ededed'; ctx.shadowBlur = 4 + _sPulse * 10;
+                    ctx.strokeStyle = '#ededed'; ctx.lineWidth = 2 + _sPulse * 0.8;
                     ctx.beginPath(); ctx.arc(_scx, _scy, _sr, 0, Math.PI * 2); ctx.stroke();
                     if (char === SYMBOLS.DOOR) {
                         const _so = _sr * 0.65;
@@ -24856,7 +24863,7 @@ function draw(now) {
                         ctx.moveTo(_scx + _so, _scy - _so); ctx.lineTo(_scx - _so, _scy + _so);
                         ctx.stroke();
                     }
-                    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(px + 2, py + TILE_SIZE - 4, TILE_SIZE - 4, 2);
+                    ctx.restore();
                 } else if (char === SYMBOLS.SAVE) {
                     ctx.fillStyle = '#38bdf8'; ctx.fillText(SYMBOLS.SAVE, px + TILE_SIZE / 2, py + TILE_SIZE / 2);
                 } else if (char === SYMBOLS.MERCHANT) {
