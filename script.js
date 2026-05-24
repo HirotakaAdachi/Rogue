@@ -11937,7 +11937,7 @@ function initMap() {
             }
         }
         // マルチスクリーン: ラテン文字コレクション敵を低確率スポーン（50F以降・スタート画面除外）
-        // 確率: 3% + 1.5% × 部屋数（部屋が多い画面ほど出やすい）
+        // 確率: 0.5% + 0.4% × 部屋数（部屋が多い画面ほど出やすい）
         // _bizTypes はギリシア文字ループでも参照するためブロック外に宣言
         const _bizTypes = new Set(['MONSTER_FLOOD','LAVA_SEA','FROZEN_PRISON','VOID_CELLS','CHAOS_ALTAR','TREASURY','BOMBER_MAZE','SPAWNER_HIVE','MIMIC_GARDEN','ISLAND_HAZARD','RIVER_CROSSING','TIGHT_MAZE','FACTION_WAR','FLEEING_HORDE','CIRCLE_SIEGE','KINGS_COURT','VSCROLL_WALLS','BIG_AMBUSH_HALL','STAGE_39','BOAR_CHAMBER','LAVA_CROSS','VERTICAL_RIVER','MAZE_LAVA_CORNER','WARP_CELLS','WARP_CELLS_V','WARP_CELLS_H','AURA_MAZE','bizarre','turret_gauntlet','poison_wasteland','novel_corridor']);
         if (floorLevel >= 50) {
@@ -11952,7 +11952,7 @@ function initMap() {
                         const _lcMap = screenGrid.maps[_lcSy][_lcSx];
                         if (!_lcMap) continue;
                         const _lcRooms = allRooms[`${_lcSx},${_lcSy}`] || [];
-                        const _lcProb = 0.03 + _lcRooms.length * 0.015;
+                        const _lcProb = 0.005 + _lcRooms.length * 0.004;
                         if (Math.random() >= _lcProb) continue;
                         const _lcType = _lcPool[Math.floor(Math.random() * _lcPool.length)];
                         const _lcEnemies = screenGrid.enemies[_lcSy][_lcSx];
