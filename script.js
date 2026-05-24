@@ -5897,7 +5897,7 @@ function initMap() {
 
                 // アイテム小部屋：床タイルをアイテムで埋める
                 const _slItems = [SYMBOLS.SWORD, SYMBOLS.ARMOR, SYMBOLS.HEAL_TOME, SYMBOLS.SPEED,
-                                   SYMBOLS.GUARDIAN, SYMBOLS.ESCAPE, SYMBOLS.EXPLOSION, SYMBOLS.CHARM, SYMBOLS.BREAKER_TOME];
+                                   SYMBOLS.GUARDIAN, ...(floorLevel >= 24 ? [SYMBOLS.ESCAPE] : []), SYMBOLS.EXPLOSION, SYMBOLS.CHARM, SYMBOLS.BREAKER_TOME];
                 for (const ir of _slItemRooms) {
                     let idx = 0;
                     for (let dy = 0; dy < ir.h; dy++)
@@ -7701,7 +7701,7 @@ function initMap() {
                 }
                 // アイテムを各部屋にランダムに数個ずつ散らばせる（合計4〜7個）
                 const vcItemPool=[SYMBOLS.SWORD,SYMBOLS.ARMOR,SYMBOLS.HEAL_TOME,SYMBOLS.SPEED,
-                    SYMBOLS.GUARDIAN,SYMBOLS.ESCAPE,SYMBOLS.EXPLOSION,SYMBOLS.CHARM,SYMBOLS.STEALTH,SYMBOLS.BREAKER_TOME];
+                    SYMBOLS.GUARDIAN,...(floorLevel>=24?[SYMBOLS.ESCAPE]:[]),SYMBOLS.EXPLOSION,SYMBOLS.CHARM,SYMBOLS.STEALTH,SYMBOLS.BREAKER_TOME];
                 const vcItemTotal=4+Math.floor(Math.random()*4);
                 const vcNormalRooms=vcRooms.filter((_,i)=>i!==0&&!vcSpiderIdxes.has(i));
                 for(let n=0,t=0;n<vcItemTotal&&t<500;t++){
@@ -8174,7 +8174,7 @@ function initMap() {
                 // 宝物庫: 全床タイルをアイテムで敷き詰める
                 const _trBasePool=[SYMBOLS.SWORD,SYMBOLS.SWORD,SYMBOLS.SWORD,SYMBOLS.ARMOR,SYMBOLS.ARMOR,SYMBOLS.ARMOR,
                     SYMBOLS.HEAL_TOME,SYMBOLS.HEAL_TOME,SYMBOLS.HEAL_TOME,SYMBOLS.SPEED,SYMBOLS.SPEED,
-                    SYMBOLS.GUARDIAN,SYMBOLS.GUARDIAN,SYMBOLS.ESCAPE,SYMBOLS.EXPLOSION,SYMBOLS.EXPLOSION,
+                    SYMBOLS.GUARDIAN,SYMBOLS.GUARDIAN,...(floorLevel>=24?[SYMBOLS.ESCAPE]:[SYMBOLS.HEAL_TOME]),SYMBOLS.EXPLOSION,SYMBOLS.EXPLOSION,
                     SYMBOLS.CHARM,SYMBOLS.BREAKER_TOME,SYMBOLS.STEALTH,SYMBOLS.HEAL_TOME,SYMBOLS.SWORD,SYMBOLS.ARMOR];
                 const _trPool=_trBasePool.slice().sort(()=>Math.random()-0.5);
                 let _trPI=0;
@@ -8563,7 +8563,7 @@ function initMap() {
 
                 // 氷の川の上にアイテムをランダムに5〜8個置く
                 if(_rcHazard===SYMBOLS.ICE){
-                    const _rcItemPool=[SYMBOLS.SWORD,SYMBOLS.ARMOR,SYMBOLS.HEAL_TOME,SYMBOLS.SPEED,SYMBOLS.GUARDIAN,SYMBOLS.ESCAPE,SYMBOLS.EXPLOSION,SYMBOLS.STEALTH];
+                    const _rcItemPool=[SYMBOLS.SWORD,SYMBOLS.ARMOR,SYMBOLS.HEAL_TOME,SYMBOLS.SPEED,SYMBOLS.GUARDIAN,...(floorLevel>=24?[SYMBOLS.ESCAPE]:[]),SYMBOLS.EXPLOSION,SYMBOLS.STEALTH];
                     const _rcIceTiles=[];
                     for(let y=_rcY1;y<=_rcY2;y++) for(let x=2;x<COLS-2;x++){
                         if(sMap[y][x]===SYMBOLS.ICE) _rcIceTiles.push([x,y]);
@@ -8927,7 +8927,7 @@ function initMap() {
                 }
                 // 行き止まりに低確率でアイテム配置（キーは post-processing が行き止まり rooms から配置）
                 if (Math.random() < 0.6 && _mlDeadEnds.length > 0) {
-                    const _mlItemPool = [SYMBOLS.SWORD, SYMBOLS.ARMOR, SYMBOLS.HEAL_TOME, SYMBOLS.SPEED, SYMBOLS.GUARDIAN, SYMBOLS.ESCAPE, SYMBOLS.EXPLOSION, SYMBOLS.STEALTH, SYMBOLS.CHARM];
+                    const _mlItemPool = [SYMBOLS.SWORD, SYMBOLS.ARMOR, SYMBOLS.HEAL_TOME, SYMBOLS.SPEED, SYMBOLS.GUARDIAN, ...(floorLevel >= 24 ? [SYMBOLS.ESCAPE] : []), SYMBOLS.EXPLOSION, SYMBOLS.STEALTH, SYMBOLS.CHARM];
                     const _mlItemCnt = 1 + Math.floor(Math.random() * 2); // 1〜2個
                     for (let i = 0; i < Math.min(_mlItemCnt, _mlDeadEnds.length); i++)
                         sMap[_mlDeadEnds[i].y][_mlDeadEnds[i].x] = _mlItemPool[Math.floor(Math.random() * _mlItemPool.length)];
@@ -9762,7 +9762,7 @@ function initMap() {
                         for (let x = 1; x < COLS-1; x++)
                             if (sMap[y][x] === SYMBOLS.ICE) _lrIceTiles.push([x, y]);
                     _lrIceTiles.sort(() => Math.random() - 0.5);
-                    const _lrItemPool = [SYMBOLS.SWORD, SYMBOLS.ARMOR, SYMBOLS.HEAL_TOME, SYMBOLS.SPEED, SYMBOLS.GUARDIAN, SYMBOLS.ESCAPE, SYMBOLS.EXPLOSION];
+                    const _lrItemPool = [SYMBOLS.SWORD, SYMBOLS.ARMOR, SYMBOLS.HEAL_TOME, SYMBOLS.SPEED, SYMBOLS.GUARDIAN, ...(floorLevel >= 24 ? [SYMBOLS.ESCAPE] : []), SYMBOLS.EXPLOSION];
                     const _lrIceCnt = 2 + Math.floor(Math.random() * 3);
                     for (let i = 0; i < _lrIceCnt && i < _lrIceTiles.length; i++)
                         sMap[_lrIceTiles[i][1]][_lrIceTiles[i][0]] = _lrItemPool[Math.floor(Math.random() * _lrItemPool.length)];
@@ -9867,7 +9867,7 @@ function initMap() {
 
                 // アイテムをランダムに壁タイルへ埋める
                 const _amItemPool = [SYMBOLS.SWORD, SYMBOLS.ARMOR, SYMBOLS.HEAL_TOME, SYMBOLS.SPEED,
-                                     SYMBOLS.CHARM, SYMBOLS.EXPLOSION, SYMBOLS.GUARDIAN, SYMBOLS.ESCAPE];
+                                     SYMBOLS.CHARM, SYMBOLS.EXPLOSION, SYMBOLS.GUARDIAN, ...(floorLevel >= 24 ? [SYMBOLS.ESCAPE] : [])];
                 const _amItemTarget = 5 + Math.floor(Math.random() * 4); // 5〜8個
                 for (let _at = 0, _placed = 0; _at < 4000 && _placed < _amItemTarget; _at++) {
                     const _ix = 2 + Math.floor(Math.random() * (COLS - 4));
@@ -12861,7 +12861,7 @@ function initMap() {
         });
 
         // --- 壁の中に隠された魔導書 × 3 ---
-        const _f4TomeSyms = [SYMBOLS.SPEED, SYMBOLS.CHARM, SYMBOLS.STEALTH, SYMBOLS.HEAL_TOME, SYMBOLS.EXPLOSION, SYMBOLS.ESCAPE, SYMBOLS.BREAKER_TOME];
+        const _f4TomeSyms = [SYMBOLS.SPEED, SYMBOLS.CHARM, SYMBOLS.STEALTH, SYMBOLS.HEAL_TOME, SYMBOLS.EXPLOSION, SYMBOLS.BREAKER_TOME];
         // プレイヤー部屋・穴部屋・BREAKERスポーンを除く壁セルからランダム選出
         const _f4WallCandidates = [];
         for (let _wy = 2; _wy < ROWS - 2; _wy++) {
@@ -14319,7 +14319,7 @@ function initMap() {
         ambushRooms.push({ cx: _cx23, cy: _cy23, x: 1, y: 1, w: COLS - 2, h: ROWS - 2, count: _count23, boarCount: 4 });
 
         // アイテム配置（中心付近に魔導書1個）
-        const _tomes23 = [SYMBOLS.HEAL_TOME, SYMBOLS.SPEED, SYMBOLS.ESCAPE, SYMBOLS.CHARM, SYMBOLS.STEALTH];
+        const _tomes23 = [SYMBOLS.HEAL_TOME, SYMBOLS.SPEED, SYMBOLS.CHARM, SYMBOLS.STEALTH];
         const _tome23 = _tomes23[Math.floor(Math.random() * _tomes23.length)];
         for (let r = 0; r <= 6; r++) {
             let placed = false;
@@ -19860,7 +19860,7 @@ function initMap() {
     if (floorLevel >= 4 && floorLevel < 100 && rooms.length > 1 && Math.random() < 0.67) {
         const possibleTomes = [SYMBOLS.SPEED, SYMBOLS.CHARM];
         if (floorLevel >= 8) possibleTomes.push(SYMBOLS.STEALTH);
-        if (floorLevel >= 18) possibleTomes.push(SYMBOLS.ESCAPE);
+        if (floorLevel >= 24) possibleTomes.push(SYMBOLS.ESCAPE);
         if (floorLevel >= 12) possibleTomes.push(SYMBOLS.EXPLOSION);
         if (floorLevel >= 4) possibleTomes.push(SYMBOLS.BREAKER_TOME);
         if (floorLevel >= 3) possibleTomes.push(SYMBOLS.HEAL_TOME);
@@ -20931,7 +20931,7 @@ function initMap() {
     }
 
     // --- 1部屋あたりの魔導書を最大2個に制限 ---
-    const tomeSymbols = [SYMBOLS.SPEED, SYMBOLS.CHARM, SYMBOLS.STEALTH, SYMBOLS.HEAL_TOME, SYMBOLS.EXPLOSION, SYMBOLS.ESCAPE, SYMBOLS.BREAKER_TOME, SYMBOLS.GUARDIAN];
+    const tomeSymbols = [SYMBOLS.SPEED, SYMBOLS.CHARM, SYMBOLS.STEALTH, SYMBOLS.HEAL_TOME, SYMBOLS.EXPLOSION, ...(floorLevel >= 24 ? [SYMBOLS.ESCAPE] : []), SYMBOLS.BREAKER_TOME, SYMBOLS.GUARDIAN];
     rooms.forEach(room => {
         let tomeCount = 0;
         for (let y = room.y; y < room.y + room.h; y++) {
