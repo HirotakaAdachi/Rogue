@@ -4933,9 +4933,9 @@ function initMap() {
         // 訪問済みフラグ初期化
         visitedScreens = Array.from({ length: screenGridRows }, () => Array(screenGridCols).fill(false));
         // 101F+ / 98F: スタート画面をランダム選択（左上固定をやめてどこからでも開始）
-        // それ以外: 従来通り左上[0,0]固定
+        // それ以外 / bizarre_allテストモード: 左上[0,0]固定
         let _ssX = 0, _ssY = 0;
-        if (floorLevel >= 101 || floorLevel === 98) {
+        if ((floorLevel >= 101 || floorLevel === 98) && !(isRoomTestMode && forcedLayoutType === 'bizarre_all')) {
             const _ssPool = [];
             for (let _sy = 0; _sy < screenGridRows; _sy++)
                 for (let _sx = 0; _sx < screenGridCols; _sx++)
