@@ -248,18 +248,25 @@ const _TERRAIN_NAMES  = ['LAVA', 'ICE', 'POISON', 'GRASS', 'WEB', 'DISPEL', 'HEA
 const _TERRAIN_COLORS = ['#ef4444', '#7dd3fc', '#a855f7', '#4ade80', '#d4a574', '#c084fc', '#fde68a', '#94a3b8'];
 const _TERRAIN_NAMES_JA = ['溶岩', '氷', '毒沼', '寄生草', '蜘蛛の巣', 'ディスペル', '回復', '通常床'];
 let _terrainSummonIdx = 0;
-// 色ルーレット: 0=白(passive) 1=青(ally) 2=赤(enemy) 3=緑 4=紫 5=橙 6=黄 7=シアン 8=ピンク 9=ライム
+// エンドクレジット用: 青(ally)/赤(enemy)の2択のみ
+const _CREDIT_COLOR_CYCLE = [
+    { color: '#60a5fa', effect: 'ally'  }, // 0 blue
+    { color: '#f87171', effect: 'enemy' }, // 1 red
+];
+// 色ルーレット: passive/ally/enemy を3色ずつ均等配置（各1/3）
+// 0=白, 3=緑, 6=黄 → passive（白扱い）
+// 1=青, 4=紫, 7=シアン → ally（仲間）
+// 2=赤, 5=橙, 8=ピンク → enemy（敵対）
 const _SUMMON_COLOR_CYCLE = [
     { color: '#ffffff', effect: 'passive' }, // 0 white
     { color: '#60a5fa', effect: 'ally'    }, // 1 blue
     { color: '#f87171', effect: 'enemy'   }, // 2 red
     { color: '#4ade80', effect: 'passive' }, // 3 green
-    { color: '#a855f7', effect: 'passive' }, // 4 purple
-    { color: '#f97316', effect: 'passive' }, // 5 orange
+    { color: '#a855f7', effect: 'ally'    }, // 4 purple
+    { color: '#f97316', effect: 'enemy'   }, // 5 orange
     { color: '#fbbf24', effect: 'passive' }, // 6 yellow
-    { color: '#38bdf8', effect: 'passive' }, // 7 cyan
-    { color: '#f472b6', effect: 'passive' }, // 8 pink
-    { color: '#84cc16', effect: 'passive' }, // 9 lime
+    { color: '#38bdf8', effect: 'ally'    }, // 7 cyan
+    { color: '#f472b6', effect: 'enemy'   }, // 8 pink
 ];
 const _SUMMON_CYCLE = [
     // A-Z (表示文字のアルファベット順・1文字1種)
@@ -4058,7 +4065,8 @@ function _initFloor36() {
                 type: 'GREEK_RHO', x: _rhoX, y: _rhoY,
                 hp: 500, maxHp: 500,
                 flashUntil: 0, offsetX: 0, offsetY: 0,
-                expValue: 15, stunTurns: 0
+                expValue: 15, stunTurns: 0,
+                flee: true, // 初期から主人公を避けて逃げ回る
             });
         }
 
@@ -4810,9 +4818,22 @@ function initMap() {
                 : Array.from({ length: screenGridRows }, () => Array(screenGridCols).fill(true))
         };
         screenGridActive = null; // reset after use
-        // 訪問済みフラグ初期化（スタート画面[0,0]は訪問済み）
+        // 訪問済みフラグ初期化
         visitedScreens = Array.from({ length: screenGridRows }, () => Array(screenGridCols).fill(false));
-        visitedScreens[0][0] = true;
+        // 101F+ / 98F: スタート画面をランダム選択（左上固定をやめてどこからでも開始）
+        // それ以外: 従来通り左上[0,0]固定
+        let _ssX = 0, _ssY = 0;
+        if (floorLevel >= 101 || floorLevel === 98) {
+            const _ssPool = [];
+            for (let _sy = 0; _sy < screenGridRows; _sy++)
+                for (let _sx = 0; _sx < screenGridCols; _sx++)
+                    if (screenGrid.active[_sy][_sx]) _ssPool.push({ sx: _sx, sy: _sy });
+            if (_ssPool.length > 0) {
+                const _ssPick = _ssPool[Math.floor(Math.random() * _ssPool.length)];
+                _ssX = _ssPick.sx; _ssY = _ssPick.sy;
+            }
+        }
+        visitedScreens[_ssY][_ssX] = true;
         // 深層テーマ: 101F+でフロアごとにランダムに変化するパラメータセット
         let deepTheme = null;
         if (floorLevel >= 101) {
@@ -4909,9 +4930,9 @@ function initMap() {
                 screenGrid.wind[sy][sx] = Math.random() < multiWindChance;
             }
         }
-        // スタート画面(0,0)は通常風なし（60〜69階は高確率なので適用する）
+        // スタート画面は通常風なし（60〜69階は高確率なので適用する）
         if (!(floorLevel >= 60 && floorLevel <= 69)) {
-            screenGrid.wind[0][0] = false;
+            screenGrid.wind[_ssY][_ssX] = false;
         }
         // テストモード（bizarre_all）は全画面風なし
         if (isRoomTestMode && forcedLayoutType === 'bizarre_all') {
@@ -4923,7 +4944,7 @@ function initMap() {
         // 一部の画面をX壁ステージに（スタート画面除く、約10%）
         for (let sy = 0; sy < screenGridRows; sy++) {
             for (let sx = 0; sx < screenGridCols; sx++) {
-                if (sx === 0 && sy === 0) continue;
+                if (sx === _ssX && sy === _ssY) continue;
                 if (!screenGrid.active[sy][sx]) continue;
                 screenGrid.xWallScreens[sy][sx] = Math.random() < 0.05;
             }
@@ -9878,13 +9899,13 @@ function initMap() {
             return { sMap, sEnemies, sWisps, sTempWalls, rooms, bizType, sInitialScrollWalls, sAmbushRooms };
         }
 
-        // カギ・出口の画面座標をランダムに決定（スタート(0,0)を避け、互いに別の画面）
+        // カギ・出口の画面座標をランダムに決定（スタート画面を避け、互いに別の画面）
         let keyScreenX, keyScreenY, doorScreenX, doorScreenY;
         {
             const allScreens = [];
             for (let sy = 0; sy < screenGridRows; sy++)
                 for (let sx = 0; sx < screenGridCols; sx++)
-                    if (!(sx === 0 && sy === 0) && screenGrid.active[sy][sx]) allScreens.push({ sx, sy });
+                    if (!(sx === _ssX && sy === _ssY) && screenGrid.active[sy][sx]) allScreens.push({ sx, sy });
             for (let i = allScreens.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [allScreens[i], allScreens[j]] = [allScreens[j], allScreens[i]];
@@ -9901,7 +9922,7 @@ function initMap() {
         // 各画面を生成（迷路型・通常ダンジョン型・壁掘り型をランダムに混合）
         // 90F以降: 特殊画面（プレイヤー開始/カギ/ドア/セーブ）以外でbreaker型が出現
         const specialScreens = new Set([
-            '0,0',  // プレイヤー開始
+            `${_ssX},${_ssY}`,  // プレイヤー開始
             `${keyScreenX},${keyScreenY}`,  // カギ
             `${doorScreenX},${doorScreenY}`,  // ドア
             (() => {
@@ -10848,7 +10869,7 @@ function initMap() {
                 allRooms[`${sx},${sy}`] = result.rooms;
 
                 // ===== 指輪ミミック (4%: 10F以上・スタート画面以外) =====
-                if (floorLevel >= 10 && !(sx === 0 && sy === 0) && Math.random() < 0.04 && result.rooms.length >= 1) {
+                if (floorLevel >= 10 && !(sx === _ssX && sy === _ssY) && Math.random() < 0.04 && result.rooms.length >= 1) {
                     const _rmRoom = result.rooms[Math.floor(Math.random() * result.rooms.length)];
                     const _rmSMap = screenGrid.maps[sy][sx];
                     const _rmEnemies = screenGrid.enemies[sy][sx];
@@ -10870,7 +10891,7 @@ function initMap() {
                 }
 
                 // ===== いかれたG (3%: 101F以上・スタート画面以外) =====
-                if (floorLevel >= 101 && !(sx === 0 && sy === 0) && Math.random() < 0.03 && result.rooms.length >= 1) {
+                if (floorLevel >= 101 && !(sx === _ssX && sy === _ssY) && Math.random() < 0.03 && result.rooms.length >= 1) {
                     const gRoom = result.rooms[Math.floor(Math.random() * result.rooms.length)];
                     const gHp = 500 + floorLevel * 10;
                     screenGrid.enemies[sy][sx].push({
@@ -10881,7 +10902,7 @@ function initMap() {
                 }
 
                 // ===== サモナールーム (1%: 101F以上・スタート画面以外) =====
-                if (floorLevel >= 101 && !(sx === 0 && sy === 0) && Math.random() < 0.01 && result.rooms.length >= 2) {
+                if (floorLevel >= 101 && !(sx === _ssX && sy === _ssY) && Math.random() < 0.01 && result.rooms.length >= 2) {
                     // 十分広い部屋（8x6以上）のみ候補にする
                     const largeRooms = result.rooms.slice(1).filter(r => r.w >= 8 && r.h >= 6);
                     if (largeRooms.length === 0) { /* 大きな部屋がなければスキップ */ }
@@ -10974,7 +10995,7 @@ function initMap() {
             const _ssCands = [];
             for (let sy = 0; sy < screenGridRows; sy++) {
                 for (let sx = 0; sx < screenGridCols; sx++) {
-                    if (sx === 0 && sy === 0) continue;
+                    if (sx === _ssX && sy === _ssY) continue;
                     if (!screenGrid.active[sy][sx]) continue;
                     const _ssRooms = allRooms[`${sx},${sy}`];
                     if (!_ssRooms || _ssRooms.length < 1) continue;
@@ -10983,11 +11004,11 @@ function initMap() {
             }
             if (_ssCands.length > 0) {
                 const _ssPick = _ssCands[Math.floor(Math.random() * _ssCands.length)];
-                const { sx: _ssX, sy: _ssY } = _ssPick;
-                const _ssRooms = allRooms[`${_ssX},${_ssY}`];
+                const { sx: _smX, sy: _smY } = _ssPick;
+                const _ssRooms = allRooms[`${_smX},${_smY}`];
                 const _ssRoom = _ssRooms[Math.floor(Math.random() * _ssRooms.length)];
                 const _ssHp = 80 + floorLevel * 4;
-                screenGrid.enemies[_ssY][_ssX].push({
+                screenGrid.enemies[_smY][_smX].push({
                     type: 'SUMMONER', x: _ssRoom.cx, y: _ssRoom.cy,
                     hp: _ssHp, maxHp: _ssHp,
                     flashUntil: 0, offsetX: 0, offsetY: 0,
@@ -11071,11 +11092,11 @@ function initMap() {
             }
         }
 
-        // プレイヤーのスタート位置: 画面(0,0)のランダムな部屋
+        // プレイヤーのスタート位置: スタート画面(_ssX,_ssY)のランダムな部屋
         // spiral画面ではWARP_PADのある中心(COLS/2, ROWS/2)を除外
-        const _s00Type = screenGrid.types && screenGrid.types[0][0];
+        const _s00Type = screenGrid.types && screenGrid.types[_ssY][_ssX];
         const _warpCX = Math.floor(COLS/2), _warpCY = Math.floor(ROWS/2);
-        let startRooms = allRooms['0,0'];
+        let startRooms = allRooms[`${_ssX},${_ssY}`];
         if (_s00Type === 'spiral') {
             const _filtered = startRooms.filter(r => !(r.cx === _warpCX && r.cy === _warpCY));
             if (_filtered.length > 0) startRooms = _filtered;
@@ -11084,11 +11105,11 @@ function initMap() {
         player.x = startRoom.cx;
         player.y = startRoom.cy;
         // WARP_PADタイルは上書きしない
-        if (screenGrid.maps[0][0][player.y][player.x] !== SYMBOLS.WARP_PAD) {
-            screenGrid.maps[0][0][player.y][player.x] = SYMBOLS.FLOOR;
+        if (screenGrid.maps[_ssY][_ssX][player.y][player.x] !== SYMBOLS.WARP_PAD) {
+            screenGrid.maps[_ssY][_ssX][player.y][player.x] = SYMBOLS.FLOOR;
         }
         // スタート地点付近の敵を除去（LETTERは除外 — novel_corridor文字は消さない）
-        screenGrid.enemies[0][0] = screenGrid.enemies[0][0].filter(
+        screenGrid.enemies[_ssY][_ssX] = screenGrid.enemies[_ssY][_ssX].filter(
             e => e.type === 'LETTER' || !(Math.abs(e.x - player.x) <= 3 && Math.abs(e.y - player.y) <= 3)
         );
 
@@ -11635,7 +11656,7 @@ function initMap() {
             const pvCandidates = [];
             for (let sy = 0; sy < screenGridRows; sy++) {
                 for (let sx = 0; sx < screenGridCols; sx++) {
-                    if (sx === 0 && sy === 0) continue;
+                    if (sx === _ssX && sy === _ssY) continue;
                     if (!screenGrid.active[sy][sx]) continue; // 非アクティブ画面を除外
                     if (sx === keyScreenX && sy === keyScreenY) continue;
                     if (sx === doorScreenX && sy === doorScreenY) continue;
@@ -11660,23 +11681,23 @@ function initMap() {
             }
         }
 
-        // 現在の画面をグローバルにロード
-        currentScreen = { x: 0, y: 0 };
-        map = screenGrid.maps[0][0];
-        enemies = screenGrid.enemies[0][0];
-        wisps = screenGrid.wisps[0][0];
-        tempWalls = [...(screenGrid.tempWalls[0][0] || [])];
-        ambushRooms = screenGrid.ambushRooms ? [...(screenGrid.ambushRooms[0][0] || [])] : [];
-        isWindFloor = false; // wind disabled (was screenGrid.wind[0][0])
-        isXWallStage = screenGrid.xWallScreens ? screenGrid.xWallScreens[0][0] : false;
+        // 現在の画面をグローバルにロード（スタート画面 = _ssX, _ssY）
+        currentScreen = { x: _ssX, y: _ssY };
+        map = screenGrid.maps[_ssY][_ssX];
+        enemies = screenGrid.enemies[_ssY][_ssX];
+        wisps = screenGrid.wisps[_ssY][_ssX];
+        tempWalls = [...(screenGrid.tempWalls[_ssY][_ssX] || [])];
+        ambushRooms = screenGrid.ambushRooms ? [...(screenGrid.ambushRooms[_ssY][_ssX] || [])] : [];
+        isWindFloor = false; // wind disabled (was screenGrid.wind[_ssY][_ssX])
+        isXWallStage = screenGrid.xWallScreens ? screenGrid.xWallScreens[_ssY][_ssX] : false;
 
         // フロアに狂人を0〜1体だけ配置（101F以上・テーマで変動）
         if (floorLevel >= 101 && Math.random() < (deepTheme ? deepTheme.madmanChance : 0.40)) {
-            // スタート画面(0,0)以外の非空スクリーンからランダムに選ぶ
+            // スタート画面以外の非空スクリーンからランダムに選ぶ
             const candidates = [];
             for (let sy = 0; sy < screenGridRows; sy++)
                 for (let sx = 0; sx < screenGridCols; sx++)
-                    if (!(sx===0 && sy===0) && screenGrid.active[sy][sx] && !(screenGrid.types && screenGrid.types[sy][sx] === 'VERTICAL_RIVER') && !(screenGrid.types && (screenGrid.types[sy][sx] === 'L_RIVER_TL' || screenGrid.types[sy][sx] === 'L_RIVER_TR' || screenGrid.types[sy][sx] === 'L_RIVER_BL' || screenGrid.types[sy][sx] === 'L_RIVER_BR')) && screenGrid.types?.[sy]?.[sx] !== 'novel_corridor') candidates.push({sx, sy});
+                    if (!(sx===_ssX && sy===_ssY) && screenGrid.active[sy][sx] && !(screenGrid.types && screenGrid.types[sy][sx] === 'VERTICAL_RIVER') && !(screenGrid.types && (screenGrid.types[sy][sx] === 'L_RIVER_TL' || screenGrid.types[sy][sx] === 'L_RIVER_TR' || screenGrid.types[sy][sx] === 'L_RIVER_BL' || screenGrid.types[sy][sx] === 'L_RIVER_BR')) && screenGrid.types?.[sy]?.[sx] !== 'novel_corridor') candidates.push({sx, sy});
             if (candidates.length > 0) {
                 const pick = candidates[Math.floor(Math.random() * candidates.length)];
                 const mMap = screenGrid.maps[pick.sy][pick.sx];
@@ -11701,7 +11722,7 @@ function initMap() {
         if (floorLevel >= 25) {
             for (let sy = 0; sy < screenGridRows; sy++) {
                 for (let sx = 0; sx < screenGridCols; sx++) {
-                    if (sx === 0 && sy === 0) continue; // スタート画面は除外
+                    if (sx === _ssX && sy === _ssY) continue; // スタート画面は除外
                     if (screenGrid.types?.[sy]?.[sx] === 'blank_template') continue;
                     if (screenGrid.types?.[sy]?.[sx] === 'novel_corridor') continue;
                     if (Math.random() >= 0.05) continue;
@@ -11728,7 +11749,7 @@ function initMap() {
         if (floorLevel >= 15) {
             for (let sy = 0; sy < screenGridRows; sy++) {
                 for (let sx = 0; sx < screenGridCols; sx++) {
-                    if (sx === 0 && sy === 0) continue; // スタート画面は除外
+                    if (sx === _ssX && sy === _ssY) continue; // スタート画面は除外
                     if (screenGrid.types?.[sy]?.[sx] === 'blank_template') continue;
                     if (screenGrid.types?.[sy]?.[sx] === 'novel_corridor') continue;
                     if (Math.random() >= 0.04) continue;
@@ -11769,7 +11790,7 @@ function initMap() {
         if (floorLevel >= 20) {
             for (let sy = 0; sy < screenGridRows; sy++) {
                 for (let sx = 0; sx < screenGridCols; sx++) {
-                    if (sx === 0 && sy === 0) continue;
+                    if (sx === _ssX && sy === _ssY) continue;
                     if (screenGrid.types?.[sy]?.[sx] === 'blank_template') continue;
                     if (screenGrid.types?.[sy]?.[sx] === 'novel_corridor') continue;
                     if (Math.random() >= 0.03) continue;
@@ -11813,7 +11834,7 @@ function initMap() {
                 let _lcSpawned = false;
                 outer: for (let _lcSy = 0; _lcSy < screenGridRows; _lcSy++) {
                     for (let _lcSx = 0; _lcSx < screenGridCols; _lcSx++) {
-                        if (_lcSx === 0 && _lcSy === 0) continue; // スタート画面除外
+                        if (_lcSx === _ssX && _lcSy === _ssY) continue; // スタート画面除外
                         if (!screenGrid.active[_lcSy][_lcSx]) continue;
                         if (_bizTypes.has(screenGrid.types?.[_lcSy]?.[_lcSx])) continue; // 奇妙な部屋は除外
                         const _lcMap = screenGrid.maps[_lcSy][_lcSx];
@@ -11864,7 +11885,7 @@ function initMap() {
             const _gcProbScale = _gcLatinPresent ? 0.1 : 1.0;
             outer2: for (let _gcSy = 0; _gcSy < screenGridRows; _gcSy++) {
                 for (let _gcSx = 0; _gcSx < screenGridCols; _gcSx++) {
-                    if (_gcSx === 0 && _gcSy === 0) continue;
+                    if (_gcSx === _ssX && _gcSy === _ssY) continue;
                     if (!screenGrid.active[_gcSy][_gcSx]) continue;
                     if (_bizTypes.has(screenGrid.types?.[_gcSy]?.[_gcSx])) continue; // 奇妙な部屋は除外
                     const _gcMap = screenGrid.maps[_gcSy][_gcSx];
@@ -11967,18 +11988,18 @@ function initMap() {
             addLog("The creatures here are at peace.");
         }
 
-        // スタート画面(0,0)のmovingMadmenは即座にenemiesへ（ただしプレイヤーから遠ければ）
-        enemies = screenGrid.enemies[0][0];
-        const startMadmen = movingMadmen.filter(m => m.screenX === 0 && m.screenY === 0 &&
+        // スタート画面のmovingMadmenは即座にenemiesへ（ただしプレイヤーから遠ければ）
+        enemies = screenGrid.enemies[_ssY][_ssX];
+        const startMadmen = movingMadmen.filter(m => m.screenX === _ssX && m.screenY === _ssY &&
             !(Math.abs(m.x - player.x) <= 3 && Math.abs(m.y - player.y) <= 3));
-        movingMadmen = movingMadmen.filter(m => !(m.screenX === 0 && m.screenY === 0));
+        movingMadmen = movingMadmen.filter(m => !(m.screenX === _ssX && m.screenY === _ssY));
         enemies.push(...startMadmen);
 
         // Stage 98: FAIRY_MIMICをスタート画面以外の各スクリーンに70%で1体ずつ配置
         if (floorLevel === 98) {
             for (let sy = 0; sy < screenGridRows; sy++) {
                 for (let sx = 0; sx < screenGridCols; sx++) {
-                    if (sx === 0 && sy === 0) continue; // スタート画面はスキップ
+                    if (sx === _ssX && sy === _ssY) continue; // スタート画面はスキップ
                     if (Math.random() >= 0.70) continue;
                     const fmMap = screenGrid.maps[sy][sx];
                     for (let t = 0; t < 300; t++) {
@@ -12009,7 +12030,7 @@ function initMap() {
                 const _s98Candidates = [];
                 for (let sy = 0; sy < screenGridRows; sy++)
                     for (let sx = 0; sx < screenGridCols; sx++)
-                        if (!(sx === 0 && sy === 0)) _s98Candidates.push({ sx, sy });
+                        if (!(sx === _ssX && sy === _ssY)) _s98Candidates.push({ sx, sy });
                 // シャッフル
                 for (let i = _s98Candidates.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -12040,6 +12061,77 @@ function initMap() {
                     }
                 }
                 if (_s98Placed > 0) addLog(`⚠️ A Summoner lurks somewhere in the labyrinth...`);
+            }
+
+            // Stage 98: GREEK_PI (π) 確定1体 — スタート画面以外のランダムなスクリーンに配置
+            {
+                const _piCandidates = [];
+                for (let sy = 0; sy < screenGridRows; sy++)
+                    for (let sx = 0; sx < screenGridCols; sx++)
+                        if (!(sx === _ssX && sy === _ssY)) _piCandidates.push({ sx, sy });
+                for (let i = _piCandidates.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [_piCandidates[i], _piCandidates[j]] = [_piCandidates[j], _piCandidates[i]];
+                }
+                let _piPlaced = false;
+                for (const { sx, sy } of _piCandidates) {
+                    const _piMap = screenGrid.maps[sy][sx];
+                    for (let t = 0; t < 300; t++) {
+                        const px = 2 + Math.floor(Math.random() * (COLS - 4));
+                        const py = 2 + Math.floor(Math.random() * (ROWS - 4));
+                        if (_piMap[py][px] !== SYMBOLS.FLOOR) continue;
+                        if (screenGrid.enemies[sy][sx].some(e => e.x === px && e.y === py)) continue;
+                        const _piHp = 20 + Math.floor(floorLevel * 0.4);
+                        screenGrid.enemies[sy][sx].push({
+                            type: 'GREEK_PI', x: px, y: py,
+                            hp: _piHp, maxHp: _piHp,
+                            flashUntil: 0, offsetX: 0, offsetY: 0,
+                            expValue: 10, stunTurns: 0,
+                            flee: true, noFleeAnim: false,
+                        });
+                        _piPlaced = true;
+                        break;
+                    }
+                    if (_piPlaced) break;
+                }
+                if (_piPlaced) addLog('⚠️ Something is hiding in the labyrinth... π?');
+            }
+
+            // Stage 98: ラテン文字コレクション敵も確定1体スポーン（LATIN_P除外）
+            {
+                const _lc98Pool = LATIN_ENEMIES.filter(t => !latinKillCounts[t.type] && t.type !== 'LATIN_P');
+                if (_lc98Pool.length > 0) {
+                    const _lc98Candidates = [];
+                    for (let sy = 0; sy < screenGridRows; sy++)
+                        for (let sx = 0; sx < screenGridCols; sx++)
+                            if (!(sx === _ssX && sy === _ssY)) _lc98Candidates.push({ sx, sy });
+                    for (let i = _lc98Candidates.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [_lc98Candidates[i], _lc98Candidates[j]] = [_lc98Candidates[j], _lc98Candidates[i]];
+                    }
+                    const _lc98Type = _lc98Pool[Math.floor(Math.random() * _lc98Pool.length)];
+                    let _lc98Placed = false;
+                    for (const { sx, sy } of _lc98Candidates) {
+                        const _lc98Map = screenGrid.maps[sy][sx];
+                        for (let t = 0; t < 300; t++) {
+                            const px = 2 + Math.floor(Math.random() * (COLS - 4));
+                            const py = 2 + Math.floor(Math.random() * (ROWS - 4));
+                            if (_lc98Map[py][px] !== SYMBOLS.FLOOR) continue;
+                            if (screenGrid.enemies[sy][sx].some(e => e.x === px && e.y === py)) continue;
+                            const _lc98Hp = 20 + Math.floor(floorLevel * 0.4);
+                            screenGrid.enemies[sy][sx].push({
+                                type: _lc98Type.type, x: px, y: py,
+                                hp: _lc98Hp, maxHp: _lc98Hp,
+                                flashUntil: 0, offsetX: 0, offsetY: 0,
+                                expValue: 10, stunTurns: 0,
+                                flee: true, noFleeAnim: false,
+                            });
+                            _lc98Placed = true;
+                            break;
+                        }
+                        if (_lc98Placed) break;
+                    }
+                }
             }
         }
 
@@ -25239,8 +25331,9 @@ function draw(now) {
                     ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 8;
                 } else if (e._colorCycling) {
                     // ルーレット中: 80msごとに自動サイクル・常時表示
-                    e._cycleColorIdx = Math.floor(now / 80) % _SUMMON_COLOR_CYCLE.length;
-                    const _dcc = (_SUMMON_COLOR_CYCLE[e._cycleColorIdx] || _SUMMON_COLOR_CYCLE[0]).color;
+                    const _dCyc = e._isCredit ? _CREDIT_COLOR_CYCLE : _SUMMON_COLOR_CYCLE;
+                    e._cycleColorIdx = Math.floor(now / 80) % _dCyc.length;
+                    const _dcc = (_dCyc[e._cycleColorIdx] || _dCyc[0]).color;
                     color = _dcc;
                     ctx.globalAlpha = 1.0;
                     ctx.shadowColor = _dcc; ctx.shadowBlur = 22;
@@ -25271,8 +25364,9 @@ function draw(now) {
                 } else if (e._summonedAlly) {
                     _mdColor = '#ffffff'; ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 8;
                 } else if (e._colorCycling) {
-                    e._cycleColorIdx = Math.floor(now / 80) % _SUMMON_COLOR_CYCLE.length;
-                    _mdColor = (_SUMMON_COLOR_CYCLE[e._cycleColorIdx] || _SUMMON_COLOR_CYCLE[0]).color;
+                    const _mdCyc = e._isCredit ? _CREDIT_COLOR_CYCLE : _SUMMON_COLOR_CYCLE;
+                    e._cycleColorIdx = Math.floor(now / 80) % _mdCyc.length;
+                    _mdColor = (_mdCyc[e._cycleColorIdx] || _mdCyc[0]).color;
                     ctx.globalAlpha = 1.0;
                     ctx.shadowColor = _mdColor; ctx.shadowBlur = 22;
                 } else if (e.isAlly) {
@@ -25297,8 +25391,9 @@ function draw(now) {
                 if (e.isAlly) sColor = '#60a5fa';
                 if (e._summonedAlly && !e._summonPending) sColor = '#ffffff';
                 if (e._colorCycling) {
-                    e._cycleColorIdx = Math.floor(now / 80) % _SUMMON_COLOR_CYCLE.length;
-                    sColor = (_SUMMON_COLOR_CYCLE[e._cycleColorIdx] || _SUMMON_COLOR_CYCLE[0]).color;
+                    const _sCyc = e._isCredit ? _CREDIT_COLOR_CYCLE : _SUMMON_COLOR_CYCLE;
+                    e._cycleColorIdx = Math.floor(now / 80) % _sCyc.length;
+                    sColor = (_sCyc[e._cycleColorIdx] || _sCyc[0]).color;
                     ctx.globalAlpha = 1.0;
                     sShadowBlur = 22;
                 }
@@ -25653,8 +25748,9 @@ function draw(now) {
                     ctx.shadowColor = '#ffffff'; ctx.shadowBlur = _blink ? 14 : 0;
                 }
                 if (e._colorCycling) {
-                    e._cycleColorIdx = Math.floor(now / 80) % _SUMMON_COLOR_CYCLE.length;
-                    eColor = (_SUMMON_COLOR_CYCLE[e._cycleColorIdx] || _SUMMON_COLOR_CYCLE[0]).color;
+                    const _eCyc = e._isCredit ? _CREDIT_COLOR_CYCLE : _SUMMON_COLOR_CYCLE;
+                    e._cycleColorIdx = Math.floor(now / 80) % _eCyc.length;
+                    eColor = (_eCyc[e._cycleColorIdx] || _eCyc[0]).color;
                     ctx.globalAlpha = 1.0;
                     ctx.shadowColor = eColor; ctx.shadowBlur = 22;
                 }
@@ -26383,9 +26479,10 @@ function addLogHTML(html) {
     while (logElement.childNodes.length > 10) { logElement.removeChild(logElement.firstChild); }
     logElement.scrollTop = logElement.scrollHeight;
 }
-function _showRouletteLog() {
+function _showRouletteLog(cycle) {
+    const _cyc = cycle || _SUMMON_COLOR_CYCLE;
     addLog('Number keys to choose color. Attack to confirm.');
-    const digits = _SUMMON_COLOR_CYCLE.map((entry, i) =>
+    const digits = _cyc.map((entry, i) =>
         `<span style="color:${entry.color};font-weight:bold">${i}</span>`
     ).join(' ');
     addLogHTML(digits);
@@ -26637,8 +26734,9 @@ function _applySummonTypeInit(e, bx, by) {
 // ルーレット停止: 現在の _cycleColorIdx で色を確定する（攻撃停止・移動確定の共通処理）
 function _resolveColorCycling(e) {
     e._colorCycling = false;
-    const _ccResIdx = e._cycleColorIdx || 0;
-    const _ccEntry = _SUMMON_COLOR_CYCLE[_ccResIdx] || _SUMMON_COLOR_CYCLE[0];
+    const _ccCyc = e._isCredit ? _CREDIT_COLOR_CYCLE : _SUMMON_COLOR_CYCLE;
+    const _ccResIdx = (e._cycleColorIdx || 0) % _ccCyc.length;
+    const _ccEntry = _ccCyc[_ccResIdx] || _ccCyc[0];
     const _ccColor  = _ccEntry.color;
     const _ccEffect = _ccEntry.effect;
     const _isEnemy  = _ccEffect === 'enemy';
@@ -29637,7 +29735,8 @@ async function handleAction(dx, dy) {
                         type: 'GREEK_RHO', x: _rhoRx, y: _rhoRy,
                         hp: 500, maxHp: 500,
                         flashUntil: 0, offsetX: 0, offsetY: 0,
-                        expValue: 15, stunTurns: 0
+                        expValue: 15, stunTurns: 0,
+                        flee: true, // 再出現後も即逃走
                     });
                     screenGrid.enemies[newScreenY][newScreenX] = enemies;
                 }
@@ -30045,7 +30144,7 @@ async function handleAction(dx, dy) {
         victim._colorCycling = true;
         victim._cycleColorIdx = 0;
         SOUNDS.PLACE_BLOCK();
-        _showRouletteLog();
+        _showRouletteLog(victim._isCredit ? _CREDIT_COLOR_CYCLE : null);
         draw();
         await enemyTurn();
         moveFairies();
@@ -30060,7 +30159,7 @@ async function handleAction(dx, dy) {
         victim._colorCycling = true;
         victim._cycleColorIdx = 0;
         SOUNDS.PLACE_BLOCK();
-        _showRouletteLog();
+        _showRouletteLog(victim._isCredit ? _CREDIT_COLOR_CYCLE : null);
         draw();
         await enemyTurn();
         moveFairies();
@@ -30210,12 +30309,12 @@ async function handleAction(dx, dy) {
                         const _rhoBonus = enemies.find(e => e.type === 'GREEK_RHO' && !e._dead && e.hp > 0);
                         if (_rhoBonus && !_rhoBonus._lpPermanentReveal) {
                             _rhoBonus._lpPermanentReveal = true;
-                            _rhoBonus._lpRevealTurns = 30;
+                            _rhoBonus._lpRevealTurns = 0;
                             _rhoBonus._lpHideTurns = 0;
-                            _rhoBonus.flee = false;
+                            _rhoBonus.flee = true; // 全R白後も逃げ続ける（姿は見える）
                             setTimeout(() => {
-                                spawnFloatingText(_rhoBonus.x, _rhoBonus.y, 'ρ!', '#ef4444', 2000);
-                                addLog('All guards are at peace! ρ emerges from the shadows!');
+                                spawnFloatingText(_rhoBonus.x, _rhoBonus.y, 'ρ REVEALED!', '#ef4444', 2000);
+                                addLog('All guards are at peace! ρ has nowhere left to hide!');
                                 SOUNDS.TAU_APPEAR && SOUNDS.TAU_APPEAR();
                                 draw();
                             }, 600);
@@ -37109,8 +37208,11 @@ async function enemyTurn() {
                     if (e._lpRevealTurns === 0) e._lpHideTurns = 3; // 見えなくなった直後は3ターンだけ逃げ続ける
                 }
                 // 見えない状態で3ターン経過後は静止（潜伏）
+                // ただしステージ36のGREEK_RHOは常に逃げ続ける（全R白で初めて静止）
                 if ((e.type === 'LATIN_P' || e.type === 'GREEK_RHO') && e._lpRevealTurns === 0) {
-                    if ((e._lpHideTurns || 0) > 0) {
+                    if (e.type === 'GREEK_RHO' && floorLevel === 36) {
+                        // 静止しない: 常に主人公から逃げ回る
+                    } else if ((e._lpHideTurns || 0) > 0) {
                         e._lpHideTurns--;
                     } else {
                         e.flee = false;
@@ -42936,7 +43038,8 @@ window.addEventListener('keydown', async e => {
             if (_rouletteTarget) {
                 e.preventDefault();
                 isProcessing = true;
-                _rouletteTarget._cycleColorIdx = _keyDigit;
+                const _kCyc = _rouletteTarget._isCredit ? _CREDIT_COLOR_CYCLE : _SUMMON_COLOR_CYCLE;
+                _rouletteTarget._cycleColorIdx = Math.min(_keyDigit, _kCyc.length - 1);
                 _resolveColorCycling(_rouletteTarget);
                 SOUNDS.CHARM();
                 const _jumpH = -(TILE_SIZE * 1.5);
