@@ -25944,7 +25944,7 @@ function draw(now) {
                     ctx.shadowColor = isFlashing ? '#ededed' : eColor;
                     ctx.shadowBlur = Math.max(ctx.shadowBlur || 0, 8);
                 }
-                ctx.fillStyle = isFlashing ? '#ededed' : eColor;
+                ctx.fillStyle = (isFlashing && e.type !== 'PHANTOM') ? '#ededed' : eColor;
                 if (e.type === 'SPAWNER' || e.type === 'WISP_SPAWNER') {
                     // □で囲まれた文字を描画
                     // cooldown 10〜7: 空の□（生成直後の休眠期）
@@ -33170,10 +33170,12 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
     // PHANTOM: 設置ブロック相当 — ダメージは常に1固定
     if (enemy.type === 'PHANTOM') {
         damage = 1;
-        // 初回被弾時: 効果音+全PHANTOM点滅しながら姿を現す
-        if (_phRevealedAt === 0) {
-            _phRevealedAt = performance.now();
-            _phHidingAt = 0;
+        // 被弾時は常に姿を現す（2回目以降の再ヒットでも再露出）
+        const _phWasFirst = _phRevealedAt === 0;
+        _phRevealedAt = performance.now();
+        _phHidingAt = 0;
+        _phRevealTurns = Math.max(_phRevealTurns, 4); // 最低4ターン表示
+        if (_phWasFirst) {
             SOUNDS.BANG();
             addLog('The shadows stir — all phantoms revealed!');
         }
