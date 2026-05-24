@@ -37449,24 +37449,24 @@ async function enemyTurn() {
                 }
                 // ===== LATIN 小文字 個別挙動 =====
 
-                // LATIN_A: 横移動で逃げ、壁に詰まったら上下交互にトグル
+                // LATIN_A: 横移動優先で逃げ、壁に詰まったらプレイヤーから遠い縦方向へ壁沿い逃走
                 if (e.type === 'LATIN_A') {
                     if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
-                    if (e._aVDir === undefined) e._aVDir = 1;
                     for (let _aStep = 0; _aStep < 2; _aStep++) {
-                        const _aAway = player.x >= e.x ? -1 : 1;
-                        const _aNx = e.x + _aAway;
-                        if (canEnemyMove(_aNx, e.y, e) && !isRealHole(_aNx, e.y)
-                                && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === _aNx && o.y === e.y)) {
-                            e.x = _aNx;
-                        } else {
-                            // 横が壁 → 上下をトグル
-                            const _aNy = e.y + e._aVDir;
-                            if (canEnemyMove(e.x, _aNy, e) && !isRealHole(e.x, _aNy)
-                                    && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === e.x && o.y === _aNy)) {
-                                e.y = _aNy;
+                        const _aAwayX = player.x >= e.x ? -1 : 1;
+                        const _aAwayY = player.y >= e.y ? -1 : 1;
+                        // 横逃げ→縦逃げ（プレイヤーから遠い方向）→縦逃げ（逆）の順で試す
+                        const _aTried = [
+                            {x: _aAwayX, y: 0},
+                            {x: 0, y: _aAwayY},
+                            {x: 0, y: -_aAwayY},
+                        ];
+                        for (const d of _aTried) {
+                            const nx = e.x + d.x, ny = e.y + d.y;
+                            if (canEnemyMove(nx, ny, e) && !isRealHole(nx, ny)
+                                    && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
+                                e.x = nx; e.y = ny; break;
                             }
-                            e._aVDir = -e._aVDir;
                         }
                     }
                     continue;
