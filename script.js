@@ -44207,7 +44207,11 @@ window.addEventListener('keydown', async e => {
             if (t) {
                 isRoomTestMode = true;
                 forcedLayoutType = t.id;
-                startGame((t.prob === 'テスト専用' || t.prob === '深層のみ' || t.prob === 'マルチ専用') ? 101 : 49, true);
+                // latin_test はシングル画面が必要なため floor 1 で起動（floor 10+ は multiScreenMode になる）
+                const _rtFloor = t.id === 'latin_test' ? 1
+                    : (t.prob === 'テスト専用' || t.prob === '深層のみ' || t.prob === 'マルチ専用') ? 101
+                    : 49;
+                startGame(_rtFloor, true);
                 SOUNDS.SELECT();
             }
             return;
