@@ -11952,7 +11952,8 @@ function initMap() {
                     const _lcMap = screenGrid.maps[_lcSy][_lcSx];
                     if (!_lcMap) continue;
                     const _lcRooms = allRooms[`${_lcSx},${_lcSy}`] || [];
-                    const _lcProb = 0.005 + _lcRooms.length * 0.004;
+                    const _lcDepthBonus = (floorLevel - 50) * 0.001; // 1F深くなるごと+0.1%、上限15%
+                    const _lcProb = Math.min(0.005 + _lcRooms.length * 0.004 + _lcDepthBonus, 0.15);
                     if (Math.random() >= _lcProb) continue;
                     // 未収集かつこのフロア未出現の型からランダム選出
                     const _lcPool = LATIN_ENEMIES.filter(t => !latinKillCounts[t.type] && t.type !== 'LATIN_P' && !_lcSpawnedTypes.has(t.type));
