@@ -25593,8 +25593,21 @@ function draw(now) {
                     const _cd = ALL_COLLECTOR_MAP.get(e.type);
                     eColor = e._summonColor || _cd.color; // 召喚色優先、なければ自然色
                     eChar = _cd.char;
-                    // LATIN_M: 未発覚時は「。」に擬態
+                    // LATIN_M: 未発覚時は「。」に擬態、壁モードは壁タイルとして描画
                     if (e.type === 'LATIN_M' && !e._mRevealed) {
+                        if (e._mWallMode) {
+                            // 壁に擬態：壁タイルと同じ描画をしてスキップ
+                            const _mWpx = e.x * TILE_SIZE, _mWpy = e.y * TILE_SIZE;
+                            ctx.save();
+                            ctx.fillStyle = '#222'; ctx.fillRect(_mWpx, _mWpy, TILE_SIZE, TILE_SIZE);
+                            ctx.strokeStyle = '#888'; ctx.lineWidth = 2; ctx.beginPath();
+                            ctx.moveTo(_mWpx, _mWpy + 1); ctx.lineTo(_mWpx + TILE_SIZE, _mWpy + 1);
+                            ctx.moveTo(_mWpx, _mWpy + TILE_SIZE - 1); ctx.lineTo(_mWpx + TILE_SIZE, _mWpy + TILE_SIZE - 1);
+                            ctx.moveTo(_mWpx + 1, _mWpy); ctx.lineTo(_mWpx + 1, _mWpy + TILE_SIZE);
+                            ctx.moveTo(_mWpx + TILE_SIZE - 1, _mWpy); ctx.lineTo(_mWpx + TILE_SIZE - 1, _mWpy + TILE_SIZE);
+                            ctx.stroke(); ctx.restore();
+                            return;
+                        }
                         eChar = '。';
                         eColor = '#94a3b8';
                         ctx.font = `10px "Courier New", monospace`;
@@ -33141,10 +33154,12 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
     // 赤い姿をその場で見せてから逃走（描画→450ms待機→enemyTurnで移動）
     if (_lpHit) { draw(); await new Promise(r => setTimeout(r, 450)); }
 
-    // LATIN_M: 攻撃されたら正体を現す
+    // LATIN_M: 攻撃されたら正体を現す（壁擬態中も同様）
     if (enemy.type === 'LATIN_M' && !enemy._mRevealed) {
         enemy._mRevealed = true;
+        enemy._mWallMode = true;
         spawnFloatingText(enemy.x, enemy.y, '!', '#a3e635');
+        addLog('The m was disguised as a wall!');
     }
     // LATIN_U: 攻撃されたら「@」擬態を解除
     if (enemy.type === 'LATIN_U' && !enemy._uRevealed) {
@@ -37411,24 +37426,11 @@ async function enemyTurn() {
                     continue;
                 }
 
-                // LATIN_B: 主人公が6マス以内に近づいたら逆方向へ突進。壁激突でスタン
+                // LATIN_B: 主人公が6マス以内に近づくと点滅（次ターン突進）→壁激突でスタン
                 if (e.type === 'LATIN_B') {
                     const _bDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
-                    if (_bDist <= 6 && !e._bCharging && e.stunTurns <= 0) {
-                        // 4方向を「プレイヤーから遠くなる順」に試して、1マス以上進める方向を選ぶ
-                        const _bDirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]
-                            .filter(d => canEnemyMove(e.x + d.x, e.y + d.y, e))
-                            .sort((a,b) => {
-                                const da = Math.abs((e.x+a.x)-player.x)+Math.abs((e.y+a.y)-player.y);
-                                const db = Math.abs((e.x+b.x)-player.x)+Math.abs((e.y+b.y)-player.y);
-                                return db - da; // 遠い順
-                            });
-                        if (_bDirs.length > 0) {
-                            e._bCharging = true; e._bDx = _bDirs[0].x; e._bDy = _bDirs[0].y;
-                            spawnFloatingText(e.x, e.y, '!', '#ff9f43');
-                        }
-                    }
                     if (e._bCharging && e.stunTurns <= 0) {
+                        // 突進ターン：必ずどこかへ飛ぶ
                         if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
                         let _bHit = false;
                         for (let _bs = 0; _bs < 5; _bs++) {
@@ -37438,6 +37440,18 @@ async function enemyTurn() {
                         }
                         e._bCharging = false;
                         if (_bHit) { e.stunTurns = 4; spawnFloatingText(e.x, e.y, 'STUNNED!', '#94a3b8'); }
+                    } else if (_bDist <= 6 && !e._bCharging && e.stunTurns <= 0) {
+                        // 点滅ターン：方向を確定して次ターンに突進
+                        const _bAllDirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+                        const _bOpenDirs = _bAllDirs.filter(d => canEnemyMove(e.x + d.x, e.y + d.y, e));
+                        const _bCandidates = (_bOpenDirs.length > 0 ? _bOpenDirs : _bAllDirs)
+                            .sort((a,b) => {
+                                const da = Math.abs((e.x+a.x)-player.x)+Math.abs((e.y+a.y)-player.y);
+                                const db = Math.abs((e.x+b.x)-player.x)+Math.abs((e.y+b.y)-player.y);
+                                return db - da; // プレイヤーから遠い順
+                            });
+                        e._bCharging = true; e._bDx = _bCandidates[0].x; e._bDy = _bCandidates[0].y;
+                        spawnFloatingText(e.x, e.y, '!', '#ff9f43');
                     } else if (!e._bCharging) {
                         const _bChosen = pickFleeDir(e);
                         if (_bChosen) {
@@ -37667,13 +37681,23 @@ async function enemyTurn() {
                     continue;
                 }
 
-                // LATIN_M: 「。」に擬態して逃げる。主人公が攻撃すると正体を現す
+                // LATIN_M: 「。」に擬態→正体露出後、遠ざかると壁に再擬態
                 if (e.type === 'LATIN_M') {
+                    const _mDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
                     if (!e._mRevealed) {
-                        const _mDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
-                        if (_mDist <= 1) e._mRevealed = true;
+                        // 擬態中：隣接で正体を現す
+                        if (_mDist <= 1) { e._mRevealed = true; e._mWallMode = true; }
+                    } else {
+                        // 正体露出中：十分遠ざかったら壁に再擬態
+                        if (_mDist >= 8) {
+                            e._mRevealed = false;
+                            e._mWallMode = true;
+                            spawnFloatingText(e.x, e.y, '...', '#94a3b8');
+                        }
                     }
                     if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                    // 擬態中は動かない（壁のように静止）
+                    if (!e._mRevealed) { continue; }
                     const _mChosen = pickFleeDir(e);
                     if (_mChosen) {
                         e.x += _mChosen.x; e.y += _mChosen.y;
