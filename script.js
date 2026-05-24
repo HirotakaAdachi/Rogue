@@ -4433,66 +4433,111 @@ function resetFloorHazardState() {
 }
 
 function _initLatinTestCave() {
-    addLog("🔤 LATIN CAVE — all 26 small-letter enemies");
-    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) map[y][x] = SYMBOLS.WALL;
-    const _ltCarve = (cx, cy, targetTiles, spread) => {
-        const front = [[cx, cy]];
-        const vis = new Set([`${cx},${cy}`]);
-        let n = 0;
-        while (front.length && n < targetTiles) {
+    addLog("🔤 LATIN CAVE — 2 rooms: [a-m] left / [n-z] right");
+
+    // 2画面横並びのマルチスクリーンモード
+    multiScreenMode = true;
+    screenGridCols = 2; screenGridRows = 1; screenGridSize = 2;
+    screenGrid = {
+        maps:            [[null, null]],
+        enemies:         [[ [],  [] ]],
+        wisps:           [[ [],  [] ]],
+        tempWalls:       [[ [],  [] ]],
+        wind:            [[false, false]],
+        xWallScreens:    [[false, false]],
+        scrollWallState: [[null, null]],
+        ambushRooms:     [[ [],  [] ]],
+        types:           [['cave', 'cave']],
+    };
+    visitedScreens = [[true, false]];
+
+    // マップ引数を取るヘルパー
+    const _carve = (m, cx, cy, n, sp) => {
+        const front = [[cx, cy]], vis = new Set([`${cx},${cy}`]);
+        let cnt = 0;
+        while (front.length && cnt < n) {
             const idx = Math.floor(Math.random() * Math.min(front.length, 6));
             const [fx, fy] = front.splice(idx, 1)[0];
             if (fx < 1 || fx >= COLS-1 || fy < 1 || fy >= ROWS-1) continue;
-            map[fy][fx] = SYMBOLS.FLOOR; n++;
-            for (const [ddx, ddy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]) {
-                const nx = fx+ddx, ny = fy+ddy, k = `${nx},${ny}`;
-                if (!vis.has(k) && Math.random() < (spread || 0.65)) { vis.add(k); front.push([nx, ny]); }
+            m[fy][fx] = SYMBOLS.FLOOR; cnt++;
+            for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]) {
+                const nx = fx+dx, ny = fy+dy, k = `${nx},${ny}`;
+                if (!vis.has(k) && Math.random() < (sp||0.65)) { vis.add(k); front.push([nx, ny]); }
             }
         }
     };
-    const _ltTunnel = (x1, y1, x2, y2) => {
+    const _tunnel = (m, x1, y1, x2, y2) => {
         for (let x = Math.min(x1,x2); x <= Math.max(x1,x2); x++)
-            if (x>=1&&x<COLS-1&&y1>=1&&y1<ROWS-1) map[y1][x] = SYMBOLS.FLOOR;
+            if (x>=1&&x<COLS-1&&y1>=1&&y1<ROWS-1) m[y1][x] = SYMBOLS.FLOOR;
         for (let y = Math.min(y1,y2); y <= Math.max(y1,y2); y++)
-            if (x2>=1&&x2<COLS-1&&y>=1&&y<ROWS-1) map[y][x2] = SYMBOLS.FLOOR;
+            if (x2>=1&&x2<COLS-1&&y>=1&&y<ROWS-1) m[y][x2] = SYMBOLS.FLOOR;
     };
-    _ltCarve(6,  5,  38, 0.60);
-    _ltCarve(20, 4,  42, 0.62);
-    _ltCarve(33, 6,  35, 0.60);
-    _ltCarve(8,  17, 38, 0.60);
-    _ltCarve(22, 18, 42, 0.62);
-    _ltCarve(34, 16, 35, 0.58);
-    _ltTunnel(6, 5, 20, 4);   _ltTunnel(20, 4, 33, 6);
-    _ltTunnel(8, 17, 22, 18); _ltTunnel(22, 18, 34, 16);
-    _ltTunnel(6, 5, 8, 17);   _ltTunnel(20, 4, 22, 18); _ltTunnel(33, 6, 34, 16);
+
+    // 部屋0（左）: プレイヤー開始、敵 a-m
+    const m0 = Array.from({length:ROWS}, () => Array(COLS).fill(SYMBOLS.WALL));
+    _carve(m0,6,5,38,0.60); _carve(m0,20,4,42,0.62); _carve(m0,33,6,35,0.60);
+    _carve(m0,8,17,38,0.60); _carve(m0,22,18,42,0.62); _carve(m0,34,16,35,0.58);
+    _tunnel(m0,6,5,20,4); _tunnel(m0,20,4,33,6);
+    _tunnel(m0,8,17,22,18); _tunnel(m0,22,18,34,16);
+    _tunnel(m0,6,5,8,17); _tunnel(m0,20,4,22,18); _tunnel(m0,33,6,34,16);
+    m0[12][3] = SYMBOLS.FLOOR; _tunnel(m0,3,12,8,12);
+    // 右端に通路（右の部屋へ接続）
+    for (let py = 11; py <= 13; py++) m0[py][COLS-1] = SYMBOLS.FLOOR;
+    _tunnel(m0,33,12,COLS-1,12);
+
+    // 部屋1（右）: 敵 n-z、階段
+    const m1 = Array.from({length:ROWS}, () => Array(COLS).fill(SYMBOLS.WALL));
+    _carve(m1,6,5,38,0.60); _carve(m1,20,4,42,0.62); _carve(m1,33,6,35,0.60);
+    _carve(m1,8,17,38,0.60); _carve(m1,22,18,42,0.62); _carve(m1,34,16,35,0.58);
+    _tunnel(m1,6,5,20,4); _tunnel(m1,20,4,33,6);
+    _tunnel(m1,8,17,22,18); _tunnel(m1,22,18,34,16);
+    _tunnel(m1,6,5,8,17); _tunnel(m1,20,4,22,18); _tunnel(m1,33,6,34,16);
+    // 左端に通路（左の部屋から接続）
+    for (let py = 11; py <= 13; py++) m1[py][0] = SYMBOLS.FLOOR;
+    _tunnel(m1,0,12,6,12);
+    // 階段
+    m1[12][37] = SYMBOLS.STAIRS; _tunnel(m1,6,12,37,12);
+
+    screenGrid.maps[0][0] = m0;
+    screenGrid.maps[0][1] = m1;
+
+    // 敵の配置ヘルパー
+    const _placeEnemies = (m, elist, defs, skipPos) => {
+        const floors = [];
+        for (let y = 1; y < ROWS-1; y++) for (let x = 1; x < COLS-1; x++) {
+            if (m[y][x] === SYMBOLS.FLOOR && !skipPos.some(p => p.x===x && p.y===y)) floors.push({x,y});
+        }
+        for (let i = floors.length-1; i > 0; i--) {
+            const j = Math.floor(Math.random()*(i+1));
+            [floors[i], floors[j]] = [floors[j], floors[i]];
+        }
+        let idx = 0;
+        for (const def of defs) {
+            while (idx < floors.length && elist.some(oe => oe.x===floors[idx].x && oe.y===floors[idx].y)) idx++;
+            if (idx >= floors.length) break;
+            const pos = floors[idx++];
+            const eObj = {type:def.type, x:pos.x, y:pos.y, hp:30, maxHp:30,
+                flashUntil:0, offsetX:0, offsetY:0, expValue:8, stunTurns:0, flee:true, noFleeAnim:false};
+            if (def.type==='LATIN_C'||def.type==='LATIN_O') eObj.trail=[];
+            elist.push(eObj);
+        }
+    };
+
+    _placeEnemies(m0, screenGrid.enemies[0][0], LATIN_ENEMIES.slice(0,13), [{x:3,y:12}]);
+    _placeEnemies(m1, screenGrid.enemies[0][1], LATIN_ENEMIES.slice(13),  [{x:37,y:12}]);
+
+    // 現在画面を部屋0（左）に設定
+    currentScreen = {x:0, y:0};
+    map     = screenGrid.maps[0][0];
+    enemies = screenGrid.enemies[0][0];
+    wisps   = screenGrid.wisps[0][0];
+    tempWalls = screenGrid.tempWalls[0][0];
     player.x = 3; player.y = 12;
-    map[player.y][player.x] = SYMBOLS.FLOOR;
-    _ltTunnel(3, 12, 6, 5);
-    map[20][37] = SYMBOLS.STAIRS;
-    _ltTunnel(34, 16, 37, 20);
-    const _ltFloors = [];
-    for (let y = 1; y < ROWS-1; y++) for (let x = 1; x < COLS-1; x++) {
-        if (map[y][x] === SYMBOLS.FLOOR && (Math.abs(x-player.x)+Math.abs(y-player.y)) > 4) _ltFloors.push({x, y});
-    }
-    for (let i = _ltFloors.length-1; i > 0; i--) {
-        const j = Math.floor(Math.random()*(i+1));
-        [_ltFloors[i], _ltFloors[j]] = [_ltFloors[j], _ltFloors[i]];
-    }
-    let _ltIdx = 0;
-    for (const def of LATIN_ENEMIES) {
-        while (_ltIdx < _ltFloors.length && enemies.some(oe => oe.x === _ltFloors[_ltIdx].x && oe.y === _ltFloors[_ltIdx].y)) _ltIdx++;
-        if (_ltIdx >= _ltFloors.length) break;
-        const pos = _ltFloors[_ltIdx++];
-        const hp = 30;
-        const eObj = { type: def.type, x: pos.x, y: pos.y, hp, maxHp: hp,
-            flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 8, stunTurns: 0, flee: true, noFleeAnim: false };
-        if (def.type === 'LATIN_C' || def.type === 'LATIN_O') eObj.trail = [];
-        enemies.push(eObj);
-    }
+
     addLog("🔤 a(horizontal) b(charge) c(bounce) d(counter) e(liminal) f(lava)");
     addLog("🔤 g(tackle) h(heal) i(ice) J(explodes) k(cross) l(block) m(disguised)");
-    addLog("🔤 n(dig) o(slippery) p(hidden) q(summon) r(fake ally) s(boar)");
-    addLog("🔤 t(fire) u(copy@) v(fire) w(dig) x(bomb) y(diagonal) z(Z-drop)");
+    addLog("🔤 [→ right room] n(dig) o(slippery) p(hidden) q(summon) r(fake) s(boar)");
+    addLog("🔤 [→ right room] t(fire) u(copy@) v(fire) w(dig) x(bomb) y(diagonal) z(Z-drop)");
 }
 
 function initMap() {
@@ -44230,7 +44275,7 @@ window.addEventListener('keydown', async e => {
             if (t) {
                 isRoomTestMode = true;
                 forcedLayoutType = t.id;
-                // latin_test はシングル画面が必要なため floor 1 で起動（floor 10+ は multiScreenMode になる）
+                // latin_test は関数内で multiScreenMode を直接設定するため floor 1 で起動
                 const _rtFloor = t.id === 'latin_test' ? 1
                     : (t.prob === 'テスト専用' || t.prob === '深層のみ' || t.prob === 'マルチ専用') ? 101
                     : 49;
