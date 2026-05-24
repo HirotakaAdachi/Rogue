@@ -37894,7 +37894,8 @@ async function enemyTurn() {
                         const _xChosen2 = pickFleeDir(e);
                         if (_xChosen2) { e.x += _xChosen2.x; e.y += _xChosen2.y; }
                     }
-                    if (Math.random() < 0.25 && map[_xPrevY][_xPrevX] === SYMBOLS.FLOOR
+                    const _xDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+                    if (_xDist <= 6 && Math.random() < 0.4 && map[_xPrevY][_xPrevX] === SYMBOLS.FLOOR
                             && !bombs.some(b => b.x === _xPrevX && b.y === _xPrevY)
                             && !tempWalls.some(tw => tw.x === _xPrevX && tw.y === _xPrevY)) {
                         bombs.push({ x: _xPrevX, y: _xPrevY, timer: 4, hp: 2 });
