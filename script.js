@@ -11936,11 +11936,11 @@ function initMap() {
                 }
             }
         }
-        // マルチスクリーン: ラテン文字コレクション敵を低確率スポーン（スタート画面除外）
+        // マルチスクリーン: ラテン文字コレクション敵を低確率スポーン（50F以降・スタート画面除外）
         // 確率: 3% + 1.5% × 部屋数（部屋が多い画面ほど出やすい）
         // _bizTypes はギリシア文字ループでも参照するためブロック外に宣言
         const _bizTypes = new Set(['MONSTER_FLOOD','LAVA_SEA','FROZEN_PRISON','VOID_CELLS','CHAOS_ALTAR','TREASURY','BOMBER_MAZE','SPAWNER_HIVE','MIMIC_GARDEN','ISLAND_HAZARD','RIVER_CROSSING','TIGHT_MAZE','FACTION_WAR','FLEEING_HORDE','CIRCLE_SIEGE','KINGS_COURT','VSCROLL_WALLS','BIG_AMBUSH_HALL','STAGE_39','BOAR_CHAMBER','LAVA_CROSS','VERTICAL_RIVER','MAZE_LAVA_CORNER','WARP_CELLS','WARP_CELLS_V','WARP_CELLS_H','AURA_MAZE','bizarre','turret_gauntlet','poison_wasteland','novel_corridor']);
-        {
+        if (floorLevel >= 50) {
             const _lcPool = LATIN_ENEMIES.filter(t => !latinKillCounts[t.type] && t.type !== 'LATIN_P');
             if (_lcPool.length > 0) {
                 let _lcSpawned = false;
@@ -24841,7 +24841,17 @@ function draw(now) {
                     ctx.beginPath(); ctx.arc(px + TILE_SIZE / 2, py + TILE_SIZE / 2, TILE_SIZE * 0.4, 0, Math.PI * 2); ctx.fill();
                     ctx.restore();
                 } else if (char === SYMBOLS.STAIRS || char === SYMBOLS.DOOR) {
-                    ctx.fillStyle = '#ededed'; ctx.fillText(char, px + TILE_SIZE / 2, py + TILE_SIZE / 2);
+                    const _scx = px + TILE_SIZE / 2, _scy = py + TILE_SIZE / 2;
+                    const _sr = TILE_SIZE * 0.38;
+                    ctx.strokeStyle = '#ededed'; ctx.lineWidth = 2.5;
+                    ctx.beginPath(); ctx.arc(_scx, _scy, _sr, 0, Math.PI * 2); ctx.stroke();
+                    if (char === SYMBOLS.DOOR) {
+                        const _so = _sr * 0.65;
+                        ctx.beginPath();
+                        ctx.moveTo(_scx - _so, _scy - _so); ctx.lineTo(_scx + _so, _scy + _so);
+                        ctx.moveTo(_scx + _so, _scy - _so); ctx.lineTo(_scx - _so, _scy + _so);
+                        ctx.stroke();
+                    }
                     ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(px + 2, py + TILE_SIZE - 4, TILE_SIZE - 4, 2);
                 } else if (char === SYMBOLS.SAVE) {
                     ctx.fillStyle = '#38bdf8'; ctx.fillText(SYMBOLS.SAVE, px + TILE_SIZE / 2, py + TILE_SIZE / 2);
