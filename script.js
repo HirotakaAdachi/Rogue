@@ -1416,6 +1416,18 @@ function stopBGM() {
     bgmAudio.volume = getBGMVolume();
 }
 
+function startLiminalBGM() {
+    if (!bgmEnabled) return;
+    stopBGM();
+    bgmActive = true;
+    bgmAudio.src = 'A.mp3';
+    bgmAudio.volume = getBGMVolume();
+    bgmAudio.currentTime = 0;
+    bgmAudio.play().catch(() => { bgmActive = false; });
+    if (bgmFadeTimer) { clearTimeout(bgmFadeTimer); bgmFadeTimer = null; }
+    bgmFadeTimer = setTimeout(startBGMFadeOut, BGM_PLAY_DURATION);
+}
+
 // ===== NOVEL_CORRIDOR: 地響きシステム =====
 // 部屋が最終部屋に近づくほど音量が増すローパスノイズ。
 let _ncRumbleSrc = null;
@@ -2332,7 +2344,7 @@ async function tryEscape() {
     const clearedFloors = [];
     for (let f = 1; f < floorLevel; f++) clearedFloors.push(f);
     if (clearedFloors.length === 0) {
-        addLog("No cleared floors to escape to!");
+        addKeyLog("No cleared floors to escape to!");
         return false;
     }
     const targetFloor = clearedFloors[Math.floor(Math.random() * clearedFloors.length)];
@@ -2425,7 +2437,7 @@ function _applyHiddenRoomDispel() {
     SOUNDS.DISPEL && SOUNDS.DISPEL();
     spawnFloatingText(player.x, player.y, "DISPELLED!", '#c084fc', 1600);
     damageTexts.push({ x: player.x, y: player.y - 1, text: "✗ TOME EFFECT", color: '#a855f7', duration: 1200, t: 0, startTime: performance.now(), rise: true });
-    addLog("The anti-magic floor dispels all your tome effects!");
+    addKeyLog("The anti-magic floor dispels all your tome effects!");
     updateUI();
 }
 
@@ -3156,7 +3168,7 @@ function buildEscapeRoomMap() {
 async function enterEscapeRoom() {
     // クリア済みフロアがなければ入室しない
     if (maxReachedFloor <= 1) {
-        addLog("No cleared floors to escape to!");
+        addKeyLog("No cleared floors to escape to!");
         return;
     }
 
@@ -3286,8 +3298,10 @@ async function enterEscapeRoom() {
     for (let _a = 1; _a >= 0; _a -= 0.25) { transition.alpha = _a; draw(); await new Promise(r => setTimeout(r, 25)); }
     transition.active = false; transition.alpha = 0;
 
-    addLog("✨ Liminal Space — Step on a warp pad to travel to a cleared floor.");
-    addLog(`   RETURN pad (right corner) goes back to B${formatFloor(_escapeRoomSavedFloor)}F.`);
+    startLiminalBGM();
+
+    addKeyLog("✨ Liminal Space — Step on a warp pad to travel to a cleared floor.");
+    addKeyLog(`   RETURN pad (right corner) goes back to B${formatFloor(_escapeRoomSavedFloor)}F.`);
 
     // 着地アニメーション（-400 から落下）
     await animateLanding();
@@ -3755,9 +3769,9 @@ function _pickSeededRing(fl, pool) {
 }
 
 function _initFloor20() {
-    addLog("EVENT: DARKNESS BELOW");
+    addKeyLog("EVENT: DARKNESS BELOW");
     addLog("Both chambers are shrouded in impenetrable darkness.");
-    addLog("Find the KEY hidden below — then return and escape!");
+    addKeyLog("Find the KEY hidden below — then return and escape!");
 
     multiScreenMode = true;
     screenGridSize = 2; screenGridCols = 1; screenGridRows = 2;
@@ -3903,8 +3917,8 @@ function _initFloor20() {
 }
 
 function _initFloor36() {
-    addLog("EVENT: ROULETTE PATROL");
-    addLog("A patrol room lies below. Find the KEY and return to the door.");
+    addKeyLog("EVENT: ROULETTE PATROL");
+    addKeyLog("A patrol room lies below. Find the KEY and return to the door.");
     addLog("Stay out of the R patrol's gaze.");
 
     multiScreenMode = true;
@@ -4084,7 +4098,7 @@ function _initFloor36() {
 }
 
 function _initFloor24HybridVSplitInv() {
-    addLog("EVENT: HYBRID V-INV TEST");
+    addKeyLog("EVENT: HYBRID V-INV TEST");
     addLog("A fixed cavern above meets a fixed maze below.");
 
     const stage24Layout = [
@@ -4317,8 +4331,8 @@ function _initFloor88() {
 }
 
 function _initFloor50() {
-    addLog("EVENT: The Turret's Corridor.");
-    addLog("WARNING: Enemy army is gathered in the deep hall...");
+    addKeyLog("EVENT: The Turret's Corridor.");
+    addKeyLog("WARNING: Enemy army is gathered in the deep hall...");
 
     for (let y = 1; y < ROWS - 1; y++) {
         for (let x = 1; x < COLS - 1; x++) {
@@ -4379,7 +4393,7 @@ function _initFloor50() {
     });
 
     map[3][20] = SYMBOLS.DOOR;
-    addLog("The exit is SEALED (⊗). Find the KEY (🗝) in the corner!");
+    addKeyLog("The exit is SEALED (⊗). Find the KEY (🗝) in the corner!");
 }
 
 // PUSH_RING: プレイヤーがいる部屋のインデックスを返す（-1=部屋外・非対応フロア）
@@ -4668,84 +4682,185 @@ function initMap() {
             } else if (isRoomTestMode && forcedLayoutType) {
                 addLog(`🧪 TEST MODE [${forcedLayoutType}]: 3×3 grid.`);
             } else {
-                // ランダムブロブ空白グリッド生成（深層専用）
+                // ランダムグリッド生成（深層専用）: 複数パターンからランダム選択
                 {
-                    const _dR = 10, _dC = 10;
-                    const _dA = Array.from({length:_dR}, () => Array(_dC).fill(true));
+                    const _dpat = Math.floor(Math.random() * 2); // 0=ブロブ, 1=川
 
-                    // 2〜4個のブロブ空白を生成
-                    const _blobN = 2 + Math.floor(Math.random() * 5);
-                    for (let _b = 0; _b < _blobN; _b++) {
-                        let _bsr, _bsc;
-                        // スタート[0,0]は保護
-                        do { _bsr = Math.floor(Math.random()*_dR); _bsc = Math.floor(Math.random()*_dC); }
-                        while (_bsr === 0 && _bsc === 0);
-                        const _bSz = 6 + Math.floor(Math.random() * 9); // 6〜14セル
-                        const _bq = [[_bsr, _bsc]];
-                        _dA[_bsr][_bsc] = false;
-                        for (let _bi = 1; _bi < _bSz; _bi++) {
-                            const _cands = [];
-                            for (const [_br, _bc] of _bq) {
-                                for (const [_dr, _dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-                                    const _nr=_br+_dr, _nc=_bc+_dc;
-                                    if (_nr>=0&&_nr<_dR&&_nc>=0&&_nc<_dC&&_dA[_nr][_nc]&&!(_nr===0&&_nc===0))
-                                        _cands.push([_nr,_nc]);
+                    if (_dpat === 0) {
+                        // ===== パターン0: ブロブ削除（既存パターン） =====
+                        const _dR = 10, _dC = 10;
+                        const _dA = Array.from({length:_dR}, () => Array(_dC).fill(true));
+
+                        // 2〜6個のブロブ空白を生成
+                        const _blobN = 2 + Math.floor(Math.random() * 5);
+                        for (let _b = 0; _b < _blobN; _b++) {
+                            let _bsr, _bsc;
+                            // スタート[0,0]は保護
+                            do { _bsr = Math.floor(Math.random()*_dR); _bsc = Math.floor(Math.random()*_dC); }
+                            while (_bsr === 0 && _bsc === 0);
+                            const _bSz = 6 + Math.floor(Math.random() * 9); // 6〜14セル
+                            const _bq = [[_bsr, _bsc]];
+                            _dA[_bsr][_bsc] = false;
+                            for (let _bi = 1; _bi < _bSz; _bi++) {
+                                const _cands = [];
+                                for (const [_br, _bc] of _bq) {
+                                    for (const [_dr, _dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+                                        const _nr=_br+_dr, _nc=_bc+_dc;
+                                        if (_nr>=0&&_nr<_dR&&_nc>=0&&_nc<_dC&&_dA[_nr][_nc]&&!(_nr===0&&_nc===0))
+                                            _cands.push([_nr,_nc]);
+                                    }
+                                }
+                                if (!_cands.length) break;
+                                const [_nr,_nc] = _cands[Math.floor(Math.random()*_cands.length)];
+                                _dA[_nr][_nc] = false;
+                                _bq.push([_nr,_nc]);
+                            }
+                        }
+
+                        // BFSで連結成分を検出
+                        const _dBFS = (sr,sc,vis) => {
+                            const q=[[sr,sc]], comp=[[sr,sc]]; vis[sr][sc]=true;
+                            while (q.length) {
+                                const [r,c]=q.shift();
+                                for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+                                    const nr=r+dr,nc=c+dc;
+                                    if (nr>=0&&nr<_dR&&nc>=0&&nc<_dC&&_dA[nr][nc]&&!vis[nr][nc])
+                                        {vis[nr][nc]=true;q.push([nr,nc]);comp.push([nr,nc]);}
                                 }
                             }
-                            if (!_cands.length) break;
-                            const [_nr,_nc] = _cands[Math.floor(Math.random()*_cands.length)];
-                            _dA[_nr][_nc] = false;
-                            _bq.push([_nr,_nc]);
-                        }
-                    }
+                            return comp;
+                        };
+                        const _dCompsOf = () => {
+                            const vis=Array.from({length:_dR},()=>Array(_dC).fill(false)), comps=[];
+                            for (let r=0;r<_dR;r++) for (let c=0;c<_dC;c++)
+                                if (_dA[r][c]&&!vis[r][c]) comps.push(_dBFS(r,c,vis));
+                            // [0,0]を含む成分を先頭へ
+                            const _mi = comps.findIndex(comp => comp.some(([r,c])=>r===0&&c===0));
+                            if (_mi > 0) { const _t=comps[0]; comps[0]=comps[_mi]; comps[_mi]=_t; }
+                            return comps;
+                        };
 
-                    // BFSで連結成分を検出
-                    const _dBFS = (sr,sc,vis) => {
-                        const q=[[sr,sc]], comp=[[sr,sc]]; vis[sr][sc]=true;
-                        while (q.length) {
-                            const [r,c]=q.shift();
-                            for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-                                const nr=r+dr,nc=c+dc;
-                                if (nr>=0&&nr<_dR&&nc>=0&&nc<_dC&&_dA[nr][nc]&&!vis[nr][nc])
-                                    {vis[nr][nc]=true;q.push([nr,nc]);comp.push([nr,nc]);}
+                        // 非連結成分をL字ブリッジで順次接続
+                        let _comps = _dCompsOf();
+                        while (_comps.length > 1) {
+                            let _bestD=Infinity, _bridge=null;
+                            for (const [r2,c2] of _comps[1]) {
+                                for (const [r1,c1] of _comps[0]) {
+                                    const d=Math.abs(r2-r1)+Math.abs(c2-c1);
+                                    if (d<_bestD){_bestD=d;_bridge={r1,c1,r2,c2};}
+                                }
                             }
+                            if (_bridge) {
+                                const {r1,c1,r2,c2}=_bridge;
+                                if (Math.random()<0.5) { // 横→縦
+                                    let c=c1; while(c!==c2){c+=c2>c?1:-1;_dA[r1][c]=true;} let r=r1; while(r!==r2){r+=r2>r?1:-1;_dA[r][c2]=true;}
+                                } else { // 縦→横
+                                    let r=r1; while(r!==r2){r+=r2>r?1:-1;_dA[r][c1]=true;} let c=c1; while(c!==c2){c+=c2>c?1:-1;_dA[r2][c]=true;}
+                                }
+                            }
+                            _comps = _dCompsOf();
                         }
-                        return comp;
-                    };
-                    const _dCompsOf = () => {
-                        const vis=Array.from({length:_dR},()=>Array(_dC).fill(false)), comps=[];
-                        for (let r=0;r<_dR;r++) for (let c=0;c<_dC;c++)
-                            if (_dA[r][c]&&!vis[r][c]) comps.push(_dBFS(r,c,vis));
-                        // [0,0]を含む成分を先頭へ
-                        const _mi = comps.findIndex(comp => comp.some(([r,c])=>r===0&&c===0));
-                        if (_mi > 0) { const _t=comps[0]; comps[0]=comps[_mi]; comps[_mi]=_t; }
-                        return comps;
-                    };
+                        screenGridActive = _dA;
+                        const _activeCount = _dA.flat().filter(Boolean).length;
+                        addKeyLog(`🌀 DEEP ZONE: ${_activeCount}/100 screens active.`);
+                        addLog("KEY and EXIT are hidden somewhere in the labyrinth. Good luck.");
 
-                    // 非連結成分をL字ブリッジで順次接続
-                    let _comps = _dCompsOf();
-                    while (_comps.length > 1) {
-                        let _bestD=Infinity, _bridge=null;
-                        for (const [r2,c2] of _comps[1]) {
-                            for (const [r1,c1] of _comps[0]) {
-                                const d=Math.abs(r2-r1)+Math.abs(c2-c1);
-                                if (d<_bestD){_bestD=d;_bridge={r1,c1,r2,c2};}
+                    } else {
+                        // ===== パターン1: 蛇行する川（河岸＋1マス幅の橋） =====
+                        const _dR = 10, _dC = 10;
+                        const _dA = Array.from({length:_dR}, () => Array(_dC).fill(true));
+
+                        // 川の向き: 横（上下に分断）or 縦（左右に分断）
+                        const _rHoriz = Math.random() < 0.5;
+
+                        if (_rHoriz) {
+                            // 横方向に流れる川（中心行 3〜6 からスタート）
+                            let _rc = 3 + Math.floor(Math.random() * 4);
+                            for (let c = 0; c < _dC; c++) {
+                                if (c > 0 && Math.random() < 0.4)
+                                    _rc = Math.max(2, Math.min(_dR - 3, _rc + (Math.random() < 0.5 ? 1 : -1)));
+                                const _w = 2 + Math.floor(Math.random() * 4); // 川幅 2〜5
+                                for (let r = _rc; r < Math.min(_rc + _w, _dR); r++)
+                                    if (!(r === 0 && c === 0)) _dA[r][c] = false;
+                            }
+                        } else {
+                            // 縦方向に流れる川（中心列 3〜6 からスタート）
+                            let _cc = 3 + Math.floor(Math.random() * 4);
+                            for (let r = 0; r < _dR; r++) {
+                                if (r > 0 && Math.random() < 0.4)
+                                    _cc = Math.max(2, Math.min(_dC - 3, _cc + (Math.random() < 0.5 ? 1 : -1)));
+                                const _w = 2 + Math.floor(Math.random() * 4); // 川幅 2〜5
+                                for (let c = _cc; c < Math.min(_cc + _w, _dC); c++)
+                                    if (!(r === 0 && c === 0)) _dA[r][c] = false;
                             }
                         }
-                        if (_bridge) {
-                            const {r1,c1,r2,c2}=_bridge;
-                            if (Math.random()<0.5) { // 横→縦
-                                let c=c1; while(c!==c2){c+=c2>c?1:-1;_dA[r1][c]=true;} let r=r1; while(r!==r2){r+=r2>r?1:-1;_dA[r][c2]=true;}
-                            } else { // 縦→横
-                                let r=r1; while(r!==r2){r+=r2>r?1:-1;_dA[r][c1]=true;} let c=c1; while(c!==c2){c+=c2>c?1:-1;_dA[r2][c]=true;}
+
+                        // [0,0] 保護
+                        _dA[0][0] = true;
+
+                        // 橋を 2〜4本、グリッドを均等分割して各区間に1本ずつ設置
+                        const _bN = 2 + Math.floor(Math.random() * 3);
+                        const _spanLen = _rHoriz ? _dC : _dR;
+                        const _secSz = Math.floor(_spanLen / _bN);
+                        for (let _bi = 0; _bi < _bN; _bi++) {
+                            const _s0 = _bi * _secSz;
+                            const _s1 = (_bi === _bN - 1) ? _spanLen - 1 : (_bi + 1) * _secSz - 1;
+                            const _bp = _s0 + Math.floor(Math.random() * (_s1 - _s0 + 1));
+                            if (_rHoriz) {
+                                for (let r = 0; r < _dR; r++) _dA[r][_bp] = true; // 縦1列を全通し
+                            } else {
+                                for (let c = 0; c < _dC; c++) _dA[_bp][c] = true; // 横1行を全通し
                             }
                         }
-                        _comps = _dCompsOf();
+
+                        // [0,0] 再保護
+                        _dA[0][0] = true;
+
+                        // BFS連結確認 + フォールバック接続
+                        const _rBFS = (sr,sc,vis) => {
+                            const q=[[sr,sc]], comp=[[sr,sc]]; vis[sr][sc]=true;
+                            while (q.length) {
+                                const [r,c]=q.shift();
+                                for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+                                    const nr=r+dr,nc=c+dc;
+                                    if (nr>=0&&nr<_dR&&nc>=0&&nc<_dC&&_dA[nr][nc]&&!vis[nr][nc])
+                                        {vis[nr][nc]=true;q.push([nr,nc]);comp.push([nr,nc]);}
+                                }
+                            }
+                            return comp;
+                        };
+                        const _rCompsOf = () => {
+                            const vis=Array.from({length:_dR},()=>Array(_dC).fill(false)), comps=[];
+                            for (let r=0;r<_dR;r++) for (let c=0;c<_dC;c++)
+                                if (_dA[r][c]&&!vis[r][c]) comps.push(_rBFS(r,c,vis));
+                            const _mi = comps.findIndex(comp => comp.some(([r,c])=>r===0&&c===0));
+                            if (_mi > 0) { const _t=comps[0]; comps[0]=comps[_mi]; comps[_mi]=_t; }
+                            return comps;
+                        };
+                        let _rComps = _rCompsOf();
+                        while (_rComps.length > 1) {
+                            let _bestD=Infinity, _rBridge=null;
+                            for (const [r2,c2] of _rComps[1]) {
+                                for (const [r1,c1] of _rComps[0]) {
+                                    const d=Math.abs(r2-r1)+Math.abs(c2-c1);
+                                    if (d<_bestD){_bestD=d;_rBridge={r1,c1,r2,c2};}
+                                }
+                            }
+                            if (_rBridge) {
+                                const {r1,c1,r2,c2}=_rBridge;
+                                if (Math.random()<0.5) {
+                                    let c=c1; while(c!==c2){c+=c2>c?1:-1;_dA[r1][c]=true;} let r=r1; while(r!==r2){r+=r2>r?1:-1;_dA[r][c2]=true;}
+                                } else {
+                                    let r=r1; while(r!==r2){r+=r2>r?1:-1;_dA[r][c1]=true;} let c=c1; while(c!==c2){c+=c2>c?1:-1;_dA[r2][c]=true;}
+                                }
+                            }
+                            _rComps = _rCompsOf();
+                        }
+                        screenGridActive = _dA;
+                        const _activeCount = _dA.flat().filter(Boolean).length;
+                        addKeyLog(`🌊 RIVER ZONE: ${_activeCount}/100 screens active.`);
+                        addLog("The river splits the labyrinth. Find a bridge to cross.");
                     }
-                    screenGridActive = _dA;
-                    const _activeCount = _dA.flat().filter(Boolean).length;
-                    addLog(`🌀 DEEP ZONE: ${_activeCount}/100 screens active.`);
-                    addLog("KEY and EXIT are hidden somewhere in the labyrinth. Good luck.");
                 }
             }
         } else if (floorLevel < 50) {
@@ -4802,7 +4917,7 @@ function initMap() {
             let _gridMsg;
             if (floorLevel === 98) {
                 screenGridSize = 10; screenGridCols = 10; screenGridRows = 10;
-                addLog("⚠️ DANGER ZONE: 10x10 MEGA LABYRINTH!");
+                addKeyLog("⚠️ DANGER ZONE: 10x10 MEGA LABYRINTH!");
                 addLog("Explore 10x10 screens to find the KEY and EXIT.");
             } else if (floorLevel >= 90) {
                 // 確率配分: 2x3=12%, 3x2=12%, 3x4=12%, 4x3=12%, L=18%, T=17%, H=17%（3x3廃止）
@@ -4898,8 +5013,8 @@ function initMap() {
                         _gridMsg = ["⚠️ DANGER ZONE: A sideways H-shaped labyrinth looms.", "Explore the H-shaped layout to find the KEY and EXIT."];
                     }
                 }
-                if (floorLevel === 62) addLog("🌋 62F — LAVA LABYRINTH: Searing mazes stretch across every vault.");
-                if (floorLevel === 72) addLog("🌀 72F — WARP CELLS: Sealed vaults. Only unstable warp pads connect them.");
+                if (floorLevel === 62) addKeyLog("🌋 62F — LAVA LABYRINTH: Searing mazes stretch across every vault.");
+                if (floorLevel === 72) addKeyLog("🌀 72F — WARP CELLS: Sealed vaults. Only unstable warp pads connect them.");
                 addLog(_gridMsg[0]); addLog(_gridMsg[1]);
             }
             } // end: isRoomTestMode else
@@ -5442,7 +5557,7 @@ function initMap() {
                             if (sEnemies.some(e => e.x === rx2 && e.y === ry2)) continue;
                             sMap[ry2][rx2] = SYMBOLS.RING;
                             ringDrops.push({ x: rx2, y: ry2, ringId: RINGS[ringIdx].id });
-                            addLog("💍 Something glitters behind guarded walls...");
+                            addKeyLog("💍 Something glitters behind guarded walls...");
                             ringPlaced = true;
                         }
                     }
@@ -7461,7 +7576,7 @@ function initMap() {
 
             // WARP_CELLSは上下左右すべてに隣接画面がある場合のみ候補に入れる
             const _wcAllNeighbors = _hasRightScreen(sx, sy) && _hasLeftScreen(sx, sy) && _hasUpScreen(sx, sy) && _hasDownScreen(sx, sy);
-            const TYPES = ['MONSTER_FLOOD', 'LAVA_SEA', 'FROZEN_PRISON', 'VOID_CELLS', 'CHAOS_ALTAR', 'TREASURY', 'BOMBER_MAZE', 'SPAWNER_HIVE', 'MIMIC_GARDEN', 'ISLAND_HAZARD', 'RIVER_CROSSING', 'TIGHT_MAZE', 'VSCROLL_WALLS', 'FACTION_WAR', 'FLEEING_HORDE', 'CIRCLE_SIEGE', 'KINGS_COURT', 'BIG_AMBUSH_HALL', 'STAGE_39', 'BOAR_CHAMBER', 'LAVA_CROSS', 'MIMIC_SWARM_CAVE', 'VERTICAL_RIVER', 'MAZE_LAVA_CORNER', ...(_wcAllNeighbors ? ['WARP_CELLS', 'WARP_CELLS_V', 'WARP_CELLS_H'] : []), 'AURA_MAZE', 'ROULETTE_GUARD'];
+            const TYPES = ['MONSTER_FLOOD', 'LAVA_SEA', 'FROZEN_PRISON', 'VOID_CELLS', 'CHAOS_ALTAR', 'TREASURY', 'BOMBER_MAZE', 'SPAWNER_HIVE', 'MIMIC_GARDEN', 'ISLAND_HAZARD', 'RIVER_CROSSING', 'TIGHT_MAZE', 'VSCROLL_WALLS', 'FACTION_WAR', 'FLEEING_HORDE', 'CIRCLE_SIEGE', 'KINGS_COURT', 'BIG_AMBUSH_HALL', 'STAGE_39', 'BOAR_CHAMBER', 'LAVA_CROSS', 'MIMIC_SWARM_CAVE', 'VERTICAL_RIVER', 'MAZE_LAVA_CORNER', ...(_wcAllNeighbors ? ['WARP_CELLS', 'WARP_CELLS_V', 'WARP_CELLS_H'] : []), 'AURA_MAZE', 'ROULETTE_GUARD', 'SOLAR_SYSTEM'];
             const bizType = forcedBizType !== null ? forcedBizType
                           : TYPES[Math.floor(Math.random() * TYPES.length)];
 
@@ -8794,7 +8909,7 @@ function initMap() {
                         }
                     }
                 }
-                addLog("🔥 VULCAN beasts lurk in the lava!");
+                addKeyLog("🔥 VULCAN beasts lurk in the lava!");
                 addLog("☠ Poison seeps through the center of the cross.");
 
             } else if (bizType === 'MAZE_LAVA_CORNER') {
@@ -8932,7 +9047,7 @@ function initMap() {
                     for (let i = 0; i < Math.min(_mlItemCnt, _mlDeadEnds.length); i++)
                         sMap[_mlDeadEnds[i].y][_mlDeadEnds[i].x] = _mlItemPool[Math.floor(Math.random() * _mlItemPool.length)];
                 }
-                addLog("🌋 A maze fortress rises from the lava moat.");
+                addKeyLog("🌋 A maze fortress rises from the lava moat.");
 
             } else if (bizType === 'WARP_CELLS') {
                 // ---- WARP_CELLS: 隣接スクリーンがある方向のみ不定形小部屋+WARP_PADを生成 ----
@@ -9079,7 +9194,7 @@ function initMap() {
                 }
 
                 openPassages(); // スクリーン境界を開通（画面遷移を可能にする）
-                addLog("🌀 Sealed vaults, each reachable from a neighboring passage.");
+                addKeyLog("🌀 Sealed vaults, each reachable from a neighboring passage.");
 
             } else if (bizType === 'WARP_CELLS_V') {
                 // ---- WARP_CELLS_V: 左右=独立小部屋+WARP_PAD、上下=中央ホール経由の通常通路 ----
@@ -9937,6 +10052,55 @@ function initMap() {
                     }
                 }
                 addLog("🕯️ The patrol watches in the dark. Avoid their gaze.");
+
+            // ---- SOLAR_SYSTEM: 太陽系軌道部屋 ----
+            } else if (bizType === 'SOLAR_SYSTEM') {
+                for (let y = 1; y < ROWS-1; y++) for (let x = 1; x < COLS-1; x++) sMap[y][x] = SYMBOLS.FLOOR;
+                rooms.push({ x:1, y:1, w:COLS-2, h:ROWS-2, cx:20, cy:12 });
+                const _ssCX = 20, _ssCY = 12;
+                const _sunHp = 60 + floorLevel * 9; // 惑星の3倍、撃破可能
+                // 太陽（中心）: 初期フレンドリー、攻撃されたら覚醒・召喚開始
+                sEnemies.push({
+                    type:'LETTER', x:_ssCX, y:_ssCY, _char:'S',
+                    hp:_sunHp, maxHp:_sunHp, flashUntil:0, offsetX:0, offsetY:0,
+                    expValue:200, stunTurns:0,
+                    _friendly:true, _stayPut:true, immuneToWind:true, alwaysChase:false,
+                    _solarSun:true,
+                });
+                // 惑星データ（水星〜冥王星）M V E M J S U N P
+                // 初期位置: 全惑星が太陽の右に1列に並ぶ（x = cx+r, y = cy）
+                // r=1〜9で隣接、全員1ターン1マス移動
+                // 惑星: エンドクレジット風のLETTER型（大文字）を使用。LATIN_*は使わない（討伐コレクション対象外）
+                const _solPlanets = [
+                    { _char:'M', _solarPlanetId:'MERCURY', r:1 }, // 水星
+                    { _char:'V', _solarPlanetId:'VENUS',   r:2, _isVulcan:true }, // 金星（VULCAN特別個体）
+                    { _char:'E', _solarPlanetId:'EARTH',   r:3 }, // 地球
+                    { _char:'M', _solarPlanetId:'MARS',    r:4 }, // 火星
+                    { _char:'J', _solarPlanetId:'JUPITER', r:5 }, // 木星
+                    { _char:'S', _solarPlanetId:'SATURN',  r:6 }, // 土星
+                    { _char:'U', _solarPlanetId:'URANUS',  r:7 }, // 天王星
+                    { _char:'N', _solarPlanetId:'NEPTUNE', r:8 }, // 海王星
+                    { _char:'P', _solarPlanetId:'PLUTO',   r:9 }, // 冥王星
+                ];
+                const _ssHp = 60 + floorLevel * 3;
+                for (const _pl of _solPlanets) {
+                    // 初期位置: 太陽の右に一列直列（右辺の中段 = cx+r, cy）
+                    const _plx = _ssCX + _pl.r, _ply = _ssCY;
+                    sEnemies.push({
+                        type:_pl._isVulcan ? 'VULCAN' : 'LETTER',
+                        _char:_pl._char,
+                        _solarPlanetId:_pl._solarPlanetId,
+                        x:_plx, y:_ply,
+                        hp:_pl._isVulcan ? _ssHp * 3 : _ssHp, maxHp:_pl._isVulcan ? _ssHp * 3 : _ssHp,
+                        flashUntil:0, offsetX:0, offsetY:0, expValue:40, stunTurns:0,
+                        _solarOrbit:true, _solarPassive:true,
+                        _solarCX:_ssCX, _solarCY:_ssCY,
+                        _solarR:_pl.r, _solarTick:0, _solarTickMax:1,
+                        immuneToWind:true,
+                        ...(_pl._isVulcan ? { _moveTick:0, _infRestLeft:0 } : {}),
+                    });
+                }
+                addLog("☀️ Planets orbit in ancient silence. Their paths are their weapons.");
             }
 
             // 全タイプ共通: 通路を開けて床まで掘る
@@ -10054,7 +10218,7 @@ function initMap() {
         ]);
         const allRooms = {}; // 各画面の部屋情報を保持
         // bizarre_all テストモード: 全17種を順番に割り当てるためのカウンタ
-        const _ALL_BIZ_TYPES = ['MONSTER_FLOOD', 'LAVA_SEA', 'FROZEN_PRISON', 'VOID_CELLS', 'CHAOS_ALTAR', 'TREASURY', 'BOMBER_MAZE', 'SPAWNER_HIVE', 'MIMIC_GARDEN', 'ISLAND_HAZARD', 'RIVER_CROSSING', 'TIGHT_MAZE', 'FACTION_WAR', 'FLEEING_HORDE', 'CIRCLE_SIEGE', 'KINGS_COURT', 'VSCROLL_WALLS', 'BIG_AMBUSH_HALL', 'STAGE_39', 'BOAR_CHAMBER', 'LAVA_CROSS', 'VERTICAL_RIVER', 'MAZE_LAVA_CORNER', 'WARP_CELLS', 'WARP_CELLS_V', 'WARP_CELLS_H', 'AURA_MAZE'];
+        const _ALL_BIZ_TYPES = ['MONSTER_FLOOD', 'LAVA_SEA', 'FROZEN_PRISON', 'VOID_CELLS', 'CHAOS_ALTAR', 'TREASURY', 'BOMBER_MAZE', 'SPAWNER_HIVE', 'MIMIC_GARDEN', 'ISLAND_HAZARD', 'RIVER_CROSSING', 'TIGHT_MAZE', 'FACTION_WAR', 'FLEEING_HORDE', 'CIRCLE_SIEGE', 'KINGS_COURT', 'VSCROLL_WALLS', 'BIG_AMBUSH_HALL', 'STAGE_39', 'BOAR_CHAMBER', 'LAVA_CROSS', 'VERTICAL_RIVER', 'MAZE_LAVA_CORNER', 'WARP_CELLS', 'WARP_CELLS_V', 'WARP_CELLS_H', 'AURA_MAZE', 'SOLAR_SYSTEM'];
         let _bizAllIdx = 0;
 
         // ===== 川渡り横連結の事前選定 =====
@@ -10278,9 +10442,17 @@ function initMap() {
                     if (screenGrid.ambushRooms) screenGrid.ambushRooms[sy][sx] = [];
                     continue;
                 }
-                // bizarre_all テストモード: [0,1] は新テストルーム用（空き予約）
+                // bizarre_all テストモード: [0,1] は太陽系軌道部屋
                 if (isRoomTestMode && forcedLayoutType === 'bizarre_all' && sx === 0 && sy === 1) {
-                    // TODO: 新テストルーム実装予定
+                    const result = generateBizarreScreen(sx, sy, 'SOLAR_SYSTEM');
+                    screenGrid.maps[sy][sx] = result.sMap;
+                    screenGrid.enemies[sy][sx] = result.sEnemies;
+                    screenGrid.wisps[sy][sx] = result.sWisps;
+                    screenGrid.tempWalls[sy][sx] = result.sTempWalls || [];
+                    if (screenGrid.types) screenGrid.types[sy][sx] = 'SOLAR_SYSTEM';
+                    allRooms[`${sx},${sy}`] = result.rooms;
+                    if (screenGrid.ambushRooms) screenGrid.ambushRooms[sy][sx] = result.sAmbushRooms || [];
+                    continue;
                 }
                 // bizarre_all テストモード: [0,4] は AURA_MAZE テストルーム（旧[0,1]から移動）
                 if (isRoomTestMode && forcedLayoutType === 'bizarre_all' && sx === 0 && sy === 4) {
@@ -10633,7 +10805,6 @@ function initMap() {
                     if (screenGrid.types) screenGrid.types[sy][sx] = 'RIVER_CROSSING';
                     allRooms[`${sx},${sy}`] = result.rooms;
                     if (screenGrid.ambushRooms) screenGrid.ambushRooms[sy][sx] = result.sAmbushRooms || [];
-                    addLog(`~ RIVER CROSSING continues...`);
                     continue;
                 }
                 // 奇妙な場所（50F以上・特殊画面以外。101F+はテーマで変動、90〜99Fは高確率、50〜89Fは低確率）
@@ -10654,8 +10825,8 @@ function initMap() {
                     }
                     allRooms[`${sx},${sy}`] = result.rooms;
                     if (screenGrid.ambushRooms) screenGrid.ambushRooms[sy][sx] = result.sAmbushRooms || [];
-                    const bizNames = { MONSTER_FLOOD:'Monster Flood', LAVA_SEA:'Sea of Lava', FROZEN_PRISON:'Frozen Prison', VOID_CELLS:'Void Cells', CHAOS_ALTAR:'Chaos Altar', FACTION_WAR:'⚔️ FACTION WAR', FLEEING_HORDE:'🏃 FLEEING PREY', CIRCLE_SIEGE:'🔵 CIRCLE SIEGE', KINGS_COURT:'👑 QUEEN\'S COURT', TREASURY:'💰 TREASURY', BOMBER_MAZE:'💣 BOMBER MAZE', SPAWNER_HIVE:'[E] SPAWNER HIVE', MIMIC_GARDEN:'> MIMIC GARDEN', ISLAND_HAZARD:'~ ISLAND HAZARD', RIVER_CROSSING:'~ RIVER CROSSING', TIGHT_MAZE:'# TIGHT MAZE', VSCROLL_WALLS:'▼ FALLING WALLS', BIG_AMBUSH_HALL:'⬇️ CAVE AMBUSH', STAGE_39:'👑 QUEEN\'S PANIC', BOAR_CHAMBER:'B FOUR CHAMBERS', MIMIC_SWARM_CAVE:'M MIMIC CLUSTER CAVE', VERTICAL_RIVER:'▢ VERTICAL RIVER', L_RIVER_TL:'┌ L-RIVER TL', L_RIVER_TR:'┐ L-RIVER TR', L_RIVER_BL:'└ L-RIVER BL', L_RIVER_BR:'┘ L-RIVER BR', MAZE_LAVA_CORNER:'🌋 MAZE LAVA CORNER', WARP_CELLS:'🌀 WARP CELLS', WARP_CELLS_H:'🌀 WARP CELLS H', WARP_CELLS_V:'🌀 WARP CELLS V', AURA_MAZE:'✨ AURA MAZE', ROULETTE_GUARD:'💀 ROULETTE GUARD' };
-                    addLog(`⚠️ A strange aura... "${bizNames[result.bizType] || '???'}"`);
+                    const bizNames = { MONSTER_FLOOD:'Monster Flood', LAVA_SEA:'Sea of Lava', FROZEN_PRISON:'Frozen Prison', VOID_CELLS:'Void Cells', CHAOS_ALTAR:'Chaos Altar', FACTION_WAR:'⚔️ FACTION WAR', FLEEING_HORDE:'🏃 FLEEING PREY', CIRCLE_SIEGE:'🔵 CIRCLE SIEGE', KINGS_COURT:'👑 QUEEN\'S COURT', TREASURY:'💰 TREASURY', BOMBER_MAZE:'💣 BOMBER MAZE', SPAWNER_HIVE:'[E] SPAWNER HIVE', MIMIC_GARDEN:'> MIMIC GARDEN', ISLAND_HAZARD:'~ ISLAND HAZARD', RIVER_CROSSING:'~ RIVER CROSSING', TIGHT_MAZE:'# TIGHT MAZE', VSCROLL_WALLS:'▼ FALLING WALLS', BIG_AMBUSH_HALL:'⬇️ CAVE AMBUSH', STAGE_39:'👑 QUEEN\'S PANIC', BOAR_CHAMBER:'B FOUR CHAMBERS', MIMIC_SWARM_CAVE:'M MIMIC CLUSTER CAVE', VERTICAL_RIVER:'▢ VERTICAL RIVER', L_RIVER_TL:'┌ L-RIVER TL', L_RIVER_TR:'┐ L-RIVER TR', L_RIVER_BL:'└ L-RIVER BL', L_RIVER_BR:'┘ L-RIVER BR', MAZE_LAVA_CORNER:'🌋 MAZE LAVA CORNER', WARP_CELLS:'🌀 WARP CELLS', WARP_CELLS_H:'🌀 WARP CELLS H', WARP_CELLS_V:'🌀 WARP CELLS V', AURA_MAZE:'✨ AURA MAZE', ROULETTE_GUARD:'💀 ROULETTE GUARD', SOLAR_SYSTEM:'☀️ SOLAR SYSTEM' };
+
                     continue;
                 }
                 // ===== POISON WASTELAND スクリーン (90+F: 非特殊画面に約2%で出現) =====
@@ -10911,7 +11082,7 @@ function initMap() {
                     screenGrid.tempWalls[sy][sx] = [];
                     if (screenGrid.types) screenGrid.types[sy][sx] = 'turret_gauntlet';
                     allRooms[`${sx},${sy}`] = [{ x:1, y:1, w:COLS-2, h:ROWS-2, cx:Math.floor(COLS/2), cy:Math.floor(ROWS/2) }];
-                    addLog('⚠️ Turret fire echoes from a nearby chamber...');
+                    addKeyLog('⚠️ Turret fire echoes from a nearby chamber...');
                     continue;
                 }
 
@@ -10984,8 +11155,8 @@ function initMap() {
                 if (screenGrid.types) screenGrid.types[sy][sx] = screenType;
                 allRooms[`${sx},${sy}`] = result.rooms;
 
-                // ===== 指輪ミミック (4%: 10F以上・スタート画面以外) =====
-                if (floorLevel >= 10 && !(sx === _ssX && sy === _ssY) && Math.random() < 0.04 && result.rooms.length >= 1) {
+                // ===== 指輪ミミック (4%: 10F以上・スタート画面以外・惑星部屋以外) =====
+                if (floorLevel >= 10 && !(sx === _ssX && sy === _ssY) && screenGrid.types?.[sy]?.[sx] !== 'SOLAR_SYSTEM' && Math.random() < 0.04 && result.rooms.length >= 1) {
                     const _rmRoom = result.rooms[Math.floor(Math.random() * result.rooms.length)];
                     const _rmSMap = screenGrid.maps[sy][sx];
                     const _rmEnemies = screenGrid.enemies[sy][sx];
@@ -11006,8 +11177,8 @@ function initMap() {
                     }
                 }
 
-                // ===== いかれたG (3%: 101F以上・スタート画面以外) =====
-                if (floorLevel >= 101 && !(sx === _ssX && sy === _ssY) && Math.random() < 0.03 && result.rooms.length >= 1) {
+                // ===== いかれたG (3%: 101F以上・スタート画面以外・惑星部屋以外) =====
+                if (floorLevel >= 101 && !(sx === _ssX && sy === _ssY) && screenGrid.types?.[sy]?.[sx] !== 'SOLAR_SYSTEM' && Math.random() < 0.03 && result.rooms.length >= 1) {
                     const gRoom = result.rooms[Math.floor(Math.random() * result.rooms.length)];
                     const gHp = 500 + floorLevel * 10;
                     screenGrid.enemies[sy][sx].push({
@@ -11017,8 +11188,8 @@ function initMap() {
                     });
                 }
 
-                // ===== サモナールーム (1%: 101F以上・スタート画面以外) =====
-                if (floorLevel >= 101 && !(sx === _ssX && sy === _ssY) && Math.random() < 0.01 && result.rooms.length >= 2) {
+                // ===== サモナールーム (1%: 101F以上・スタート画面以外・惑星部屋以外) =====
+                if (floorLevel >= 101 && !(sx === _ssX && sy === _ssY) && screenGrid.types?.[sy]?.[sx] !== 'SOLAR_SYSTEM' && Math.random() < 0.01 && result.rooms.length >= 2) {
                     // 十分広い部屋（8x6以上）のみ候補にする
                     const largeRooms = result.rooms.slice(1).filter(r => r.w >= 8 && r.h >= 6);
                     if (largeRooms.length === 0) { /* 大きな部屋がなければスキップ */ }
@@ -11099,7 +11270,7 @@ function initMap() {
                         sMap2[rewardY][rewardX] = rewards[Math.floor(Math.random() * rewards.length)];
                     }
 
-                    addLog("⚠️ A Summoner's Sanctum lurks nearby...");
+                    addKeyLog("⚠️ A Summoner's Sanctum lurks nearby...");
                     } // end largeRooms check
                 }
             }
@@ -11113,6 +11284,7 @@ function initMap() {
                 for (let sx = 0; sx < screenGridCols; sx++) {
                     if (sx === _ssX && sy === _ssY) continue;
                     if (!screenGrid.active[sy][sx]) continue;
+                    if (screenGrid.types?.[sy]?.[sx] === 'SOLAR_SYSTEM') continue;
                     const _ssRooms = allRooms[`${sx},${sy}`];
                     if (!_ssRooms || _ssRooms.length < 1) continue;
                     _ssCands.push({ sx, sy });
@@ -11157,6 +11329,7 @@ function initMap() {
                 for (let _psx = 0; _psx < screenGridCols; _psx++) {
                     if (!screenGrid.active[_psy][_psx]) continue;
                     if (screenGrid.types?.[_psy]?.[_psx] === 'novel_corridor') continue;
+                    if (screenGrid.types?.[_psy]?.[_psx] === 'SOLAR_SYSTEM') continue;
                     const _psMap = screenGrid.maps[_psy][_psx];
                     if (!_psMap) continue;
                     const _psIsStart = (_psx === 0 && _psy === 0);
@@ -11297,7 +11470,7 @@ function initMap() {
                     }
                 }
             }
-            addLog("⚔️ EVENT: Stage 95 — Faction War spreads across all rooms!");
+            addKeyLog("⚔️ EVENT: Stage 95 — Faction War spreads across all rooms!");
             // START画面の「部屋内タイル」からプレイヤーの部屋以外・遠い場所にワープ床を配置
             {
                 const _s95Map = screenGrid.maps[0][0];
@@ -11375,8 +11548,8 @@ function initMap() {
                     trailX: null, trailY: null
                 });
             }
-            addLog("EVENT: Stage 97 — The Key Thief!");
-            addLog("🔑 K holds the only key. Find it across the labyrinth!");
+            addKeyLog("EVENT: Stage 97 — The Key Thief!");
+            addKeyLog("🔑 K holds the only key. Find it across the labyrinth!");
         }
 
         // 階段(DOOR): 決定済みの画面のランダムな部屋に配置
@@ -11568,7 +11741,7 @@ function initMap() {
                     huntPlaced2++;
                 }
                 addLog("🕸 A SPIDER is hiding somewhere in this labyrinth...");
-                if (huntPlaced2 > 0) addLog(`⚔️ A hunting party of ${huntPlaced2} has surrounded it.`);
+                if (huntPlaced2 > 0) addKeyLog(`⚔️ A hunting party of ${huntPlaced2} has surrounded it.`);
                 break;
             }
         }
@@ -11792,7 +11965,7 @@ function initMap() {
         if (screenGrid.types && screenGrid.wind) {
             for (let sy = 0; sy < screenGridRows; sy++) {
                 for (let sx = 0; sx < screenGridCols; sx++) {
-                    if (screenGrid.types[sy][sx] === 'STAGE_39' || screenGrid.types[sy][sx] === 'LAVA_CROSS' || screenGrid.types[sy][sx] === 'MIMIC_SWARM_CAVE' || screenGrid.types[sy][sx] === 'MAZE_LAVA_CORNER' || screenGrid.types[sy][sx] === 'WARP_CELLS' || screenGrid.types[sy][sx] === 'WARP_CELLS_H' || screenGrid.types[sy][sx] === 'WARP_CELLS_V' || screenGrid.types[sy][sx] === 'AURA_MAZE' || screenGrid.types[sy][sx] === 'ROULETTE_GUARD') screenGrid.wind[sy][sx] = false;
+                    if (screenGrid.types[sy][sx] === 'STAGE_39' || screenGrid.types[sy][sx] === 'LAVA_CROSS' || screenGrid.types[sy][sx] === 'MIMIC_SWARM_CAVE' || screenGrid.types[sy][sx] === 'MAZE_LAVA_CORNER' || screenGrid.types[sy][sx] === 'WARP_CELLS' || screenGrid.types[sy][sx] === 'WARP_CELLS_H' || screenGrid.types[sy][sx] === 'WARP_CELLS_V' || screenGrid.types[sy][sx] === 'AURA_MAZE' || screenGrid.types[sy][sx] === 'ROULETTE_GUARD' || screenGrid.types[sy][sx] === 'SOLAR_SYSTEM') screenGrid.wind[sy][sx] = false;
                 }
             }
         }
@@ -12143,7 +12316,7 @@ function initMap() {
                     }
                 }
             }
-            addLog("⚠️ Something feels... off about those fairies.");
+            addKeyLog("⚠️ Something feels... off about those fairies.");
 
             // Stage 98: SUMMONER を全画面合計で最大2体配置
             {
@@ -12180,7 +12353,7 @@ function initMap() {
                         break;
                     }
                 }
-                if (_s98Placed > 0) addLog(`⚠️ A Summoner lurks somewhere in the labyrinth...`);
+                if (_s98Placed > 0) addKeyLog(`⚠️ A Summoner lurks somewhere in the labyrinth...`);
             }
 
             // Stage 98: GREEK_PI (π) 確定1体 — スタート画面以外のランダムなスクリーンに配置
@@ -12214,7 +12387,7 @@ function initMap() {
                     }
                     if (_piPlaced) break;
                 }
-                if (_piPlaced) addLog('⚠️ Something is hiding in the labyrinth... π?');
+                if (_piPlaced) addKeyLog('⚠️ Something is hiding in the labyrinth... π?');
             }
 
             // Stage 98: ラテン文字コレクション敵も確定1体スポーン（LATIN_P除外）
@@ -12282,12 +12455,12 @@ function initMap() {
     // ----- FLOOR 85: THE WRECKING STORM -----
 
     if (floorLevel === 85) {
-        addLog("EVENT: The Wrecking Storm.");
-        addLog("⚠️ BREAKERs lurk within every wall. Violent winds howl through all chambers!");
+        addKeyLog("EVENT: The Wrecking Storm.");
+        addKeyLog("⚠️ BREAKERs lurk within every wall. Violent winds howl through all chambers!");
 
         multiScreenMode = true;
         screenGridSize = 2; screenGridCols = 2; screenGridRows = 2;
-        addLog("⚠️ DANGER ZONE: Multi-screen labyrinth!");
+        addKeyLog("⚠️ DANGER ZONE: Multi-screen labyrinth!");
         addLog("Explore 2x2 screens to find the KEY and EXIT.");
 
         screenGrid = {
@@ -12468,7 +12641,7 @@ function initMap() {
     // ----- FLOOR 91: THE STONE TEMPEST -----
 
     if (floorLevel === 91) {
-        addLog("⚠️ FLOOR 91: THE STONE TEMPEST");
+        addKeyLog("⚠️ FLOOR 91: THE STONE TEMPEST");
         addLog("Rock slabs grind in from the right in every chamber.");
         addLog("Explore 3x3 screens — find the KEY, then reach the exit!");
 
@@ -12790,7 +12963,7 @@ function initMap() {
 
         // 鍵を配置
         map[12][6] = SYMBOLS.KEY;
-        addLog("The gold hole is SEALED (⊗). Find the KEY (🗝) in the side room.");
+        addKeyLog("The gold hole is SEALED (⊗). Find the KEY (🗝) in the side room.");
 
         // 右の細い廊下に敵とウィルを配置
         // 敵はウィルの通り道に立たせる
@@ -12890,7 +13063,7 @@ function initMap() {
 
     // ----- FLOOR 6: ICE RIVER CROSSING -----
     if (floorLevel === 6) {
-        addLog("EVENT: ICE RIVER CROSSING");
+        addKeyLog("EVENT: ICE RIVER CROSSING");
         addLog("❄️ A frozen river splits the dungeon in two.");
         addLog("💡 Something glints within the ice...");
 
@@ -12966,9 +13139,9 @@ function initMap() {
 
     // ----- FLOOR 9: LAVA SWAMP -----
     if (floorLevel === 9) {
-        addLog("EVENT: LAVA SWAMP");
-        addLog("🌋 A vast molten lake dominates the chamber.");
-        addLog("💍 Something gleams within the burning depths...");
+        addKeyLog("EVENT: LAVA SWAMP");
+        addKeyLog("🌋 A vast molten lake dominates the chamber.");
+        addKeyLog("💍 Something gleams within the burning depths...");
 
         // 1. 内部を全面FLOORに（広い空部屋）
         for (let y = 1; y <= 23; y++)
@@ -13115,9 +13288,9 @@ function initMap() {
 
     // ----- FLOOR 8: THE LEECH BOG -----
     if (floorLevel === 8) {
-        addLog("EVENT: THE LEECH BOG");
-        addLog("⚠ Stepping OFF the grass (ⅲ) summons a parasite (i)!");
-        addLog("🔥 V guards the lava river — it shoots fireballs on sight!");
+        addKeyLog("EVENT: THE LEECH BOG");
+        addKeyLog("⚠ Stepping OFF the grass (ⅲ) summons a parasite (i)!");
+        addKeyLog("🔥 V guards the lava river — it shoots fireballs on sight!");
 
         // 内部全体を FLOOR で埋める
         for (let y = 1; y < ROWS - 1; y++)
@@ -13239,7 +13412,7 @@ function initMap() {
 
     // ----- FLOOR 10: THE VOICES IN THE WALL -----
     if (floorLevel === 10) {
-        addLog("EVENT: A voice echoes from deep within the walls...");
+        addKeyLog("EVENT: A voice echoes from deep within the walls...");
 
         // 全面を壁で埋める
         for (let y = 1; y < ROWS - 1; y++) {
@@ -13384,10 +13557,10 @@ function initMap() {
     // ----- FLOOR 11: BOAR ENCOUNTER -----
 
     if (floorLevel === 11) {
-        addLog("▶ FLOOR 11: BOAR ENCOUNTER");
+        addKeyLog("▶ FLOOR 11: BOAR ENCOUNTER");
         addLog("Crumbling walls divide the dungeon into four chambers.");
-        addLog("The exit is SEALED (⊗). Find the key first!");
-        addLog("!! A rampaging BOAR is lurking somewhere !!");
+        addKeyLog("The exit is SEALED (⊗). Find the key first!");
+        addKeyLog("!! A rampaging BOAR is lurking somewhere !!");
 
         // 全タイルを床で初期化（外周のみ壁）
         for (let y = 0; y < ROWS; y++)
@@ -13693,7 +13866,7 @@ function initMap() {
     // ----- FLOOR 13: THE GRINDER -----
 
     if (floorLevel === 13) {
-        addLog("⚠️ FLOOR 13: THE GRINDER");
+        addKeyLog("⚠️ FLOOR 13: THE GRINDER");
         addLog("Lines of walls scroll in from the right every turn.");
         addLog("Reach the exit at the BOTTOM-RIGHT. Crushed at the left edge = DEATH.");
 
@@ -13794,8 +13967,8 @@ function initMap() {
 
     // ----- FLOOR 15: THE FROZEN HALL -----
     if (floorLevel === 15) {
-        addLog("EVENT: The Frozen Hall.");
-        addLog("WARNING: The entire floor is covered in ice!");
+        addKeyLog("EVENT: The Frozen Hall.");
+        addKeyLog("WARNING: The entire floor is covered in ice!");
         isIceFloor = true;
 
         // 全面を氷にする
@@ -14111,7 +14284,7 @@ function initMap() {
 
     // ----- FLOOR 18: THE LABYRINTH ISLAND -----
     if (floorLevel === 18) {
-        addLog("EVENT: The Labyrinth Island.");
+        addKeyLog("EVENT: The Labyrinth Island.");
         addLog("Rescue the fairy 🧚 trapped on the island!");
 
         // 広い空間を作成
@@ -14253,9 +14426,9 @@ function initMap() {
 
     // ----- FLOOR 23: CAVE AMBUSH -----
     if (floorLevel === 23) {
-        addLog("EVENT: CAVE AMBUSH");
+        addKeyLog("EVENT: CAVE AMBUSH");
         addLog("The cavern is eerily quiet...");
-        addLog("⚠️ Something lurks in the darkness above!");
+        addKeyLog("⚠️ Something lurks in the darkness above!");
 
         // 内部を全床にする
         for (let y = 1; y < ROWS - 1; y++)
@@ -14345,7 +14518,7 @@ function initMap() {
 
     // ----- FLOOR 27: SMALL ROOM LABYRINTH -----
     if (floorLevel === 27) {
-        addLog("EVENT: SMALL ROOM LABYRINTH");
+        addKeyLog("EVENT: SMALL ROOM LABYRINTH");
         addLog("Chambers of all shapes twist through the dark...");
 
         // 全体を壁で埋める
@@ -14588,7 +14761,7 @@ function initMap() {
 
     // ----- FLOOR 29: THE SEALED CHAMBER -----
     if (floorLevel === 29) {
-        addLog("EVENT: The Sealed Chamber.");
+        addKeyLog("EVENT: The Sealed Chamber.");
         addLog("Enemies are buried in the walls. A Wall Breaker will free them.");
 
         // 全体を壁で埋める
@@ -14706,8 +14879,8 @@ function initMap() {
 
     // ----- FLOOR 30: THE GRAND FORGERY -----
     if (floorLevel === 30) {
-        addLog("EVENT: The Grand Forgery.");
-        addLog("Eight exits await — SEVEN are MIMICS in disguise.");
+        addKeyLog("EVENT: The Grand Forgery.");
+        addKeyLog("Eight exits await — SEVEN are MIMICS in disguise.");
 
         // 全体を壁で埋める
         for (let y = 1; y < ROWS - 1; y++) {
@@ -15049,7 +15222,7 @@ function initMap() {
     // ----- FLOOR 41: THE GALE GRINDER -----
 
     if (floorLevel === 41) {
-        addLog("⚠️ FLOOR 41: THE GALE GRINDER");
+        addKeyLog("⚠️ FLOOR 41: THE GALE GRINDER");
         addLog("Walls scroll left. A fierce wind blows downward every turn.");
         addLog("Reach the exit at the TOP-RIGHT. Crushed at the left edge = DEATH.");
 
@@ -15152,9 +15325,9 @@ function initMap() {
     // ----- FLOOR 34: CAVE AMBUSH II -----
 
     if (floorLevel === 34) {
-        addLog("EVENT: CAVE AMBUSH II");
+        addKeyLog("EVENT: CAVE AMBUSH II");
         addLog("The cavern holds its breath...");
-        addLog("🔑 A KEY_RUNNER hides in the dark. Catch it to open the exit!");
+        addKeyLog("🔑 A KEY_RUNNER hides in the dark. Catch it to open the exit!");
 
         for (let y = 1; y < ROWS - 1; y++)
             for (let x = 1; x < COLS - 1; x++)
@@ -15254,7 +15427,7 @@ function initMap() {
     // ----- FLOOR 35: FALLING WALLS -----
 
     if (floorLevel === 35) {
-        addLog("EVENT: FALLING WALLS");
+        addKeyLog("EVENT: FALLING WALLS");
         addLog("🪨 Slabs of stone rain from above. Move fast!");
 
         // 内部を全床にする
@@ -15320,7 +15493,7 @@ function initMap() {
     // ----- FLOOR 38: THE TEMPEST CROSSING -----
 
     if (floorLevel === 38) {
-        addLog("EVENT: The Tempest Crossing.");
+        addKeyLog("EVENT: The Tempest Crossing.");
         addLog("💨 Rivers of fire and ice — swept by violent winds!");
 
         // 外周を壁、内部を全て床にする
@@ -15516,9 +15689,9 @@ function initMap() {
     // ----- FLOOR 39: FLEEING HORDE -----
 
     if (floorLevel === 39) {
-        addLog("EVENT: FLEEING HORDE");
+        addKeyLog("EVENT: FLEEING HORDE");
         addLog("Masses of creatures scatter in blind terror...");
-        addLog("⚠️ Something far worse approaches from above...");
+        addKeyLog("⚠️ Something far worse approaches from above...");
 
         for (let y = 1; y < ROWS-1; y++)
             for (let x = 1; x < COLS-1; x++)
@@ -15579,8 +15752,8 @@ function initMap() {
 
     // ----- FLOOR 40: THE LAYER'S HALL -----
     if (floorLevel === 40) {
-        addLog("EVENT: The Layer's Hall.");
-        addLog("WARNING: Something is blocking the paths behind it...");
+        addKeyLog("EVENT: The Layer's Hall.");
+        addKeyLog("WARNING: Something is blocking the paths behind it...");
 
         // 大広間: 全面を床にする
         for (let y = 1; y < ROWS - 1; y++) {
@@ -15678,7 +15851,7 @@ function initMap() {
     // ----- FLOOR 43: THE POISON MARSH -----
 
     if (floorLevel === 43) {
-        addLog("EVENT: The Poison Marsh.");
+        addKeyLog("EVENT: The Poison Marsh.");
         addLog("☠ The ground is saturated with venom. Watch your step.");
 
         // 外周を壁、内部を全て毒沼にする
@@ -15860,8 +16033,8 @@ function initMap() {
 
     // ----- FLOOR 53: THE LAVA SHRINE -----
     if (floorLevel === 53) {
-        addLog("EVENT: The Lava Shrine.");
-        addLog("WARNING: A ring shines on the island — but guardians surround it!");
+        addKeyLog("EVENT: The Lava Shrine.");
+        addKeyLog("WARNING: A ring shines on the island — but guardians surround it!");
 
         // ステージ18と同様の広い空間（外周2マスをLAVA、内側をFLOOR）
         for (let y = 1; y < ROWS - 1; y++) {
@@ -15916,7 +16089,7 @@ function initMap() {
         const ring53 = _pickSeededRing(53, ringSrc53);
         map[ry53][rx53] = SYMBOLS.RING;
         ringDrops.push({ x: rx53, y: ry53, ringId: ring53.id });
-        addLog(`💍 A ring pulses with ancient power on the shrine island...`);
+        addKeyLog(`💍 A ring pulses with ancient power on the shrine island...`);
 
         // ORC 2体
         for (let i = 0; i < 2; i++) {
@@ -15972,7 +16145,7 @@ function initMap() {
     // ----- FLOOR 55: THE MULTI-GRINDER -----
 
     if (floorLevel === 55) {
-        addLog("EVENT: The Multi-Grinder.");
+        addKeyLog("EVENT: The Multi-Grinder.");
         addLog("Walls surge in every chamber. Find the exit before you're crushed.");
         addLog("Explore 2x2 screens to find the KEY and EXIT.");
 
@@ -16109,8 +16282,8 @@ function initMap() {
 
     // ----- FLOOR 57: THE GLACIAL BATTERY -----
     if (floorLevel === 57) {
-        addLog("EVENT: The Glacial Battery.");
-        addLog("WARNING: Sliding turrets patrol the hall — ice patches send them flying!");
+        addKeyLog("EVENT: The Glacial Battery.");
+        addKeyLog("WARNING: Sliding turrets patrol the hall — ice patches send them flying!");
 
         // まず全面を床にする
         for (let y = 1; y < ROWS - 1; y++) {
@@ -16231,7 +16404,7 @@ function initMap() {
     // ----- FLOOR 65: THE REVERSE GRINDER -----
 
     if (floorLevel === 65) {
-        addLog("EVENT: The Reverse Grinder.");
+        addKeyLog("EVENT: The Reverse Grinder.");
         addLog("Walls surge in every chamber. The exit is at the top-right.");
         addLog("Explore 2x2 screens — find the KEY, then reach the exit!");
 
@@ -16475,7 +16648,7 @@ function initMap() {
                 }
             }
         }
-        if (ring61placed) addLog("💍 Something glitters in the upper-right webs...");
+        if (ring61placed) addKeyLog("💍 Something glitters in the upper-right webs...");
 
         // 指輪の上下左右に蜘蛛を固定配置（重ならないよう4方向に1体ずつ）
         if (ring61placed) {
@@ -16576,7 +16749,7 @@ function initMap() {
     // ----- FLOOR 86: THE POISON WASTES -----
 
     if (floorLevel === 86) {
-        addLog("EVENT: The Poison Wastes.");
+        addKeyLog("EVENT: The Poison Wastes.");
         addLog("☠ The entire floor reeks of venom — every step burns!");
 
         // 外周を壁、内部を全て毒沼にする
@@ -16776,8 +16949,8 @@ function initMap() {
 
     // ----- FLOOR 70: THE HOPPER'S GAUNTLET -----
     if (floorLevel === 70) {
-        addLog("EVENT: The Hopper's Gauntlet.");
-        addLog("WARNING: Turrets line the walls — poison pools fill the floor!");
+        addKeyLog("EVENT: The Hopper's Gauntlet.");
+        addKeyLog("WARNING: Turrets line the walls — poison pools fill the floor!");
 
         // まず全面を床にする
         for (let y = 1; y < ROWS - 1; y++) {
@@ -16912,8 +17085,8 @@ function initMap() {
 
     // ----- FLOOR 66: THE WALL BREAKER'S DEN -----
     if (floorLevel === 66) {
-        addLog("EVENT: The Wall Breaker's Den.");
-        addLog("WARNING: The walls tremble... something massive lurks here.");
+        addKeyLog("EVENT: The Wall Breaker's Den.");
+        addKeyLog("WARNING: The walls tremble... something massive lurks here.");
         addLog("Enemies and treasures are trapped in the walls!");
 
         // まず全体を壁で埋める
@@ -17058,10 +17231,10 @@ function initMap() {
     // ----- FLOOR 46: SHADOW SYNCHRONY -----
 
     if (floorLevel === 46) {
-        addLog("EVENT: Shadow Synchrony.");
+        addKeyLog("EVENT: Shadow Synchrony.");
         addLog("The cavern is filled with pale figures...");
-        addLog("⚠ They move with you — or against you. Strike to break the sync.");
-        addLog("🔑 One of them carries the key. Find it.");
+        addKeyLog("⚠ They move with you — or against you. Strike to break the sync.");
+        addKeyLog("🔑 One of them carries the key. Find it.");
 
         // 内部を全床にする（23F と同じ手法）
         for (let y = 1; y < ROWS - 1; y++)
@@ -17208,9 +17381,9 @@ function initMap() {
 
     // ----- FLOOR 47: THE TURRET VAULT -----
     if (floorLevel === 47) {
-        addLog("EVENT: The Turret Vault.");
+        addKeyLog("EVENT: The Turret Vault.");
         addLog("Cannons are buried in the walls. A Wall Breaker will wake them all.");
-        addLog("⚠️ The rubble is alive. Every wall hides a bomb.");
+        addKeyLog("⚠️ The rubble is alive. Every wall hides a bomb.");
         isXWallStage = true;
 
         // 全体を壁で埋める
@@ -17330,8 +17503,8 @@ function initMap() {
     // ----- FLOOR 48: THE MIMIC'S GALLERY -----
 
     if (floorLevel === 48) {
-        addLog("EVENT: The Mimic's Gallery.");
-        addLog("⚠ Every exit could be a trap. Only one is real.");
+        addKeyLog("EVENT: The Mimic's Gallery.");
+        addKeyLog("⚠ Every exit could be a trap. Only one is real.");
 
         // 外周を壁、内部を全て床にする
         for (let y = 0; y < ROWS; y++) {
@@ -17521,7 +17694,7 @@ function initMap() {
 
     // ----- FLOOR 73: THE ROCKFALL -----
     if (floorLevel === 73) {
-        addLog("⚠️ FLOOR 73: THE ROCKFALL");
+        addKeyLog("⚠️ FLOOR 73: THE ROCKFALL");
         addLog("Massive boulders grind in from the right.");
         addLog("Squeeze through the gaps — reach the exit at the RIGHT.");
 
@@ -17597,7 +17770,7 @@ function initMap() {
 
     // ----- FLOOR 75: THE VOID ARENA -----
     if (floorLevel === 75) {
-        addLog("EVENT: The Void Arena.");
+        addKeyLog("EVENT: The Void Arena.");
         // 全面を床にしつつ、壁沿いに溶岩の枠を作る
         for (let y = 1; y < ROWS - 1; y++) {
             for (let x = 1; x < COLS - 1; x++) {
@@ -17753,7 +17926,7 @@ function initMap() {
                 expValue: 25, stunTurns: 0, trail: [], weaverDir: Math.floor(Math.random() * 4), immuneToWind: true });
         }
 
-        addLog("WARNING: The Arena is filled with wandering spirits and chaos...");
+        addKeyLog("WARNING: The Arena is filled with wandering spirits and chaos...");
 
         return;
     }
@@ -17762,7 +17935,7 @@ function initMap() {
     // ----- FLOOR 78: FACTION WAR — THE KILLING FIELDS -----
 
     if (floorLevel === 78) {
-        addLog("⚔️ EVENT: FACTION WAR — The Killing Fields.");
+        addKeyLog("⚔️ EVENT: FACTION WAR — The Killing Fields.");
         addLog("GREEN army charges from the left. PURPLE army from the right.");
 
         // 全面を床にする
@@ -18137,8 +18310,8 @@ function initMap() {
 
     // ----- FLOOR 80: THE FROZEN FURNACE -----
     if (floorLevel === 80) {
-        addLog("EVENT: The Frozen Furnace.");
-        addLog("WARNING: Ice and fire are sealed within these walls!");
+        addKeyLog("EVENT: The Frozen Furnace.");
+        addKeyLog("WARNING: Ice and fire are sealed within these walls!");
         addLog("Enemies and treasures are trapped in the walls!");
 
         // まず全体を壁で埋める
@@ -18309,7 +18482,7 @@ function initMap() {
     }
 
     if (floorLevel === 83) {
-        addLog("EVENT: The Thief's Labyrinth.");
+        addKeyLog("EVENT: The Thief's Labyrinth.");
         addLog("K holds the only key. Hunt it down!");
         // 内部を全床にしてから迷路ロジックへフォールスルー
         for (let y = 1; y < ROWS - 1; y++)
@@ -18324,7 +18497,7 @@ function initMap() {
     }
 
     if (floorLevel === 77) {
-        addLog("EVENT: The Forbidden Labyrinth.");
+        addKeyLog("EVENT: The Forbidden Labyrinth.");
         // フロア全体を一旦床にして、迷路ロジックの土台を作る
         for (let y = 1; y < ROWS - 1; y++) {
             for (let x = 1; x < COLS - 1; x++) {
@@ -18346,7 +18519,7 @@ function initMap() {
         isPerfectMazeFloor = false; isCastleFloor = false; isGreatHallFloor = false;
         isHazardIslandFloor = false; isRiverFloor = false; isTightMazeFloor = true; isQuadFloor = false;
         isVScrollWallFloor = true; vScrollWalls = []; vScrollTimer = 0;
-        addLog("⚠️ THE DESCENT: Walls rain from above every 3 turns. Keep moving!");
+        addKeyLog("⚠️ THE DESCENT: Walls rain from above every 3 turns. Keep moving!");
     }
 
     // ── QUAD FLOOR: 四部屋分割ダンジョン（ランダム生成版, ~3%）──
@@ -18433,7 +18606,7 @@ function initMap() {
         }
 
         // 全4部屋に確定で溶岩ブロブを配置
-        addLog("🔥 Lava seeps into every chamber. Beware the parasitic grass!");
+        addKeyLog("🔥 Lava seeps into every chamber. Beware the parasitic grass!");
         const _qBlobFn = (cx, cy) => {
             const lr0=2.0+Math.random()*1.5, lLobes=[{ox:0,oy:0,r:lr0}];
             for(let n=0;n<2;n++){const a=Math.random()*Math.PI*2,d=lr0*(0.6+Math.random()*0.6);lLobes.push({ox:Math.round(Math.cos(a)*d),oy:Math.round(Math.sin(a)*d),r:1.2+Math.random()*1.2});}
@@ -18528,21 +18701,21 @@ function initMap() {
 
     const rooms = [];
 
-    if (isDenseMazeFloor) addLog("⚠️ CAVE: Ancient caverns twist in every direction — no end in sight...");
+    if (isDenseMazeFloor) addKeyLog("⚠️ CAVE: Ancient caverns twist in every direction — no end in sight...");
     else if (isSpiralFloor) addLog("A spiraling corridor stretches before you... The path coils inward.");
     else if (isCrossFloor) addLog("A great crossroads dominates this floor. Four quarters await.");
     else if (isIslandsFloor) addLog("Isolated chambers float in the void, connected by narrow bridges...");
-    else if (isMazeFloor) addLog("⚠️ CAVERN: Narrow tunnels burrow through the ancient rock...");
-    else if (isBoldMazeFloor) addLog("⚠️ MONSTER TOWN: Wide corridors — something massive lurks here...");
-    else if (isPerfectMazeFloor) addLog("⚠️ PERFECT MAZE: Every turn is a dead end... except one.");
+    else if (isMazeFloor) addKeyLog("⚠️ CAVERN: Narrow tunnels burrow through the ancient rock...");
+    else if (isBoldMazeFloor) addKeyLog("⚠️ MONSTER TOWN: Wide corridors — something massive lurks here...");
+    else if (isPerfectMazeFloor) addKeyLog("⚠️ PERFECT MAZE: Every turn is a dead end... except one.");
     else if (isCastleFloor) addLog("The floor is a fortified castle — rooms connected by narrow passages.");
     else if (isGreatHallFloor) addLog("This floor is a vast GREAT HALL.");
-    else if (isHazardIslandFloor) addLog("⚠️ HAZARD ISLANDS: Islands adrift in a sea of poison or ice...");
-    else if (isRiverFloor) addLog("⚠️ RIVER CROSSING: A river divides this floor. Find the bridges!");
-    else if (isTightMazeFloor) addLog("⚠️ TIGHT MAZE: 1-tile corridors wind through solid rock. BREAKERs lurk within!");
-    else if (isHybridSplitFloor) addLog("⚡ HYBRID SPLIT: A labyrinth divided — perfect maze on the left, cavern on the right.");
-    else if (isHybridVSplitFloor) addLog("⚡ HYBRID V-SPLIT: A labyrinth divided — perfect maze above, cavern below.");
-    else if (isHybridRoomsFloor) addLog("⚡ HYBRID ROOMS: Ancient chambers carved into the heart of a perfect maze...");
+    else if (isHazardIslandFloor) addKeyLog("⚠️ HAZARD ISLANDS: Islands adrift in a sea of poison or ice...");
+    else if (isRiverFloor) addKeyLog("⚠️ RIVER CROSSING: A river divides this floor. Find the bridges!");
+    else if (isTightMazeFloor) addKeyLog("⚠️ TIGHT MAZE: 1-tile corridors wind through solid rock. BREAKERs lurk within!");
+    else if (isHybridSplitFloor) addKeyLog("⚡ HYBRID SPLIT: A labyrinth divided — perfect maze on the left, cavern on the right.");
+    else if (isHybridVSplitFloor) addKeyLog("⚡ HYBRID V-SPLIT: A labyrinth divided — perfect maze above, cavern below.");
+    else if (isHybridRoomsFloor) addKeyLog("⚡ HYBRID ROOMS: Ancient chambers carved into the heart of a perfect maze...");
 
     // フロアタイプに応じて部屋数を決定
     const roomCount = isDenseMazeFloor ? 8 : (isSpiralFloor ? 6 : (isCrossFloor ? 6 : (isIslandsFloor ? 12 : (isMazeFloor ? 25 : (isBoldMazeFloor ? 14 : (isPerfectMazeFloor ? 0 : (isCastleFloor ? 0 : (isGreatHallFloor ? 2 : (isHazardIslandFloor ? 0 : (isRiverFloor ? 0 : (isTightMazeFloor ? 0 : (isHybridSplitFloor ? 0 : (isHybridVSplitFloor ? 0 : (isHybridRoomsFloor ? 0 : (isQuadFloor ? 0 : (Math.floor(Math.random() * 4) + 8))))))))))))))));
@@ -19088,7 +19261,7 @@ function initMap() {
         const _rvHazard = (floorLevel >= 8 && _rvRoll < 0.333) ? SYMBOLS.LAVA
                         : (_rvRoll < (floorLevel >= 8 ? 0.667 : 0.5)) ? SYMBOLS.ICE : SYMBOLS.POISON;
         const _rvRiverY1 = 10, _rvRiverY2 = 14;
-        if (_rvHazard === SYMBOLS.LAVA) addLog("🔥 A river of molten lava splits the dungeon in two.");
+        if (_rvHazard === SYMBOLS.LAVA) addKeyLog("🔥 A river of molten lava splits the dungeon in two.");
         else if (_rvHazard === SYMBOLS.POISON) addLog("☠ A toxic river of poison cuts through the floor.");
         else addLog("❄️ A frozen river of ice divides the dungeon.");
         addLog("💡 Something glints within the river...");
@@ -19339,7 +19512,7 @@ function initMap() {
                 if (enemies.some(e => e.x === rx2 && e.y === ry2)) continue;
                 map[ry2][rx2] = SYMBOLS.RING;
                 ringDrops.push({ x: rx2, y: ry2, ringId: _mrRing.id });
-                addLog("💍 Something glitters behind guarded walls...");
+                addKeyLog("💍 Something glitters behind guarded walls...");
                 break;
             }
         }
@@ -19627,7 +19800,7 @@ function initMap() {
                 sy += Math.floor(Math.random() * 3) - 1;
             }
         }
-        if (floorLevel < 50) addLog("🔥 WARNING: Lava (^) detected!");
+        if (floorLevel < 50) addKeyLog("🔥 WARNING: Lava (^) detected!");
     }
 
     // 寄生草（LEECH_WEED）生成ヘルパー: seed から BFS で size マスのブロブを生成
@@ -19668,7 +19841,7 @@ function initMap() {
             _placeLWPatch({ x: sx, y: sy }, 7 + Math.floor(Math.random() * 5));
             _28lwPlaced++;
         }
-        addLog("⚠️ Patches of strange grass cover parts of the floor...");
+        addKeyLog("⚠️ Patches of strange grass cover parts of the floor...");
 
         // タレットを 2 体配置（プレイヤーから遠い部屋）
         const _28tRooms = rooms.slice(1).sort((a, b) => {
@@ -19762,13 +19935,13 @@ function initMap() {
     if (floorLevel === 45 && !isWindFloor) {
         isWindFloor = false; // wind disabled
         windTimer = 4; // 1ターン目で即発動
-        addLog("💨 FLOOR 45: Violent gales tear through this labyrinth!");
+        addKeyLog("💨 FLOOR 45: Violent gales tear through this labyrinth!");
     }
     const windChance = 0.015;
     if (floorLevel >= 10 && !isWindFloor && !fixedStages.includes(floorLevel) && floorLevel !== 37 && floorLevel !== 50 && !isRoomTestMode && Math.random() < windChance) {
         isWindFloor = false; // wind disabled
         windTimer = 4; // 1ターン目で即発動
-        addLog("💨 WARNING: Strong winds blow through this floor!");
+        addKeyLog("💨 WARNING: Strong winds blow through this floor!");
     }
     // 大広間(WINDモディファイア): 確定で突風
     if (greatHallModifier === 'WIND' && !isWindFloor) {
@@ -19942,7 +20115,7 @@ function initMap() {
                 if (map[ry][rx] === SYMBOLS.FLOOR && !(rx === player.x && ry === player.y)) {
                     map[ry][rx] = SYMBOLS.RING;
                     ringDrops.push({ x: rx, y: ry, ringId: RINGS[ringIdx].id });
-                    addLog(`💍 Something sparkles in the dungeon...`);
+                    addKeyLog(`💍 Something sparkles in the dungeon...`);
                     break;
                 }
             }
@@ -20218,7 +20391,7 @@ function initMap() {
 
     // Xステージ警告
     if (isXWallStage) {
-        addLog("⚠️ The walls feel... alive. Something lurks within.");
+        addKeyLog("⚠️ The walls feel... alive. Something lurks within.");
     }
 
     // 壁の割合を計算（BREAKERの出現率補正に使用）
@@ -20323,7 +20496,7 @@ function initMap() {
                     hp: crazyHp, maxHp: crazyHp,
                     flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 100 + floorLevel * 5, stunTurns: 0
                 });
-                addLog("!! Something crazy appeared !!");
+                addKeyLog("!! Something crazy appeared !!");
             }
         }
 
@@ -20336,7 +20509,7 @@ function initMap() {
                     flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 500 + (floorLevel * 100),
                     stunTurns: 0, flee: true
                 });
-                addLog("!! A Golden Shiny Enemy appeared !!");
+                addKeyLog("!! A Golden Shiny Enemy appeared !!");
             }
         /* } else if (rand < (floorLevel <= 10 ? 0.02 : 0.10)) { // 大蛇(SNAKE) 現在無効化中
             const pos = findFloorInRoom(room);
@@ -20349,7 +20522,7 @@ function initMap() {
                     flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 30,
                     stunTurns: 0
                 });
-                addLog("!! A huge ENEMY appeared !!");
+                addKeyLog("!! A huge ENEMY appeared !!");
             } */
         } else {
             // 大部屋(Great Hall)の場合は広さに合わせて多めに出す。通常は1部屋1体
@@ -20572,10 +20745,10 @@ function initMap() {
                 }
                 if (_spiderGuaranteed) {
                     addLog("🕸 EVENT: SPIDER'S NEST — A great web fills the floor!");
-                    addLog(`⚔️ ${huntPlaced} hunters have come to slay the spider...`);
+                    addKeyLog(`⚔️ ${huntPlaced} hunters have come to slay the spider...`);
                 } else {
                     addLog("🕸 You hear faint scuttling — a SPIDER lurks here!");
-                    if (huntPlaced > 0) addLog(`⚔️ ${huntPlaced} hunters circle the area, weapons drawn.`);
+                    if (huntPlaced > 0) addKeyLog(`⚔️ ${huntPlaced} hunters circle the area, weapons drawn.`);
                 }
                 break;
             }
@@ -20651,7 +20824,7 @@ function initMap() {
                 }
             }
         }
-        if (spiralPlaced > 0) addLog(`⚠ ${spiralPlaced} ${clusterType}s converge around the central abyss!`);
+        if (spiralPlaced > 0) addKeyLog(`⚠ ${spiralPlaced} ${clusterType}s converge around the central abyss!`);
     }
 
     // --- ミミック配置 ---
@@ -20759,7 +20932,7 @@ function initMap() {
                 });
                 _layPlaced++;
             }
-            addLog(`⚠ λ Something glides through the dark...`);
+            addKeyLog(`⚠ λ Something glides through the dark...`);
         }
     }
 
@@ -20783,7 +20956,7 @@ function initMap() {
             });
             swPlaced++;
         }
-        if (swPlaced > 0) addLog(`⚠ A Cluster lurks in the dark!`);
+        if (swPlaced > 0) addKeyLog(`⚠ A Cluster lurks in the dark!`);
     }
 
     // --- VULCAN 配置 floor 10+ 3%確率（溶岩タイル限定）---
@@ -20802,7 +20975,7 @@ function initMap() {
                 expValue: 25, stunTurns: 0,
                 lavaBound: true
             });
-            addLog(`⚠ V A Vulcan Cannon rises from the lava!`);
+            addKeyLog(`⚠ V A Vulcan Cannon rises from the lava!`);
             break;
         }
     }
@@ -20844,7 +21017,7 @@ function initMap() {
                 _zsMinPlaced++;
             }
             if (_zsPlaced >= 3) {
-                addLog("⚠ A swarm of Splitters lurks in the shadows...");
+                addKeyLog("⚠ A swarm of Splitters lurks in the shadows...");
                 // EとGを2〜3体間引いてめりはりをつける
                 const _zsTrim = 2 + Math.floor(Math.random() * 2);
                 let _zsTrimmed = 0;
@@ -21049,7 +21222,7 @@ function initMap() {
                 flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 500 + floorLevel * 100,
                 stunTurns: 0, flee: true
             });
-            addLog("!! A Golden Shiny Enemy appeared !!");
+            addKeyLog("!! A Golden Shiny Enemy appeared !!");
             break;
         }
     }
@@ -21068,7 +21241,7 @@ function initMap() {
                 hp: crazyHp, maxHp: crazyHp,
                 flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 100 + floorLevel * 5, stunTurns: 0
             });
-            addLog("!! Something deranged is lurking here !!");
+            addKeyLog("!! Something deranged is lurking here !!");
             break;
         }
         // BLAZE × 1
@@ -21101,7 +21274,7 @@ function initMap() {
 
     // === Floor 44: WISP SWARM — ウィスプ大量 + WEAVER後処理 ===
     if (floorLevel === 44) {
-        addLog("★ WISP SWARM: Drifting lights fill every passage.");
+        addKeyLog("★ WISP SWARM: Drifting lights fill every passage.");
         let _wp44 = 0;
         for (let t = 0; t < 3000 && _wp44 < 30; t++) {
             const wx = 1 + Math.floor(Math.random() * (COLS - 2));
@@ -21148,9 +21321,9 @@ function initMap() {
             });
             placed++;
         }
-        addLog("★ WEAVER'S THREAD — shimmering lines fill the dark.");
+        addKeyLog("★ WEAVER'S THREAD — shimmering lines fill the dark.");
         addLog("◆ Weavers roam the floor, leaving glowing trails.");
-        addLog("⚠ Standing on a trail deals damage to all who linger.");
+        addKeyLog("⚠ Standing on a trail deals damage to all who linger.");
     }
 
     // 33階：派閥敵を追加（突風ステージ＋派閥エリア）
@@ -21183,9 +21356,9 @@ function initMap() {
         spawn26('BREAKER',  4, 50 + floorLevel * 4,    45);
 
         applyPeacefulVillage(enemies);
-        addLog("EVENT: PEACEFUL VILLAGE.");
+        addKeyLog("EVENT: PEACEFUL VILLAGE.");
         addLog("✿ The creatures here are calm. They will not attack first.");
-        addLog("⚠ But strike one, and the others nearby will turn hostile.");
+        addKeyLog("⚠ But strike one, and the others nearby will turn hostile.");
 
         // ===== GのアジトとランダムRING（右下コーナー、peaceful対象外）=====
         const rW = 9, rH = 7;
@@ -21242,7 +21415,7 @@ function initMap() {
         const ring26 = _pickSeededRing(26, RINGS.filter(r => r.id !== 'TERRAIN_RING'));
         map[ringY26][ringX26] = SYMBOLS.RING;
         ringDrops.push({ x: ringX26, y: ringY26, ringId: ring26.id });
-        addLog("💍 Something sparkles from deep within a guarded room...");
+        addKeyLog("💍 Something sparkles from deep within a guarded room...");
 
         // プレイヤーが部屋エリア内にいたら外の床に移動
         if (player.x >= rX && player.x < rX + rW && player.y >= rY && player.y < rY + rH) {
@@ -21327,9 +21500,9 @@ function initMap() {
     if (!multiScreenMode && floorLevel >= 6 && floorLevel < 50 && floorLevel !== 26
             && !FIXED_STAGE_FLOORS.includes(floorLevel) && Math.random() < 0.05) {
         applyPeacefulVillage(enemies);
-        addLog("EVENT: PEACEFUL VILLAGE.");
+        addKeyLog("EVENT: PEACEFUL VILLAGE.");
         addLog("✿ The creatures here are calm. They will not attack first.");
-        addLog("⚠ But strike one, and the others nearby will turn hostile.");
+        addKeyLog("⚠ But strike one, and the others nearby will turn hostile.");
     }
 
     if (floorLevel === 33) {
@@ -21366,7 +21539,7 @@ function initMap() {
         place33(midX33 + 1, COLS - 2, 'NORMAL', 'COBALT', 6);
         place33(midX33 + 2, COLS - 2, 'ORC',    'COBALT', 1);
         place33(midX33 + 2, COLS - 2, 'LAYER',  'COBALT', 1);
-        addLog("⚔️ Two factions clash in the storm!");
+        addKeyLog("⚔️ Two factions clash in the storm!");
     }
 
     // ステージ83: 密集迷路＋KEY_RUNNERのみ。完全クリーンアップ後に再配置
@@ -21438,7 +21611,7 @@ function initMap() {
                 }
             }
         }
-        addLog("🔑 K holds the only key. Catch it to unlock the door!");
+        addKeyLog("🔑 K holds the only key. Catch it to unlock the door!");
 
         // ウィスプ10体を迷路内にランダム配置
         let wispCount = 0;
@@ -21529,7 +21702,7 @@ function initMap() {
             }
         }
         addLog(`EVENT: Stage ${floorLevel} — The Key Thief!`);
-        addLog("🔑 K holds the only key. Catch it to unlock the door!");
+        addKeyLog("🔑 K holds the only key. Catch it to unlock the door!");
     }
 
     // === KING: 深層階（51F以上・固定ステージ除外）で 0.1% の確率で出現 ===
@@ -21547,8 +21720,8 @@ function initMap() {
                 flashUntil: 0, offsetX: 0, offsetY: 0,
                 expValue: 500 + floorLevel * 10, stunTurns: 0
             });
-            addLog("👑 A wandering KING holds court in the deep...");
-            addLog("⚠ His presence empowers all nearby enemies!");
+            addKeyLog("👑 A wandering KING holds court in the deep...");
+            addKeyLog("⚠ His presence empowers all nearby enemies!");
             break;
         }
     }
@@ -21608,9 +21781,9 @@ function initMap() {
     // ----- FLOOR 99: THE FINAL CAVERN -----
 
     if (floorLevel === 99) {
-        addLog("EVENT: The Final Cavern.");
+        addKeyLog("EVENT: The Final Cavern.");
         addLog("▲ Rock spikes fill every corner. The air is deathly still.");
-        addLog("⚠️ Something lurks beyond the silence...");
+        addKeyLog("⚠️ Something lurks beyond the silence...");
 
         // 全面を外周壁・内部床で初期化
         for (let y = 0; y < ROWS; y++) {
@@ -22034,7 +22207,7 @@ function spawnQueenIfEligible() {
 function breakStealth() {
     if (player.isStealth) {
         player.isStealth = false;
-        addLog("Stealth broken!");
+        addKeyLog("Stealth broken!");
     }
 }
 
@@ -22322,75 +22495,75 @@ async function processPickedItems(items) {
             if (floorLevel === 2) {
                 await triggerWandEvent();
             } else {
-                addLog("You picked up the Magic Wand.");
+                addKeyLog("You picked up the Magic Wand.");
             }
         } else if (item.symbol === SYMBOLS.KEY) {
             await animateItemGet(SYMBOLS.KEY, SOUNDS.GET_KEY);
             player.hasKey = true;
-            addLog("You picked up the Key.");
+            addKeyLog("You picked up the Key.");
             damageTexts.push({ x: item.x * TILE_SIZE + TILE_SIZE / 2, y: item.y * TILE_SIZE, text: "🔑 KEY GET!", color: "#fbbf24", alpha: 1, life: 1800, rise: true, font: 'bold 15px Courier New' });
         } else if (item.symbol === SYMBOLS.SPEED) {
             await animateItemGet(SYMBOLS.TOME);
             player.hasteTomes++;
-            addLog("You picked up a Haste Tome.");
+            addKeyLog("You picked up a Haste Tome.");
             spawnFloatingText(item.x, item.y, "HASTE TOME IDENTIFIED", "#38bdf8", 1500);
         } else if (item.symbol === SYMBOLS.CHARM) {
             await animateItemGet(SYMBOLS.TOME);
             player.charmTomes++;
-            addLog("You picked up a Charm Tome.");
+            addKeyLog("You picked up a Charm Tome.");
             spawnFloatingText(item.x, item.y, "CHARM TOME IDENTIFIED", "#60a5fa", 1500);
         } else if (item.symbol === SYMBOLS.STEALTH) {
             await animateItemGet(SYMBOLS.TOME);
             player.stealthTomes++;
-            addLog("You picked up a Stealth Tome.");
+            addKeyLog("You picked up a Stealth Tome.");
             spawnFloatingText(item.x, item.y, "STEALTH TOME IDENTIFIED", "#94a3b8", 1500);
         } else if (item.symbol === SYMBOLS.SWORD) {
             await animateItemGet(SYMBOLS.SWORD);
             player.swordCount++;
-            addLog("You picked up a Sword.");
+            addKeyLog("You picked up a Sword.");
             spawnFloatingText(item.x, item.y, "ATTACK UP", "#38bdf8");
         } else if (item.symbol === SYMBOLS.ARMOR) {
             await animateItemGet(SYMBOLS.ARMOR);
             player.armorCount++;
-            addLog("You picked up Armor.");
+            addKeyLog("You picked up Armor.");
             spawnFloatingText(item.x, item.y, "DEFENSE UP", "#94a3b8");
         } else if (item.symbol === SYMBOLS.HEAL_TOME) {
             await animateItemGet(SYMBOLS.TOME);
             player.healTomes++;
-            addLog("You picked up a Heal Tome.");
+            addKeyLog("You picked up a Heal Tome.");
             spawnFloatingText(item.x, item.y, "HEAL TOME IDENTIFIED", "#34d399", 1500);
         } else if (item.symbol === SYMBOLS.EXPLOSION) {
             await animateItemGet(SYMBOLS.TOME);
             player.explosionTomes++;
-            addLog("You picked up an Explosion Tome.");
+            addKeyLog("You picked up an Explosion Tome.");
             spawnFloatingText(item.x, item.y, "EXPLOSION TOME IDENTIFIED", "#fb923c", 1500);
         } else if (item.symbol === SYMBOLS.BREAKER_TOME) {
             await animateItemGet(SYMBOLS.TOME);
             player.breakerTomes++;
-            addLog("You picked up a Breaker Tome.");
+            addKeyLog("You picked up a Breaker Tome.");
             spawnFloatingText(item.x, item.y, "BREAKER TOME IDENTIFIED", "#fbbf24", 1500);
         } else if (item.symbol === SYMBOLS.ESCAPE) {
             await animateItemGet(SYMBOLS.TOME);
             player.escapeTomes++;
-            addLog("You picked up a Liminal Tome.");
+            addKeyLog("You picked up a Liminal Tome.");
             spawnFloatingText(item.x, item.y, "LIMINAL TOME IDENTIFIED", "#a78bfa", 1500);
         } else if (item.symbol === SYMBOLS.GUARDIAN) {
             await animateItemGet(SYMBOLS.TOME);
             player.guardianTomes++;
-            addLog("You picked up a Guardian Tome.");
+            addKeyLog("You picked up a Guardian Tome.");
             spawnFloatingText(item.x, item.y, "GUARDIAN TOME IDENTIFIED", "#4ade80", 1500);
         } else if (item.symbol === SYMBOLS.RING) {
             await animateItemGet(SYMBOLS.RING);
             const ringData = RINGS.find(r => r.id === item.ringId);
             if (ringData && !player.ownedRings.includes(ringData.id)) {
                 player.ownedRings.push(ringData.id);
-                addLog(`You picked up the ${ringData.name}.`);
+                addKeyLog(`You picked up the ${ringData.name}.`);
                 spawnFloatingText(item.x, item.y, `${ringData.name} GET!`, "#fbbf24", 1800);
             } else if (ringData) {
                 const randomRing = RINGS[Math.floor(Math.random() * RINGS.length)];
                 player.ownedRings.push(randomRing.id);
                 const newCount = player.ownedRings.filter(rid => rid === randomRing.id).length;
-                addLog(`You picked up the ${randomRing.name}.`);
+                addKeyLog(`You picked up the ${randomRing.name}.`);
                 spawnFloatingText(item.x, item.y, `${randomRing.name} ×${newCount}`, randomRing.color, 1800);
             }
         } else if (item.symbol === SYMBOLS.FAIRY) {
@@ -22497,7 +22670,7 @@ async function triggerDragonSpawn() {
     await new Promise(r => setTimeout(r, 500));
 
     // 咆哮と突き飛ばし演出
-    addLog("DRAGONLORD: 'You have come far, mortal. The Core belongs to me.'");
+    addKeyLog("DRAGONLORD: 'You have come far, mortal. The Core belongs to me.'");
     SOUNDS.FATAL();
     setScreenShake(60, 1500);
 
@@ -25426,6 +25599,32 @@ function draw(now) {
                 return; // 擬態中はマップの壁タイルで描画済み
             }
 
+            // M (水星/火星) 惑星: 穴(◯)に擬態して静止
+            // M惑星 穴擬態 + 変身演出（正体露出・再擬態トランジション共通）
+            const _inMimicTrans = (e._solarMimicHole || e._solarMimicRevealed)
+                && e.mimicTransitionEnd && now < e.mimicTransitionEnd;
+            if (e._solarMimicHole || _inMimicTrans) {
+                const _mhpx = e.x * TILE_SIZE + TILE_SIZE / 2 + (e.offsetX || 0);
+                const _mhpy = e.y * TILE_SIZE + TILE_SIZE / 2 + (e.offsetY || 0);
+                ctx.save();
+                ctx.globalAlpha = 1.0;
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = `${TILE_SIZE - 2}px 'Courier New'`;
+                if (_inMimicTrans) {
+                    const _mhPhase = Math.floor(now / 80) % 2;
+                    ctx.fillStyle = _mhPhase === 0 ? '#ef4444' : '#ffffff';
+                    ctx.fillText(_mhPhase === 0 ? (e._char || 'M') : SYMBOLS.STAIRS, _mhpx, _mhpy);
+                } else {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText(SYMBOLS.STAIRS, _mhpx, _mhpy);
+                }
+                ctx.restore();
+                return;
+            }
+
             if (e.type === 'MIMIC' && e.disguised) {
                 if (e.mimicTransitionEnd && now < e.mimicTransitionEnd) {
                     // 変身演出中：穴とMが交互に点滅
@@ -25592,7 +25791,11 @@ function draw(now) {
                 else if (e.type === 'BLAZE') { eColor = '#fb923c'; eChar = 'F'; }
                 else if (e.type === 'VULCAN') {
                     eChar = 'V';
-                    eColor = (e._shotFlash > 0) ? '#ffffff' : '#facc15'; // 発射後1ターンは白、通常は黄色
+                    if (e._solarFree && !e.isAlly) {
+                        eColor = '#f87171'; // 惑星V敵対時は赤
+                    } else {
+                        eColor = (e._shotFlash > 0) ? '#ffffff' : '#facc15';
+                    }
                 }
                 else if (e.type === 'FROST') { eColor = '#ededed'; eChar = 'I'; }
                 else if (e.type === 'BOMBER') { eColor = '#f97316'; eChar = 'X'; }
@@ -25663,6 +25866,7 @@ function draw(now) {
                     const _cd = ALL_COLLECTOR_MAP.get(e.type);
                     eColor = e._summonColor || _cd.color; // 召喚色優先、なければ自然色
                     eChar = _cd.char;
+                    if (e._solarOrbit) eChar = eChar.toUpperCase();
                     // LATIN_M: 未発覚時は「。」に擬態、壁モードは壁タイルとして描画
                     if (e.type === 'LATIN_M' && !e._mRevealed) {
                         if (e._mWallMode) {
@@ -25696,7 +25900,7 @@ function draw(now) {
                         eColor = '#ffffff';
                         ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 6;
                     }
-                    ctx.font = `14px "Courier New", monospace`;
+                    ctx.font = e._solarOrbit ? `${TILE_SIZE - 2}px 'Courier New'` : `14px "Courier New", monospace`;
                     if (e._collectorDying) {
                         // 消滅演出: 白く輝きながら2.5秒でフェードアウト
                         const _dyElapsed = now - (e._collectorDyingStart || now);
@@ -25894,7 +26098,20 @@ function draw(now) {
                 }
                 else if (e.type === 'LETTER') {
                     eChar = e._char || '?';
-                    if (e.isAlly) {
+                    if (e._solarSun) {
+                        if (!e._friendly && !e.isAlly) {
+                            // 太陽敵対状態: 赤色
+                            eColor = '#ef4444';
+                            ctx.shadowColor = '#ef4444';
+                            ctx.shadowBlur = 14;
+                        } else {
+                            // 友好状態: 黄金色にパルスするグロー
+                            const _sunP = Math.sin(now / 300) * 0.5 + 0.5;
+                            eColor = '#facc15';
+                            ctx.shadowColor = '#ffdd00';
+                            ctx.shadowBlur = 18 + _sunP * 24;
+                        }
+                    } else if (e.isAlly) {
                         // 仲間になった文字: 青く光る
                         eColor = '#60a5fa';
                         ctx.shadowColor = '#60a5fa';
@@ -25903,15 +26120,13 @@ function draw(now) {
                         eColor = '#ededed';
                         ctx.shadowBlur = 0;
                     } else {
-                        eColor = '#ef4444';
-                        ctx.shadowColor = '#ef4444';
-                        ctx.shadowBlur = 10;
+                        eColor = '#f87171';
                     }
                 }
                 if (e.isAlly && e.type !== 'WEAVER') { eColor = e._allyColor || '#60a5fa'; ctx.shadowColor = eColor; }
                 // 友好状態の敵: teal (緑青) で表示。攻撃前の穏やかな住人色
                 // WEAVERはウィスプ属性なので常に固有カラーを維持
-                if (e._friendly && !e.isAlly && e.type !== 'WEAVER') eColor = '#ffffff';
+                if (e._friendly && !e.isAlly && e.type !== 'WEAVER' && !e._solarSun) eColor = '#ffffff';
                 if (e._summonedAlly && !e._summonPending) { eColor = '#ffffff'; ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 8; }
                 if (e._summonPending) {
                     eColor = '#ffffff';
@@ -25968,6 +26183,14 @@ function draw(now) {
                 if (map[e.y] && map[e.y][e.x] === SYMBOLS.ICE) {
                     ctx.shadowColor = isFlashing ? '#ededed' : eColor;
                     ctx.shadowBlur = Math.max(ctx.shadowBlur || 0, 8);
+                }
+                // 太陽系軌道敵: パッシブのみ白色オーバーライド（解放後は通常のLETTER赤色をそのまま使用）
+                if (e._solarOrbit && e._solarPassive) {
+                    eColor = '#ffffff'; ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 6;
+                }
+                // P (冥王星) 惑星: 半透明PHANTOM状態
+                if (e._solarPhantom && !isFlashing) {
+                    ctx.globalAlpha = 0.2;
                 }
                 ctx.fillStyle = (isFlashing && e.type !== 'PHANTOM') ? '#ededed' : eColor;
                 if (e.type === 'SPAWNER' || e.type === 'WISP_SPAWNER') {
@@ -26649,9 +26872,10 @@ function draw(now) {
 }
 
 // ===== SECTION: LOGGING & BOMB SYSTEM =====
-function addLog(msg) {
+function addLog(msg) { /* suppressed — use addKeyLog for important messages */ }
+function addKeyLog(msg) {
     const div = document.createElement('div'); div.innerText = msg; logElement.appendChild(div);
-    while (logElement.childNodes.length > 10) { logElement.removeChild(logElement.firstChild); } // 消息履歴を10行に増加
+    while (logElement.childNodes.length > 10) { logElement.removeChild(logElement.firstChild); }
     logElement.scrollTop = logElement.scrollHeight;
 }
 function addLogHTML(html) {
@@ -26714,7 +26938,7 @@ function detonateBomb(bomb) {
                     if (e.type === 'LATIN_J' && !e._jArmed) {
                         e._jArmed = true; e._jBoomCounter = 3; e.hp = Math.max(1, e.hp);
                         spawnFloatingText(e.x, e.y, 'ARMED!', '#ef4444');
-                        addLog('The J is triggered by the explosion!');
+                        addKeyLog('The J is triggered by the explosion!');
                         return;
                     }
                     // LATIN_X: 自分が爆弾を設置する側なので爆発ダメージ免疫
@@ -27010,7 +27234,7 @@ function tryPlaceBlock(dx, dy) {
         // 通常ダンジョン: HP10%消費チェック
         const _summonHpCost = isInEscapeRoom ? 0 : Math.max(1, Math.floor(getPlayerMaxHp() * 0.1));
         if (_summonHpCost > 0 && player.hp <= _summonHpCost) {
-            addLog("Not enough HP to summon! (costs 10% MaxHP)");
+            addKeyLog("Not enough HP to summon! (costs 10% MaxHP)");
             spawnFloatingText(player.x, player.y, 'LOW HP!', '#ef4444');
             return false;
         }
@@ -27115,7 +27339,7 @@ function tryPlaceBlock(dx, dy) {
         }
         if (hasRing('STAR_RING')) {
             tempWalls.push({ x: bx, y: by, hp: 2, type: 'FIRE_BLOCK' });
-            addLog("★ Placed a star block!");
+            addKeyLog("★ Placed a star block!");
             SOUNDS.PLACE_BLOCK();
             return true;
         }
@@ -27289,7 +27513,7 @@ async function slidePlainBlock(block, dx, dy) {
 async function dragonDeathAnimation(dragon) {
     dragon.dyingAnimation = true; // HP0でも描画を維持するフラグ
     dragon.alpha = 1.0;
-    addLog("⚠ The Dragon writhes — a final, earth-shattering death cry!");
+    addKeyLog("⚠ The Dragon writhes — a final, earth-shattering death cry!");
     spawnFloatingText(Math.floor(COLS / 2), Math.floor(ROWS / 2) - 2, "THE DRAGON FALLS!!", "#ef4444");
 
     // 低音を5秒以上鳴らし続ける（複数レイヤーで厚みを出す）
@@ -27376,7 +27600,7 @@ async function dragonHalfPhase() {
     }
 
     // === フェーズ1: 約2秒の震動 ===
-    addLog("⚠ The Dragon trembles with rage — the ground shakes!");
+    addKeyLog("⚠ The Dragon trembles with rage — the ground shakes!");
     spawnFloatingText(dragon ? dragon.x : Math.floor(COLS / 2), 2, "RRROAARRR!!", "#ef4444");
     SOUNDS.FATAL();
 
@@ -27444,7 +27668,7 @@ async function dragonHalfPhase() {
         });
     }
     if (toSmash.length > 0) {
-        addLog("⚡ All blocks and spikes are SHATTERED by the impact!");
+        addKeyLog("⚡ All blocks and spikes are SHATTERED by the impact!");
         setTimeout(() => SOUNDS.EXPLODE(), 160);
     }
 
@@ -27543,13 +27767,13 @@ async function dragonHalfPhase() {
     draw();
     await new Promise(r => setTimeout(r, 400));
 
-    addLog("🔥 The Dragon's fury scorches the floor — LAVA floods the dungeon!");
+    addKeyLog("🔥 The Dragon's fury scorches the floor — LAVA floods the dungeon!");
     updateUI();
 }
 
 async function dragonWaveAttack(wave = 1) {
     const isSecondWave = wave >= 2;
-    addLog("The DRAGONLORD unleashes a devastating shockwave!");
+    addKeyLog("The DRAGONLORD unleashes a devastating shockwave!");
     SOUNDS.FATAL();
     setScreenShake(50, 800);
     spawnFloatingText(Math.floor(COLS / 2), Math.floor(ROWS / 2), "SHOCKWAVE!", "#f97316");
@@ -27972,7 +28196,7 @@ async function _advanceBizarreVScrollRoom() {
             const _vDmg = Math.max(3, Math.floor(player.maxHp / 20));
             player.hp -= _vDmg; SOUNDS.BANG();
             spawnFloatingText(player.x, player.y, `-${_vDmg}`, "#ff4444", 800);
-            addLog(`Slammed into the floor! -${_vDmg} HP`);
+            addKeyLog(`Slammed into the floor! -${_vDmg} HP`);
             if (player.hp <= 0) { draw(); await triggerGameOver(); return; }
         } else {
             player.y = downY;
@@ -28180,7 +28404,7 @@ async function advanceScrollWalls() {
                 player.hp -= _wDmg;
                 SOUNDS.BANG();
                 spawnFloatingText(player.x, player.y, `-${_wDmg}`, "#ff4444", 800);
-                addLog(`Slammed by the wall! -${_wDmg} HP`);
+                addKeyLog(`Slammed by the wall! -${_wDmg} HP`);
                 if (player.hp <= 0) { draw(); await triggerGameOver(); return; }
                 _wEscaped = true;
                 break;
@@ -28211,7 +28435,7 @@ async function advanceScrollWalls() {
             player.hp -= _wallDmg;
             SOUNDS.BANG();
             spawnFloatingText(player.x, player.y, `-${_wallDmg}`, "#ff4444", 800);
-            addLog(`Slammed into the wall! -${_wallDmg} HP`);
+            addKeyLog(`Slammed into the wall! -${_wallDmg} HP`);
             if (player.hp <= 0) { draw(); await triggerGameOver(); return; }
         } else {
             player.x = leftX;
@@ -28292,7 +28516,7 @@ async function advanceScrollWalls() {
             player.hp -= _spawnDmg;
             SOUNDS.BANG();
             spawnFloatingText(player.x, player.y, `-${_spawnDmg}`, "#ff4444", 800);
-            addLog(`Slammed into the wall! -${_spawnDmg} HP`);
+            addKeyLog(`Slammed into the wall! -${_spawnDmg} HP`);
             if (player.hp <= 0) { draw(); await triggerGameOver(); return; }
         } else {
             player.x = _spawnLeftX;
@@ -28408,7 +28632,7 @@ async function advanceVScrollWalls() {
             player.flashUntil = performance.now() + 200;
             spawnDamageText(player.x, player.y, _vDmg, '#ff4444');
             SOUNDS.DAMAGE();
-            addLog(`Crushed by the descending walls! -${_vDmg} HP`);
+            addKeyLog(`Crushed by the descending walls! -${_vDmg} HP`);
             if (player.hp <= 0) {
                 for (const w of vScrollWalls)
                     if (w.y >= 1 && w.y < ROWS-1 && w.x >= 1 && w.x < COLS-1) map[w.y][w.x] = SYMBOLS.WALL;
@@ -28530,7 +28754,7 @@ async function advanceVScrollWalls() {
             player.flashUntil = performance.now() + 200;
             spawnDamageText(player.x, player.y, _vDmg2, '#ff4444');
             SOUNDS.DAMAGE();
-            addLog(`Crushed by falling walls! -${_vDmg2} HP`);
+            addKeyLog(`Crushed by falling walls! -${_vDmg2} HP`);
             if (player.hp <= 0) {
                 for (const w of vScrollWalls)
                     if (w.y >= 1 && w.y < ROWS-1 && w.x >= 1 && w.x < COLS-1) map[w.y][w.x] = SYMBOLS.WALL;
@@ -28647,7 +28871,7 @@ async function windGustSlide() {
         map[player.y][player.x] = SYMBOLS.FLOOR;
         player.hasKey = true;
         await animateItemGet(SYMBOLS.KEY, SOUNDS.GET_KEY);
-        addLog("Blown into the KEY! 🗝 You grabbed it!");
+        addKeyLog("Blown into the KEY! 🗝 You grabbed it!");
         spawnFloatingText(player.x, player.y, "KEY GET!", "#fbbf24");
         updateUI();
     }
@@ -28749,7 +28973,7 @@ async function slidePlayer(dx, dy) {
                 map[mimicSlide.y][mimicSlide.x] = SYMBOLS.FLOOR;
                 mimicSlide.mimicTransitionEnd = performance.now() + 500;
                 SOUNDS.MIMIC_REVEAL();
-                addLog("The hole suddenly attacks! It was a MIMIC!");
+                addKeyLog("The hole suddenly attacks! It was a MIMIC!");
                 spawnFloatingText(player.x, player.y, "MIMIC!!", "#c084fc");
                 SOUNDS.ENEMY_ATTACK();
                 setScreenShake(10, 300);
@@ -29016,7 +29240,7 @@ async function triggerEnding() {
     // ドラゴン消滅（ホワイトアウト中に処理）
     if (dragon) {
         enemies = enemies.filter(e => e !== dragon);
-        addLog("The ancient DRAGONLORD has vanished...");
+        addKeyLog("The ancient DRAGONLORD has vanished...");
     }
 
     await new Promise(r => setTimeout(r, 1500));
@@ -29575,7 +29799,7 @@ async function handleAction(dx, dy) {
     if (player.trailStunned && !_summonInteractTarget) {
         player.trailStunned = false;
         isProcessing = true;
-        addLog("⚡ You're paralyzed by the Weaver's thread!");
+        addKeyLog("⚡ You're paralyzed by the Weaver's thread!");
         turnCount++;
         updateUI();
         try {
@@ -29949,7 +30173,7 @@ async function handleAction(dx, dy) {
                         }
                     }
                     SOUNDS.QUEEN_ALERT();
-                    addLog("👑 Both Queens sensed your presence! QUEEN'S PANIC begins!");
+                    addKeyLog("👑 Both Queens sensed your presence! QUEEN'S PANIC begins!");
                 }
 
                 // 出現位置が壁や障害物なら床にする
@@ -29980,7 +30204,7 @@ async function handleAction(dx, dy) {
                 addLog(`Screen [${newScreenX + 1},${newScreenY + 1}]`);
                 if (enemies.some(e => e._friendly)) {
                     addLog("✿ PEACEFUL VILLAGE. The creatures here are calm.");
-                    addLog("⚠ But strike one, and those watching will turn hostile.");
+                    addKeyLog("⚠ But strike one, and those watching will turn hostile.");
                 }
 
                 // 遷移直後は敵ターンをスキップ
@@ -30145,10 +30369,10 @@ async function handleAction(dx, dy) {
             launchFlameProjectile(nx, ny, dx, dy);
             if (block.hp <= 0) {
                 tempWalls.splice(blockIdx, 1);
-                addLog("★ The star block shattered!");
+                addKeyLog("★ The star block shattered!");
                 SOUNDS.DEFEAT();
             } else {
-                addLog("★ Star block fires! (1 hit left)");
+                addKeyLog("★ Star block fires! (1 hit left)");
             }
             if (!player.isInfiniteStamina) player.stamina = Math.max(0, player.stamina - 20);
             await new Promise(r => setTimeout(r, 200));
@@ -30169,7 +30393,7 @@ async function handleAction(dx, dy) {
             if (!player.isInfiniteStamina) player.stamina = 0;
             SOUNDS.WALL_BREAK();
             setScreenShake(10, 200);
-            addLog("The Breaker Ring shattered the rock spike!");
+            addKeyLog("The Breaker Ring shattered the rock spike!");
             spawnFloatingText(nx, ny, "BREAK!", '#f59e0b');
             player.offsetX = 0; player.offsetY = 0;
             if (!transition.active) { turnCount++; updateUI(); try { await windGustSlide(); await applyLaserDamage(); await enemyTurn(); } catch(err) { console.error('[turn ERROR]', err); } finally { try { await moveWisps(); } catch(we) { console.error('[wisp ERROR]', we); } moveFairies(); moveMadmen(); isProcessing = false; } if (bufferedInput) { const b = bufferedInput; bufferedInput = null; handleAction(b.dx, b.dy); } }
@@ -30398,44 +30622,44 @@ async function handleAction(dx, dy) {
         // 仲間の下に隠れていたアイテムを取得
         if (nextTile === SYMBOLS.SWORD) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.SWORD); SOUNDS.GET_ITEM();
-            player.swordCount++; addLog("You picked up a Sword."); spawnFloatingText(nx, ny, "ATTACK UP", "#38bdf8");
+            player.swordCount++; addKeyLog("You picked up a Sword."); spawnFloatingText(nx, ny, "ATTACK UP", "#38bdf8");
             if (floorLevel === 24 && nx === 7 && ny === 2) { _f24ItemsTaken.sword = true; saveGame(); }
         } else if (nextTile === SYMBOLS.ARMOR) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.ARMOR); SOUNDS.GET_ITEM();
-            player.armorCount++; addLog("You picked up Armor."); spawnFloatingText(nx, ny, "DEFENSE UP", "#94a3b8");
+            player.armorCount++; addKeyLog("You picked up Armor."); spawnFloatingText(nx, ny, "DEFENSE UP", "#94a3b8");
         } else if (nextTile === SYMBOLS.KEY) {
             map[ny][nx] = keyDropUnderTile !== null ? keyDropUnderTile : SYMBOLS.FLOOR; keyDropUnderTile = null;
             if (_crumbleOrigMap) _crumbleOrigMap[ny][nx] = SYMBOLS.FLOOR;
             await animateItemGet(SYMBOLS.KEY, SOUNDS.GET_KEY); SOUNDS.GET_ITEM();
-            player.hasKey = true; addLog("You picked up the Key."); spawnFloatingText(nx, ny, "GOT KEY", "#fbbf24");
+            player.hasKey = true; addKeyLog("You picked up the Key."); spawnFloatingText(nx, ny, "GOT KEY", "#fbbf24");
         } else if (nextTile === SYMBOLS.WAND) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.WAND); SOUNDS.GET_ITEM();
-            player.hasWand = true; addLog("You picked up the Magic Wand.");
+            player.hasWand = true; addKeyLog("You picked up the Magic Wand.");
         } else if (nextTile === SYMBOLS.SPEED) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.TOME); SOUNDS.GET_ITEM();
-            player.hasteTomes++; addLog("You picked up a Haste Tome."); spawnFloatingText(nx, ny, "HASTE TOME IDENTIFIED", "#38bdf8", 1500);
+            player.hasteTomes++; addKeyLog("You picked up a Haste Tome."); spawnFloatingText(nx, ny, "HASTE TOME IDENTIFIED", "#38bdf8", 1500);
         } else if (nextTile === SYMBOLS.CHARM) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.TOME); SOUNDS.GET_ITEM();
-            player.charmTomes++; addLog("You picked up a Charm Tome."); spawnFloatingText(nx, ny, "CHARM TOME IDENTIFIED", "#60a5fa", 1500);
+            player.charmTomes++; addKeyLog("You picked up a Charm Tome."); spawnFloatingText(nx, ny, "CHARM TOME IDENTIFIED", "#60a5fa", 1500);
         } else if (nextTile === SYMBOLS.STEALTH) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.TOME); SOUNDS.GET_ITEM();
-            player.stealthTomes++; addLog("You picked up a Stealth Tome."); spawnFloatingText(nx, ny, "STEALTH TOME IDENTIFIED", "#94a3b8", 1500);
+            player.stealthTomes++; addKeyLog("You picked up a Stealth Tome."); spawnFloatingText(nx, ny, "STEALTH TOME IDENTIFIED", "#94a3b8", 1500);
         } else if (nextTile === SYMBOLS.EXPLOSION) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.TOME); SOUNDS.GET_ITEM();
-            player.explosionTomes++; addLog("You picked up an Explosion Tome."); spawnFloatingText(nx, ny, "EXPLOSION TOME IDENTIFIED", "#ef4444", 1500);
+            player.explosionTomes++; addKeyLog("You picked up an Explosion Tome."); spawnFloatingText(nx, ny, "EXPLOSION TOME IDENTIFIED", "#ef4444", 1500);
         } else if (nextTile === SYMBOLS.ESCAPE) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.TOME); SOUNDS.GET_ITEM();
-            player.escapeTomes++; addLog("You picked up a Liminal Tome."); spawnFloatingText(nx, ny, "LIMINAL TOME IDENTIFIED", "#c084fc", 1500);
+            player.escapeTomes++; addKeyLog("You picked up a Liminal Tome."); spawnFloatingText(nx, ny, "LIMINAL TOME IDENTIFIED", "#c084fc", 1500);
             if (floorLevel === 24 && nx === 8 && ny === 2) { _f24ItemsTaken.escape = true; saveGame(); }
         } else if (nextTile === SYMBOLS.HEAL_TOME) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.TOME); SOUNDS.GET_ITEM();
-            player.healTomes++; addLog("You picked up a Heal Tome."); spawnFloatingText(nx, ny, "HEAL TOME IDENTIFIED", "#4ade80", 1500);
+            player.healTomes++; addKeyLog("You picked up a Heal Tome."); spawnFloatingText(nx, ny, "HEAL TOME IDENTIFIED", "#4ade80", 1500);
         } else if (nextTile === SYMBOLS.BREAKER_TOME) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.TOME); SOUNDS.GET_ITEM();
-            player.breakerTomes++; addLog("You picked up a Breaker Tome."); spawnFloatingText(nx, ny, "BREAKER TOME IDENTIFIED", "#f59e0b", 1500);
+            player.breakerTomes++; addKeyLog("You picked up a Breaker Tome."); spawnFloatingText(nx, ny, "BREAKER TOME IDENTIFIED", "#f59e0b", 1500);
         } else if (nextTile === SYMBOLS.GUARDIAN) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.TOME); SOUNDS.GET_ITEM();
-            player.guardianTomes++; addLog("You picked up a Guardian Tome."); spawnFloatingText(nx, ny, "GUARDIAN TOME IDENTIFIED", "#facc15", 1500);
+            player.guardianTomes++; addKeyLog("You picked up a Guardian Tome."); spawnFloatingText(nx, ny, "GUARDIAN TOME IDENTIFIED", "#facc15", 1500);
         } else if (nextTile === SYMBOLS.RING) {
             const _swRingDrop = ringDrops.find(r => r.x === nx && r.y === ny);
             if (_swRingDrop) {
@@ -30445,11 +30669,11 @@ async function handleAction(dx, dy) {
                 SOUNDS.GET_ITEM();
                 if (_swRingData && (_swRingDrop.forced || !player.ownedRings.includes(_swRingData.id))) {
                     player.ownedRings.push(_swRingData.id);
-                    addLog(`You picked up the ${_swRingData.name}.`); spawnFloatingText(nx, ny, `${_swRingData.name} GET!`, "#fbbf24", 1800);
+                    addKeyLog(`You picked up the ${_swRingData.name}.`); spawnFloatingText(nx, ny, `${_swRingData.name} GET!`, "#fbbf24", 1800);
                 } else if (_swRingData) {
                     const _swRR = RINGS[Math.floor(Math.random() * RINGS.length)];
                     player.ownedRings.push(_swRR.id);
-                    addLog(`You picked up the ${_swRR.name}.`); spawnFloatingText(nx, ny, `${_swRR.name} GET!`, _swRR.color, 1800);
+                    addKeyLog(`You picked up the ${_swRR.name}.`); spawnFloatingText(nx, ny, `${_swRR.name} GET!`, _swRR.color, 1800);
                 }
                 updateUI();
                 if (_swRingDrop.story) {
@@ -30463,7 +30687,7 @@ async function handleAction(dx, dy) {
     } else if (victim) {
         if (player.isStealth) {
             player.isStealth = false;
-            addLog("Stealth broken by attack!");
+            addKeyLog("Stealth broken by attack!");
         }
         player.offsetX = dx * 10; player.offsetY = dy * 10;
         if (victim.syncMode) {
@@ -30474,7 +30698,7 @@ async function handleAction(dx, dy) {
         }
         // STAGE_39: 攻撃のたびに戦闘クールダウンをリセット（8ターン攻撃なしで平和モードへ戻る）
         if (victim._isSt39) {
-            if (_st39CombatCooldown === 0) addLog("👑 You attacked! The swarm retaliates!");
+            if (_st39CombatCooldown === 0) addKeyLog("👑 You attacked! The swarm retaliates!");
             _st39CombatCooldown = 8;
         }
         // ROULETTE_GUARD: 背後からの攻撃で白フェーズ（停止・平和化）
@@ -30630,7 +30854,7 @@ async function handleAction(dx, dy) {
             map[wallMimicHere.y][wallMimicHere.x] = SYMBOLS.FLOOR;
             wallMimicHere.mimicTransitionEnd = performance.now() + 500;
             SOUNDS.MIMIC_REVEAL();
-            addLog("The wall shifts — it was a WALL MIMIC! It strikes!");
+            addKeyLog("The wall shifts — it was a WALL MIMIC! It strikes!");
             spawnFloatingText(nx, ny, "MIMIC!!", "#c084fc");
             SOUNDS.ENEMY_ATTACK();
             setScreenShake(10, 300);
@@ -30741,15 +30965,15 @@ async function handleAction(dx, dy) {
                 }
                 if (brokenSet.size > 0) {
                     setScreenShake(16, 350);
-                    addLog(`★ Breaker Ring carved ${brokenSet.size + 1} walls into pathways!`);
+                    addKeyLog(`★ Breaker Ring carved ${brokenSet.size + 1} walls into pathways!`);
                 } else {
-                    addLog("★ Breaker Ring shattered the wall!");
+                    addKeyLog("★ Breaker Ring shattered the wall!");
                 }
             }
             player.x = nx; player.y = ny;
             SOUNDS.WALL_BREAK();
             setScreenShake(8, 200);
-            if (!hasRingDoubled('BREAKER_RING')) addLog("The Breaker Ring shattered the wall!");
+            if (!hasRingDoubled('BREAKER_RING')) addKeyLog("The Breaker Ring shattered the wall!");
             spawnFloatingText(nx, ny, "BREAK!", '#f59e0b');
             if (!player.isInfiniteStamina) player.stamina = 0;
             // Xステージ: 高確率でBOMBERが出現
@@ -30981,7 +31205,7 @@ async function handleAction(dx, dy) {
                 && !isBlockedByWall && !isBlockedByTempWall && !isBlockedByBomb && !isBlockedByMiasma) {
                 SOUNDS.WALL_BUMP();
                 // 不可視壁メッセージは連打で出ないよう1回のみ
-                addLog("★ Sector locked — no cleared floors beyond this point.");
+                addKeyLog("★ Sector locked — no cleared floors beyond this point.");
                 _erLockedWallGlowUntil = performance.now() + 500;
                 _erLockedWallGlowTile = { x: nx, y: ny };
             } else {
@@ -31031,7 +31255,7 @@ async function handleAction(dx, dy) {
                 if (!hasShownEquipTut) {
                     await triggerEquipEvent();
                 } else {
-                    addLog("You picked up a Sword.");
+                    addKeyLog("You picked up a Sword.");
                 }
                 spawnFloatingText(nx, ny, "ATTACK UP", "#38bdf8");
                 if (floorLevel === 24 && nx === 7 && ny === 2) { _f24ItemsTaken.sword = true; saveGame(); }
@@ -31046,7 +31270,7 @@ async function handleAction(dx, dy) {
                 if (!hasShownEquipTut) {
                     await triggerEquipEvent();
                 } else {
-                    addLog("You picked up Armor.");
+                    addKeyLog("You picked up Armor.");
                 }
                 spawnFloatingText(nx, ny, "DEFENSE UP", "#94a3b8");
                 _markFixedFloorItemTaken(floorLevel, nx, ny, SYMBOLS.ARMOR);
@@ -31068,7 +31292,7 @@ async function handleAction(dx, dy) {
                     if (floorLevel === 2) {
                         await triggerWandEvent();
                     } else {
-                        addLog("You picked up the Magic Wand.");
+                        addKeyLog("You picked up the Magic Wand.");
                     }
                 } else if (nextTile === SYMBOLS.KEY) {
                     // holdsKey敵ドロップの場合は元タイルを復元、通常配置はFLOOR
@@ -31083,7 +31307,7 @@ async function handleAction(dx, dy) {
                     if (floorLevel === 3) {
                         await triggerKeyLogStory();
                     } else {
-                        addLog("You picked up the Key.");
+                        addKeyLog("You picked up the Key.");
                         spawnFloatingText(nx, ny, "GOT KEY", "#fbbf24");
                     }
                 } else if (nextTile === SYMBOLS.SPEED) {
@@ -31096,7 +31320,7 @@ async function handleAction(dx, dy) {
                     if (!hasShownTomeTut) {
                         await triggerTomeEvent();
                     } else {
-                        addLog("You picked up a Haste Tome.");
+                        addKeyLog("You picked up a Haste Tome.");
                     }
                     spawnFloatingText(nx, ny, "HASTE TOME IDENTIFIED", "#38bdf8", 1500);
                 } else if (nextTile === SYMBOLS.CHARM) {
@@ -31109,7 +31333,7 @@ async function handleAction(dx, dy) {
                     if (!hasShownTomeTut) {
                         await triggerTomeEvent();
                     } else {
-                        addLog("You picked up a Charm Tome.");
+                        addKeyLog("You picked up a Charm Tome.");
                     }
                     spawnFloatingText(nx, ny, "CHARM TOME IDENTIFIED", "#60a5fa", 1500);
                 } else if (nextTile === SYMBOLS.STEALTH) {
@@ -31122,7 +31346,7 @@ async function handleAction(dx, dy) {
                     if (!hasShownTomeTut) {
                         await triggerTomeEvent();
                     } else {
-                        addLog("You picked up a Stealth Tome.");
+                        addKeyLog("You picked up a Stealth Tome.");
                     }
                     spawnFloatingText(nx, ny, "STEALTH TOME IDENTIFIED", "#94a3b8", 1500);
                 } else if (nextTile === SYMBOLS.EXPLOSION) {
@@ -31135,7 +31359,7 @@ async function handleAction(dx, dy) {
                     if (!hasShownTomeTut) {
                         await triggerTomeEvent();
                     } else {
-                        addLog("You picked up an Explosion Tome.");
+                        addKeyLog("You picked up an Explosion Tome.");
                     }
                     spawnFloatingText(nx, ny, "EXPLOSION TOME IDENTIFIED", "#ef4444", 1500);
                 } else if (nextTile === SYMBOLS.ESCAPE) {
@@ -31148,7 +31372,7 @@ async function handleAction(dx, dy) {
                     if (!hasShownTomeTut) {
                         await triggerTomeEvent();
                     } else {
-                        addLog("You picked up a Liminal Tome.");
+                        addKeyLog("You picked up a Liminal Tome.");
                     }
                     spawnFloatingText(nx, ny, "LIMINAL TOME IDENTIFIED", "#c084fc", 1500);
                     if (floorLevel === 24 && nx === 8 && ny === 2) { _f24ItemsTaken.escape = true; saveGame(); }
@@ -31162,7 +31386,7 @@ async function handleAction(dx, dy) {
                     if (!hasShownTomeTut) {
                         await triggerTomeEvent();
                     } else {
-                        addLog("You picked up a Heal Tome.");
+                        addKeyLog("You picked up a Heal Tome.");
                     }
                     spawnFloatingText(nx, ny, "HEAL TOME IDENTIFIED", "#4ade80", 1500);
                 } else if (nextTile === SYMBOLS.BREAKER_TOME) {
@@ -31175,7 +31399,7 @@ async function handleAction(dx, dy) {
                     if (!hasShownTomeTut) {
                         await triggerTomeEvent();
                     } else {
-                        addLog("You picked up a Breaker Tome.");
+                        addKeyLog("You picked up a Breaker Tome.");
                     }
                     spawnFloatingText(nx, ny, "BREAKER TOME IDENTIFIED", "#f59e0b", 1500);
                 } else if (nextTile === SYMBOLS.GUARDIAN) {
@@ -31188,7 +31412,7 @@ async function handleAction(dx, dy) {
                     if (!hasShownTomeTut) {
                         await triggerTomeEvent();
                     } else {
-                        addLog("You picked up a Guardian Tome.");
+                        addKeyLog("You picked up a Guardian Tome.");
                     }
                     spawnFloatingText(nx, ny, "GUARDIAN TOME IDENTIFIED", "#facc15", 1500);
                 } else if (nextTile === SYMBOLS.RING) {
@@ -31201,14 +31425,14 @@ async function handleAction(dx, dy) {
                         SOUNDS.GET_ITEM();
                         if (ringData && (ringDrop.forced || !player.ownedRings.includes(ringData.id))) {
                             player.ownedRings.push(ringData.id);
-                            addLog(`You picked up the ${ringData.name}.`);
+                            addKeyLog(`You picked up the ${ringData.name}.`);
                             spawnFloatingText(nx, ny, `${ringData.name} GET!`, "#fbbf24", 1800);
                         } else if (ringData) {
                             // 重複: ランダムな指輪を1個追加（二重装備用のストック）
                             const randomRing = RINGS[Math.floor(Math.random() * RINGS.length)];
                             player.ownedRings.push(randomRing.id);
                             const newCount = player.ownedRings.filter(rid => rid === randomRing.id).length;
-                            addLog(`You picked up the ${randomRing.name}.`);
+                            addKeyLog(`You picked up the ${randomRing.name}.`);
                             spawnFloatingText(nx, ny, `${randomRing.name} ×${newCount}`, randomRing.color, 1800);
                         }
                         updateUI();
@@ -31225,7 +31449,7 @@ async function handleAction(dx, dy) {
                                 e._justAngered = _angerEnd;
                                 e.flashUntil = performance.now() + 400;
                             });
-                            addLog(`💢 The guardians awakened with fury! (${_ringGuards.length})`);
+                            addKeyLog(`💢 The guardians awakened with fury! (${_ringGuards.length})`);
                             spawnFloatingText(nx, ny, "ANGER!", "#ef4444", 1200);
                         }
                     }
@@ -31539,7 +31763,7 @@ async function handleAction(dx, dy) {
                     map[mimicAtStairs.y][mimicAtStairs.x] = SYMBOLS.FLOOR;
                     mimicAtStairs.mimicTransitionEnd = performance.now() + 500;
                     SOUNDS.MIMIC_REVEAL();
-                    addLog("The hole suddenly attacks! It was a MIMIC!");
+                    addKeyLog("The hole suddenly attacks! It was a MIMIC!");
                     spawnFloatingText(nx, ny, "MIMIC!!", "#c084fc");
                     SOUNDS.ENEMY_ATTACK();
                     setScreenShake(10, 300);
@@ -31610,7 +31834,7 @@ async function handleAction(dx, dy) {
             SOUNDS.DISPEL && SOUNDS.DISPEL();
             spawnFloatingText(player.x, player.y, "DISPELLED!", '#c084fc', 1600);
             damageTexts.push({ x: player.x, y: player.y - 1, text: "✗ TOME EFFECT", color: '#a855f7', duration: 1200, t: 0, startTime: performance.now(), rise: true });
-            addLog("The anti-magic floor dispels all your tome effects!");
+            addKeyLog("The anti-magic floor dispels all your tome effects!");
             updateUI();
         }
     }
@@ -31636,7 +31860,7 @@ async function handleAction(dx, dy) {
     // 4F BREAKERチュートリアル（10ターン後に表示）
     if (floorLevel === 4 && !pendingF4Tutorial && floorTurnCount >= 10) {
         pendingF4Tutorial = true;
-        addLog("EVENT: The Sealed Chamber.");
+        addKeyLog("EVENT: The Sealed Chamber.");
         addLog("TIP: W (Wall Breaker) destroys walls. Let it carve a path!");
         await showStoryPages([
             [
@@ -32486,7 +32710,7 @@ function moveMadmen() {
             } else if (m.type === 'LATIN_Y') {
                 addLog("The y dashes across diagonally!");
             } else {
-                addLog("The Wandering Shade has followed you into this room!");
+                addKeyLog("The Wandering Shade has followed you into this room!");
             }
             continue;
         }
@@ -32538,7 +32762,7 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
             enemy._leechBoomCounter = 3;
             enemy.hp = 1;
             spawnFloatingText(enemy.x, enemy.y, 'ARMED!', '#ef4444');
-            addLog('⚠️ The parasite triggers! It will explode next turn!');
+            addKeyLog('⚠️ The parasite triggers! It will explode next turn!');
             return;
         } else {
             // 起動済みへの再ダメージ: プレイヤー直接攻撃なら即爆発、レーザー・溶岩等は継続
@@ -32609,7 +32833,7 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
     if (enemy.holdsKey) {
         keyDropUnderTile = map[enemy.y][enemy.x]; // ICE/LAVA等を記憶
         map[enemy.y][enemy.x] = SYMBOLS.KEY;
-        addLog("🔑 The thief dropped the key!");
+        addKeyLog("🔑 The thief dropped the key!");
         spawnFloatingText(enemy.x, enemy.y, "KEY DROP!", "#fbbf24");
         playMelody([
             { f: 880, d: 0.1 }, { f: 1108, d: 0.1 }, { f: 1320, d: 0.2 }
@@ -32640,7 +32864,7 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
     // 狂人が死んだ場合: 最後の叫び
     if (enemy.type === 'PAUPER_SHADE') {
         const lastWords = ['"...Let me out of here..."', '"...Thank you... finally, I can rest..."', '"...Where am I... I just wanted... to go home..."'];
-        addLog(`The Wandering Shade whispers: ${lastWords[Math.floor(Math.random() * lastWords.length)]}`);
+        addKeyLog(`The Wandering Shade whispers: ${lastWords[Math.floor(Math.random() * lastWords.length)]}`);
     }
 
     // 召喚師が死んだ場合: 召喚された敵のリファレンスを解除
@@ -32656,7 +32880,7 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
             { f: 880, d: 0.12 }, { f: 740, d: 0.12 }, { f: 622, d: 0.12 },
             { f: 494, d: 0.3 }
         ]);
-        addLog("👑 The King has fallen! His followers flee in panic!");
+        addKeyLog("👑 The King has fallen! His followers flee in panic!");
         enemies.forEach(e => {
             if (!e._dead && e.hp > 0) {
                 e.flee = true;
@@ -32815,6 +33039,16 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
         }
     }
 
+    // 太陽系惑星: 撃破時の特別ログ（JUPITER含む全惑星）
+    if (enemy._solarPlanetId) {
+        const _pNames = { MERCURY:'Mercury', VENUS:'Venus', EARTH:'Earth', MARS:'Mars',
+            JUPITER:'Jupiter', SATURN:'Saturn', URANUS:'Uranus', NEPTUNE:'Neptune', PLUTO:'Pluto' };
+        const _pName = _pNames[enemy._solarPlanetId] || enemy._solarPlanetId;
+        addKeyLog(`☀️ Planet ${_pName} destroyed!`);
+        spawnFloatingText(enemy.x, enemy.y, `${_pName.toUpperCase()}!`, '#facc15', 1500);
+        SOUNDS.DEFEAT();
+    }
+
     if (killedByPlayer || killedByWisp) {
         if (killedByPlayer) {
             player.totalKills++;
@@ -32886,7 +33120,7 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
         }
     } else {
         if (enemy.type === 'GOLD') {
-            addLog("The Golden E escaped or was lost...");
+            addKeyLog("The Golden E escaped or was lost...");
         }
     }
 
@@ -32899,7 +33133,7 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
             // 単装備: 蘇生済み仲間が1体でも生存していたら蘇生不可
             const necroAllyCount = enemies.filter(e => e.isAlly && e._necroRevived && e.hp > 0 && !e._dead).length;
             if (!necroDoubled && necroAllyCount >= 1) {
-                addLog(`💍 Necro Ring: Already have a revived ally. (equip ×2 for unlimited)`);
+                addKeyLog(`💍 Necro Ring: Already have a revived ally. (equip ×2 for unlimited)`);
             } else {
                 SOUNDS.NECRO_ACTIVATE();
                 const revivedHp = necroDoubled ? enemy.maxHp : Math.max(1, Math.floor(enemy.maxHp * 0.5));
@@ -32946,7 +33180,7 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
             _st39SwarmMode = false;
             _st39SwarmTimer = 0;
             _st39CombatCooldown = 0;
-            addLog("👑 The Queen's command breaks. The E horde scatters again!");
+            addKeyLog("👑 The Queen's command breaks. The E horde scatters again!");
         }
     }
 
@@ -32997,8 +33231,32 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
 }
 
 async function attackEnemy(enemy, dx, dy, isMain = true) {
-    // LATIN_J: 通常攻撃は完全に素通り（環境ダメージ専用）
-    if (enemy.type === 'LATIN_J' && !enemy._jArmed) {
+    // 太陽系軌道: 軌道敵への攻撃でアグロ発動（全軌道敵を白→赤に）
+    if (enemy._solarOrbit && enemy._solarPassive) {
+        // 攻撃された惑星のみ軌道から解放（他の惑星は影響なし）
+        enemy._solarPassive = false;
+        enemy._solarFree = true;
+        const _pid = enemy._solarPlanetId;
+        if (_pid === 'NEPTUNE') { enemy.flee = true; }
+        // VULCAN(Venus): _solarOrbitを維持して軌道ブロック内で動作させる（VULCANのAIに渡すと溶岩外で即死するため）
+        addLog("☀️ The planet breaks free from its orbit!");
+    }
+    // 太陽への攻撃: フレンドリー解除→サモナー覚醒
+    if (enemy._solarSun && enemy._friendly) {
+        enemy._friendly = false;
+        enemy._solarFree = true;
+        enemy._solarSummonTick = 0;
+        addLog("☀️ The Sun awakens in fury!");
+    }
+    // LATIN_J: 通常攻撃は完全に素通り（環境ダメージ専用）。ただし太陽系軌道個体は除外
+    if (enemy.type === 'LATIN_J' && !enemy._jArmed && !enemy._solarOrbit) {
+        spawnFloatingText(enemy.x, enemy.y, 'NO EFFECT', '#fbbf24');
+        SOUNDS.HIT();
+        if (isMain) { player.offsetX = dx * 10; player.offsetY = dy * 10; draw(); await new Promise(r => setTimeout(r, 100)); player.offsetX = 0; player.offsetY = 0; }
+        return;
+    }
+    // JUPITER (木星) 惑星: ガス惑星は通常攻撃では破壊できない（軌道解放は発動済み）
+    if (enemy._solarPlanetId === 'JUPITER') {
         spawnFloatingText(enemy.x, enemy.y, 'NO EFFECT', '#fbbf24');
         SOUNDS.HIT();
         if (isMain) { player.offsetX = dx * 10; player.offsetY = dy * 10; draw(); await new Promise(r => setTimeout(r, 100)); player.offsetX = 0; player.offsetY = 0; }
@@ -33036,7 +33294,7 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
                 }
             }
             spawnFloatingText(enemy.x, enemy.y, "ANGER!", '#ef4444', 1000);
-            addLog(`💢 ${aggressed} villager(s) turned hostile!`);
+            addKeyLog(`💢 ${aggressed} villager(s) turned hostile!`);
         }
         draw(); await new Promise(r => setTimeout(r, 100));
         if (isMain) { player.offsetX = 0; player.offsetY = 0; }
@@ -33152,7 +33410,7 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
         enemy.disguised = false;
         enemy.mimicTransitionEnd = performance.now() + 500;
         SOUNDS.MIMIC_REVEAL();
-        addLog(`The ${meta.name} was a MIMIC!`);
+        addKeyLog(`The ${meta.name} was a MIMIC!`);
         spawnFloatingText(enemy.x, enemy.y, meta.shout, meta.color);
         setScreenShake(8, 200);
     }
@@ -33162,7 +33420,7 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
         enemy.disguised = false;
         enemy.mimicTransitionEnd = performance.now() + 500;
         SOUNDS.MIMIC_REVEAL();
-        addLog("It was a FAKE FAIRY! A MIMIC!");
+        addKeyLog("It was a FAKE FAIRY! A MIMIC!");
         spawnFloatingText(enemy.x, enemy.y, "FAKE FAIRY!!", "#f472b6");
         setScreenShake(8, 200);
     }
@@ -33173,7 +33431,19 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
         map[enemy.y][enemy.x] = SYMBOLS.FLOOR;
         enemy.mimicTransitionEnd = performance.now() + 500;
         SOUNDS.MIMIC_REVEAL();
-        addLog("The hole was a MIMIC!");
+        addKeyLog("The hole was a MIMIC!");
+        spawnFloatingText(enemy.x, enemy.y, "MIMIC!!", "#c084fc");
+        setScreenShake(8, 200);
+    }
+
+    // M惑星（穴擬態）: 攻撃で正体を現す（通常ミミックMと同じ挙動）
+    if (enemy._solarMimicHole) {
+        enemy._solarMimicHole = false;
+        enemy._solarMimicRevealed = true;
+        enemy._solarMimicChaseTurns = 0;
+        enemy.mimicTransitionEnd = performance.now() + 500;
+        SOUNDS.MIMIC_REVEAL();
+        addKeyLog("The hole was planet M in disguise!");
         spawnFloatingText(enemy.x, enemy.y, "MIMIC!!", "#c084fc");
         setScreenShake(8, 200);
     }
@@ -33184,7 +33454,7 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
         map[enemy.y][enemy.x] = SYMBOLS.FLOOR;
         enemy.mimicTransitionEnd = performance.now() + 500;
         SOUNDS.MIMIC_REVEAL();
-        addLog("The wall crumbles — a WALL MIMIC!");
+        addKeyLog("The wall crumbles — a WALL MIMIC!");
         spawnFloatingText(enemy.x, enemy.y, "WALL MIMIC!!", "#c084fc");
         setScreenShake(8, 200);
     }
@@ -33262,7 +33532,7 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
         enemy._rFakeAlly = true;
         enemy.isAlly = true;
         spawnFloatingText(enemy.x, enemy.y, 'ALLY!', '#60a5fa');
-        addLog('The r pretends to be your ally to escape!');
+        addKeyLog('The r pretends to be your ally to escape!');
         SOUNDS.HIT();
         if (isMain) { player.offsetX = dx * 10; player.offsetY = dy * 10; draw(); await new Promise(r => setTimeout(r, 100)); player.offsetX = 0; player.offsetY = 0; }
         return;
@@ -33351,7 +33621,7 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
         }
         if (aggressed > 0) {
             spawnFloatingText(enemy.x, enemy.y, "ANGER!", '#ef4444', 1000);
-            addLog(`💢 ${aggressed} villager(s) turned hostile!`);
+            addKeyLog(`💢 ${aggressed} villager(s) turned hostile!`);
         }
     }
 
@@ -33745,7 +34015,7 @@ async function handleDragonTurn(e) {
                     const spawnGold = Math.random() < 0.03 && !hasSpawnedGoldOn100;
                     if (spawnGold) {
                         hasSpawnedGoldOn100 = true;
-                        addLog("A golden figure materializes from the shadows...");
+                        addKeyLog("A golden figure materializes from the shadows...");
                         enemies.push({
                             type: 'GOLD', x: spawnPos.x, y: spawnPos.y,
                             hp: 4, maxHp: 4,
@@ -33755,7 +34025,7 @@ async function handleDragonTurn(e) {
                         SOUNDS.GET_ITEM();
                     } else {
                     // オークの召喚
-                    addLog("Dragonlord: 'Go, my heavy infantry! Crush them!'");
+                    addKeyLog("Dragonlord: 'Go, my heavy infantry! Crush them!'");
                     enemies.push({
                         type: 'ORC', x: spawnPos.x, y: spawnPos.y,
                         hp: 50 + floorLevel * 5, maxHp: 50 + floorLevel * 5,
@@ -33765,7 +34035,7 @@ async function handleDragonTurn(e) {
                     }
                 } else {
                     // ウィルの召喚
-                    addLog("Dragonlord calls upon the lingering souls...");
+                    addKeyLog("Dragonlord calls upon the lingering souls...");
                     wisps.push({ x: spawnPos.x, y: spawnPos.y, dir: Math.floor(Math.random() * 4), mode: 'STRAIGHT' });
                     SOUNDS.SPEED_UP(); // 魔法っぽい音
                 }
@@ -33777,7 +34047,7 @@ async function handleDragonTurn(e) {
 
     // 新攻撃：大地の咆哮 (EARTH SPIKES)
     if (dist > 6 && Math.random() < (isPhase2 ? 0.4 : 0.2)) {
-        addLog("Dragonlord chants an ancient spell... EARTH SPIKES!");
+        addKeyLog("Dragonlord chants an ancient spell... EARTH SPIKES!");
         await summonDragonTraps(e, isPhase2 ? 12 : 6, 'READY');
         e.fireCooldown = 2;
         return;
@@ -33821,7 +34091,7 @@ async function knockbackPlayer(kx, ky, baseDamage, destroyIcicles = false, damag
         _kbLeech._leechArmed = true;
         _kbLeech._leechBoomCounter = 3;
         spawnFloatingText(_kbLeech.x, _kbLeech.y, 'ARMED!', '#ef4444');
-        addLog('⚠️ The tackle ripped off the parasite! It triggers!');
+        addKeyLog('⚠️ The tackle ripped off the parasite! It triggers!');
     }
 
     let damage = Math.max(1, toughDmg(baseDamage - getPlayerDefense()));
@@ -33922,7 +34192,7 @@ async function knockbackPlayer(kx, ky, baseDamage, destroyIcicles = false, damag
                     launchFlameProjectile(nx, ny, d.dx, d.dy);
                 }
                 tempWalls.splice(blockIdx, 1);
-                addLog("★ CRASH! The star block explodes sideways!");
+                addKeyLog("★ CRASH! The star block explodes sideways!");
                 SOUNDS.EXPLODE();
                 setScreenShake(15, 200);
                 // 通常ブロックと同様に突き抜けて飛び続ける
@@ -33995,7 +34265,7 @@ async function knockbackPlayer(kx, ky, baseDamage, destroyIcicles = false, damag
                 map[mimicKnock.y][mimicKnock.x] = SYMBOLS.FLOOR;
                 mimicKnock.mimicTransitionEnd = performance.now() + 500;
                 SOUNDS.MIMIC_REVEAL();
-                addLog("The hole suddenly attacks! It was a MIMIC!");
+                addKeyLog("The hole suddenly attacks! It was a MIMIC!");
                 spawnFloatingText(player.x, player.y, "MIMIC!!", "#c084fc");
                 SOUNDS.ENEMY_ATTACK();
                 setScreenShake(10, 300);
@@ -34135,10 +34405,10 @@ async function knockbackEnemy(e, kx, ky, damage, toWall = false) {
         }
     }
 
-    // VULCANがノックバックで溶岩の外に出た場合: 即死（仲間は除外）
-    if (e.type === 'VULCAN' && !e.isAlly && e.hp > 0 && map[e.y][e.x] !== SYMBOLS.LAVA) {
+    // VULCANがノックバックで溶岩の外に出た場合: 即死（仲間・太陽系軌道個体は除外）
+    if (e.type === 'VULCAN' && !e.isAlly && !e._solarOrbit && !e._solarFree && e.hp > 0 && map[e.y][e.x] !== SYMBOLS.LAVA) {
         spawnFloatingText(e.x, e.y, "SCALDED!", '#f97316', 800);
-        addLog("VULCAN burns out — it cannot survive outside lava!");
+        addKeyLog("VULCAN burns out — it cannot survive outside lava!");
         e.hp = 0;
     }
 
@@ -34253,12 +34523,12 @@ async function enemyTurn() {
             _twHit.hp--;
             if (_twHit.hp <= 0) {
                 tempWalls.splice(_twHitIdx, 1);
-                addLog("🔥 The fireball destroys your block!");
+                addKeyLog("🔥 The fireball destroys your block!");
                 spawnFloatingText(_proj.x, _proj.y, 'SMASH!', '#fb923c');
                 setScreenShake(5, 150);
                 SOUNDS.BANG();
             } else {
-                addLog("🔥 The fireball cracks your block!");
+                addKeyLog("🔥 The fireball cracks your block!");
                 spawnFloatingText(_proj.x, _proj.y, 'CRACK!', '#fbbf24');
                 setScreenShake(3, 100);
                 SOUNDS.BANG();
@@ -34270,13 +34540,13 @@ async function enemyTurn() {
         const _iProjTile = map[_proj.y][_proj.x];
         if (_iProjTile === SYMBOLS.BLOCK) {
             map[_proj.y][_proj.x] = SYMBOLS.BLOCK_CRACKED;
-            addLog("🔥 The fireball cracks the block!");
+            addKeyLog("🔥 The fireball cracks the block!");
             infernoProjectiles.splice(_ip, 1);
             continue;
         }
         if (_iProjTile === SYMBOLS.BLOCK_CRACKED) {
             map[_proj.y][_proj.x] = SYMBOLS.FLOOR;
-            addLog("🔥 The fireball destroys the block!");
+            addKeyLog("🔥 The fireball destroys the block!");
             SOUNDS.BANG();
             infernoProjectiles.splice(_ip, 1);
             continue;
@@ -34298,7 +34568,7 @@ async function enemyTurn() {
             player.flashUntil = performance.now() + 200;
             if (player.hp > 0) animateBounce(player);
             spawnDamageText(player.x, player.y, _idmg, '#ef4444');
-            addLog("🔥 VULCAN's fireball burns you! (-10 HP)");
+            addKeyLog("🔥 VULCAN's fireball burns you! (-10 HP)");
             SOUNDS.DAMAGE();
             updateUI();
             infernoProjectiles.splice(_ip, 1);
@@ -34339,7 +34609,7 @@ async function enemyTurn() {
             player.flashUntil = performance.now() + 200;
             if (player.hp > 0) animateBounce(player);
             spawnDamageText(player.x, player.y, _ppdmg, '#ef4444');
-            addLog(`A phantom's bolt hits you! (-${_ppdmg} HP)`);
+            addKeyLog(`A phantom's bolt hits you! (-${_ppdmg} HP)`);
             SOUNDS.DAMAGE();
             updateUI();
             _phantomProjectiles.splice(_pp, 1);
@@ -34350,6 +34620,7 @@ async function enemyTurn() {
     if (!player.isStealth) {
         for (const _ie of enemies) {
             if (_ie.type !== 'VULCAN' || _ie._dead || _ie.hp <= 0 || _ie.stunTurns > 0 || _ie.isAlly) continue;
+            if (_ie._solarOrbit && _ie._solarPassive) continue; // 太陽系軌道・パッシブ中は発射しない
             if (_ie._infRestLeft > 0) continue;
             const _iOnRow = _ie.y === player.y, _iOnCol = _ie.x === player.x;
             if (!_iOnRow && !_iOnCol) continue;
@@ -34358,7 +34629,7 @@ async function enemyTurn() {
             if (_iDx === 0 && _iDy === 0) continue;
             infernoProjectiles.push({ x: _ie.x, y: _ie.y, dx: _iDx, dy: _iDy, life: 40, owner: _ie });
             SOUNDS.IGNITE();
-            addLog("🔥 VULCAN launches a fireball!");
+            addKeyLog("🔥 VULCAN launches a fireball!");
             _ie._shotFlash = 2; // 今ターン+次ターンまで白（1ターン継続）
             _ie._infRestLeft = 5;
         }
@@ -34397,7 +34668,7 @@ async function enemyTurn() {
     // STAGE_39 戦闘クールダウン: 毎ターン1減少、0になると平和モードへ
     if (_st39CombatCooldown > 0) {
         _st39CombatCooldown--;
-        if (_st39CombatCooldown === 0) addLog("👑 The swarm calms... They drift back to their Queens.");
+        if (_st39CombatCooldown === 0) addKeyLog("👑 The swarm calms... They drift back to their Queens.");
     }
 
     // アンブッシュチェック: 未発動の伏兵部屋でプレイヤーが中心4マス以内に入ったら発動
@@ -34418,7 +34689,7 @@ async function enemyTurn() {
                     _arSpawnList.push({ x: _ax, y: _ay });
                 }
                 if (_arSpawnList.length > 0) {
-                    addLog(`⚡ AMBUSH! Monsters drop from above!`);
+                    addKeyLog(`⚡ AMBUSH! Monsters drop from above!`);
                     if (SOUNDS.BANG) SOUNDS.BANG();
                     // 全体2秒以内に収める並行落下アニメーション（落下速度はステージ2と同一）
                     const _fallH = 400, _fallMs = 600;
@@ -34487,7 +34758,7 @@ async function enemyTurn() {
                 const _ge = { type: 'ORC', x: _gx, y: _gy, hp: _ghp37, maxHp: _ghp37,
                                flashUntil: 0, expValue: 12, stunTurns: 0, offsetX: 0, offsetY: -400 };
                 enemies.push(_ge);
-                addLog('⚠️ A GOLEM ORC drops from above!');
+                addKeyLog('⚠️ A GOLEM ORC drops from above!');
                 SOUNDS.FALL_WHIZ && SOUNDS.FALL_WHIZ();
                 // 落下アニメーション（0.5秒）
                 const _ft0 = performance.now();
@@ -34668,6 +34939,33 @@ async function enemyTurn() {
 
         // ===== AI: hostile LETTER — 大文字種別簡易AI =====
         if (e.type === 'LETTER' && !e._friendly) {
+            // 太陽(_solarSun)が解放された: 3ターンごとにNORMAL召喚して静止（仲間化後は召喚しない）
+            if (e._solarSun && e._solarFree && !e.isAlly) {
+                e._solarSummonTick = (e._solarSummonTick || 0) + 1;
+                if (e._solarSummonTick >= 3) {
+                    e._solarSummonTick = 0;
+                    const _scnt = enemies.filter(o => !o._dead && o.hp > 0).length;
+                    if (_scnt < 40) {
+                        for (let _sa = 0; _sa < 15; _sa++) {
+                            const _sx = e.x + (Math.floor(Math.random()*7)-3);
+                            const _sy = e.y + (Math.floor(Math.random()*7)-3);
+                            if (_sx >= 1 && _sx < COLS-1 && _sy >= 1 && _sy < ROWS-1
+                                && map[_sy][_sx] === SYMBOLS.FLOOR
+                                && !enemies.some(o => o.hp > 0 && !o._dead && o.x === _sx && o.y === _sy)
+                                && !(_sx === player.x && _sy === player.y)) {
+                                const _sHp = 5 + floorLevel;
+                                enemies.push({ type:'NORMAL', x:_sx, y:_sy,
+                                    hp:_sHp, maxHp:_sHp, flashUntil:0, offsetX:0, offsetY:0,
+                                    expValue:5, stunTurns:0 });
+                                spawnFloatingText(e.x, e.y, "SOLAR FLARE!", '#facc15');
+                                break;
+                            }
+                        }
+                    }
+                }
+                continue; // 太陽は移動しない
+            }
+            if (e._solarSun) continue; // 仲間化した太陽・その他: 静止
             // 初回敵対化時の初期化（lazy）
             if (!e._ncAiInit) {
                 e._ncAiInit = true;
@@ -35246,7 +35544,7 @@ async function enemyTurn() {
                     spawnDamageText(player.x, player.y, dmg, '#22d3ee');
                     if (player.hp > 0) animateBounce(player);
                     SOUNDS.DAMAGE();
-                    addLog("⚡ The Weaver's thread shocks you! (-5)");
+                    addKeyLog("⚡ The Weaver's thread shocks you! (-5)");
                     if (player.hp <= 0) triggerGameOver();
                 }
                 const _wDying = [];
@@ -35385,6 +35683,279 @@ async function enemyTurn() {
         // SUMMONERが召喚した非NORMAL敵はその場に静止（NORMAL/赤のみ動く）
         // ただしステージ88のボスSUMMONERが召喚した敵、および召喚KEY_RUNNERは専用AIへ進む
         if (e.summonedBy && e.type !== 'NORMAL' && e.type !== 'KEY_RUNNER' && floorLevel !== 88) continue;
+
+        // ===== 太陽系軌道: _solarOrbit フラグ付き敵を正方形軌道で移動 =====
+        if (e._solarOrbit) {
+            if (e._infRestLeft > 0) e._infRestLeft--;
+
+            // ---- 解放状態: 惑星ごとの個別AI ----
+            if (e._solarFree) {
+                const _pid = e._solarPlanetId;
+
+                // チャーム済み惑星: プレイヤーを追跡（通常青色仲間と同じ動き）
+                if (e.isAlly) {
+                    // 土星(S): 5ターンごとに仲間NORMALを召喚
+                    if (_pid === 'SATURN') {
+                        e._solarSummonTick = (e._solarSummonTick || 0) + 1;
+                        if (e._solarSummonTick >= 5) {
+                            e._solarSummonTick = 0;
+                            const _allyCount = enemies.filter(o => !o._dead && o.hp > 0 && o.isAlly).length;
+                            if (_allyCount < 10) {
+                                for (let _sa = 0; _sa < 15; _sa++) {
+                                    const _asx = e.x + (Math.floor(Math.random()*5)-2);
+                                    const _asy = e.y + (Math.floor(Math.random()*5)-2);
+                                    if (_asx >= 1 && _asx < COLS-1 && _asy >= 1 && _asy < ROWS-1
+                                        && map[_asy][_asx] === SYMBOLS.FLOOR
+                                        && !enemies.some(o => o.hp > 0 && !o._dead && o.x === _asx && o.y === _asy)
+                                        && !(_asx === player.x && _asy === player.y)) {
+                                        const _asHp = 3 + floorLevel;
+                                        enemies.push({ type:'NORMAL', x:_asx, y:_asy,
+                                            hp:_asHp, maxHp:_asHp, flashUntil:0, offsetX:0, offsetY:0,
+                                            expValue:5, stunTurns:0, isAlly: true });
+                                        spawnFloatingText(e.x, e.y, "SUMMON!", '#60a5fa');
+                                        SOUNDS.SUMMON();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // プレイヤーを追跡（1マス以上離れていれば近づく）
+                    const _aCanMove = (nx, ny) => nx >= 1 && nx < COLS-1 && ny >= 1 && ny < ROWS-1
+                        && map[ny][nx] !== SYMBOLS.WALL
+                        && !enemies.some(o => o !== e && o.hp > 0 && !o._dead && o.x === nx && o.y === ny);
+                    const _aDirs = [{x:0,y:-1},{x:1,y:0},{x:0,y:1},{x:-1,y:0}];
+                    if (Math.abs(e.x - player.x) + Math.abs(e.y - player.y) > 1) {
+                        const _aFoll = [..._aDirs].sort((a, b) => {
+                            const da = Math.abs(e.x+a.x-player.x)+Math.abs(e.y+a.y-player.y);
+                            const db = Math.abs(e.x+b.x-player.x)+Math.abs(e.y+b.y-player.y);
+                            return da - db;
+                        });
+                        for (const d of _aFoll) {
+                            const nx = e.x+d.x, ny = e.y+d.y;
+                            if (_aCanMove(nx, ny) && !(nx === player.x && ny === player.y)) {
+                                e.x = nx; e.y = ny; break;
+                            }
+                        }
+                    }
+                    continue;
+                }
+
+                const _pDirs4 = [{x:0,y:-1},{x:1,y:0},{x:0,y:1},{x:-1,y:0}];
+                const _pCanMove = (nx, ny) => nx >= 1 && nx < COLS-1 && ny >= 1 && ny < ROWS-1
+                    && map[ny][nx] !== SYMBOLS.WALL
+                    && !enemies.some(o => o !== e && o.hp > 0 && !o._dead && o.x === nx && o.y === ny);
+
+                // J (木星): 完全静止
+                if (_pid === 'JUPITER') { continue; }
+
+                // V (金星): 静止 + 毎ターン足元を溶岩化
+                if (_pid === 'VENUS') {
+                    if (map[e.y][e.x] !== SYMBOLS.LAVA) {
+                        map[e.y][e.x] = SYMBOLS.LAVA;
+                        spawnFloatingText(e.x, e.y, "LAVA!", '#fb923c');
+                        SOUNDS.LAVA_BURN();
+                    }
+                    continue;
+                }
+
+                // N (海王星): 逃走
+                if (_pid === 'NEPTUNE') {
+                    const _nd = [..._pDirs4].sort((a, b) => {
+                        const da = Math.abs(e.x+a.x-player.x)+Math.abs(e.y+a.y-player.y);
+                        const db = Math.abs(e.x+b.x-player.x)+Math.abs(e.y+b.y-player.y);
+                        return db - da;
+                    });
+                    for (const d of _nd) {
+                        const nx = e.x+d.x, ny = e.y+d.y;
+                        if (_pCanMove(nx, ny) && !(nx === player.x && ny === player.y)) {
+                            e.x = nx; e.y = ny; break;
+                        }
+                    }
+                    continue;
+                }
+
+                // M (水星/火星): ミミックMと同じ挙動（白穴擬態 → 攻撃/隣接で正体露出 → 追跡 → 再擬態）
+                if (_pid === 'MERCURY' || _pid === 'MARS') {
+                    if (!e._solarMimicRevealed) {
+                        // 擬態フェーズ: 白い穴として静止
+                        if (!e._solarMimicHole) e._solarMimicHole = true;
+                        const _mDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+                        if (_mDist === 1 && !player.isStealth) {
+                            // 隣接: 正体露出 + 先制攻撃（ミミックMと同じ）
+                            e._solarMimicHole = false;
+                            e._solarMimicRevealed = true;
+                            e._solarMimicChaseTurns = 0;
+                            e.mimicTransitionEnd = performance.now() + 500;
+                            SOUNDS.MIMIC_REVEAL();
+                            addKeyLog("The hole suddenly attacks! Planet M!");
+                            spawnFloatingText(e.x, e.y, "MIMIC!!", "#c084fc");
+                            setScreenShake(10, 300);
+                            e.offsetX = (player.x - e.x) * 10; e.offsetY = (player.y - e.y) * 10;
+                            spawnSlash(player.x, player.y);
+                            SOUNDS.ENEMY_ATTACK();
+                            const _mAtk = 8 + Math.floor(floorLevel / 2);
+                            const _mFinal = player.isDefending ? Math.max(1, Math.floor(_mAtk * 0.25)) : _mAtk;
+                            if (!player.isShielded) {
+                                player.hp = Math.max(0, player.hp - _mFinal);
+                                player.flashUntil = performance.now() + 300;
+                                spawnDamageText(player.x, player.y, _mFinal, '#c084fc');
+                                SOUNDS.DAMAGE(); updateUI();
+                                if (player.hp <= 0) { player.hp = 0; updateUI(); triggerGameOver(); return; }
+                            }
+                            await new Promise(r => setTimeout(r, 200));
+                            e.offsetX = 0; e.offsetY = 0;
+                        }
+                        continue;
+                    } else {
+                        // 露出フェーズ: 数ターン追跡後に諦めて再擬態
+                        e._solarMimicChaseTurns = (e._solarMimicChaseTurns || 0) + 1;
+                        const _mDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+                        if (_mDist === 1) {
+                            // 隣接攻撃（追跡カウントはリセットしない — 攻撃しても次ターンに諦める）
+                            if (!player.isShielded) {
+                                const _pdmg = 8 + Math.floor(floorLevel / 2);
+                                const _pfinal = player.isDefending ? Math.max(1, Math.floor(_pdmg * 0.25)) : _pdmg;
+                                player.hp = Math.max(0, player.hp - _pfinal);
+                                player.flashUntil = performance.now() + 200;
+                                if (player.hp > 0) animateBounce(player);
+                                spawnDamageText(player.x, player.y, _pfinal, '#ef4444');
+                                addKeyLog(`☄️ M strikes! (-${_pfinal} HP)`);
+                                SOUNDS.DAMAGE(); updateUI();
+                            }
+                        } else if (e._solarMimicChaseTurns >= 4) {
+                            // 4ターン追いかけて諦め → 再擬態
+                            e._solarMimicHole = true;
+                            e._solarMimicRevealed = false;
+                            e._solarMimicChaseTurns = 0;
+                            e.mimicTransitionEnd = performance.now() + 500;
+                            SOUNDS.MIMIC_DISGUISE();
+                            addKeyLog("Planet M gave up and disguised itself again...");
+                        } else {
+                            const _chDirs = [..._pDirs4].sort((a, b) =>
+                                (Math.abs(e.x+a.x-player.x)+Math.abs(e.y+a.y-player.y)) -
+                                (Math.abs(e.x+b.x-player.x)+Math.abs(e.y+b.y-player.y))
+                            );
+                            for (const d of _chDirs) {
+                                const nx = e.x+d.x, ny = e.y+d.y;
+                                if (_pCanMove(nx, ny) && !(nx === player.x && ny === player.y)) {
+                                    e.x = nx; e.y = ny; break;
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                }
+
+                // P (冥王星): PHANTOM化して追跡（半透明）
+                if (_pid === 'PLUTO') {
+                    e._solarPhantom = true;
+                    // fall through to chase
+                }
+
+                // U (天王星): プレイヤーから逃走（反対側へ移動）
+                if (_pid === 'URANUS') {
+                    const _ud = [..._pDirs4].sort((a, b) => {
+                        const da = Math.abs(e.x+a.x-player.x)+Math.abs(e.y+a.y-player.y);
+                        const db = Math.abs(e.x+b.x-player.x)+Math.abs(e.y+b.y-player.y);
+                        return db - da; // 降順 = 最遠方向優先
+                    });
+                    for (const d of _ud) {
+                        const nx = e.x+d.x, ny = e.y+d.y;
+                        if (_pCanMove(nx, ny) && !(nx === player.x && ny === player.y)) {
+                            e.x = nx; e.y = ny; break;
+                        }
+                    }
+                    continue;
+                }
+
+                // S (土星): サモナー — 5ターンごとにNORMAL召喚 + プレイヤー追跡
+                if (_pid === 'SATURN') {
+                    e._solarSummonTick = (e._solarSummonTick || 0) + 1;
+                    if (e._solarSummonTick >= 5) {
+                        e._solarSummonTick = 0;
+                        const _spawnCount = enemies.filter(o => !o._dead && o.hp > 0).length;
+                        if (_spawnCount < 40) {
+                            for (let _sa = 0; _sa < 15; _sa++) {
+                                const _sx = e.x + (Math.floor(Math.random()*5)-2);
+                                const _sy = e.y + (Math.floor(Math.random()*5)-2);
+                                if (_sx >= 1 && _sx < COLS-1 && _sy >= 1 && _sy < ROWS-1
+                                    && map[_sy][_sx] === SYMBOLS.FLOOR
+                                    && !enemies.some(o => o.hp > 0 && !o._dead && o.x === _sx && o.y === _sy)
+                                    && !(_sx === player.x && _sy === player.y)) {
+                                    const _sHp = 3 + floorLevel;
+                                    enemies.push({ type:'NORMAL', x:_sx, y:_sy,
+                                        hp:_sHp, maxHp:_sHp, flashUntil:0, offsetX:0, offsetY:0,
+                                        expValue:5, stunTurns:0 });
+                                    spawnFloatingText(e.x, e.y, "SUMMON!", '#f97316');
+                                    SOUNDS.SUMMON();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // fall through to chase below
+                }
+
+                // その他 / S (土星) の移動: プレイヤー追跡
+                const _chDirs = [..._pDirs4].sort((a, b) => {
+                    const da = Math.abs(e.x+a.x-player.x)+Math.abs(e.y+a.y-player.y);
+                    const db = Math.abs(e.x+b.x-player.x)+Math.abs(e.y+b.y-player.y);
+                    return da - db;
+                });
+                for (const d of _chDirs) {
+                    const nx = e.x+d.x, ny = e.y+d.y;
+                    if (nx === player.x && ny === player.y) {
+                        if (!player.isShielded) {
+                            const _pdmg = 8 + Math.floor(floorLevel / 2);
+                            const _pfinal = player.isDefending ? Math.max(1, Math.floor(_pdmg * 0.25)) : _pdmg;
+                            player.hp = Math.max(0, player.hp - _pfinal);
+                            player.flashUntil = performance.now() + 200;
+                            if (player.hp > 0) animateBounce(player);
+                            spawnDamageText(player.x, player.y, _pfinal, '#ef4444');
+                            addKeyLog(`☄️ ${e._char || 'A planet'} strikes! (-${_pfinal} HP)`);
+                            SOUNDS.DAMAGE(); updateUI();
+                        }
+                        break;
+                    }
+                    if (_pCanMove(nx, ny)) { e.x = nx; e.y = ny; break; }
+                }
+                continue;
+            }
+
+            // ---- 軌道上の移動（パッシブ or アグロ軌道） ----
+            e._solarTick = (e._solarTick || 0) + 1;
+            if (e._solarTick < (e._solarTickMax || 1)) { continue; }
+            e._solarTick = 0;
+            const _scx = e._solarCX, _scy = e._solarCY, _sr = e._solarR;
+            const _stop = _scy - _sr, _sbot = _scy + _sr;
+            const _slft = _scx - _sr, _srgt = _scx + _sr;
+            let _snx = e.x, _sny = e.y;
+            // 正方形を時計回りに1マス進む
+            if      (e.y === _stop && e.x < _srgt) { _snx = e.x + 1; } // 上辺: 右へ
+            else if (e.x === _srgt && e.y < _sbot) { _sny = e.y + 1; } // 右辺: 下へ
+            else if (e.y === _sbot && e.x > _slft) { _snx = e.x - 1; } // 下辺: 左へ
+            else if (e.x === _slft && e.y > _stop) { _sny = e.y - 1; } // 左辺: 上へ
+            else { _snx = _slft; _sny = _stop; }   // 軌道外 → 左上隅にスナップ
+            if (!e._solarPassive && _snx === player.x && _sny === player.y && !player.isShielded) {
+                const _sdmg = 10;
+                player.hp = Math.max(0, player.hp - _sdmg);
+                player.flashUntil = performance.now() + 200;
+                if (player.hp > 0) animateBounce(player);
+                spawnDamageText(player.x, player.y, _sdmg, '#ef4444');
+                addKeyLog(`☄️ A planet swept through you! (-${_sdmg} HP)`);
+                SOUNDS.DAMAGE();
+                updateUI();
+            }
+            // プレイヤーのタイルには乗らない（重なると攻撃できなくなる）
+            // 他の敵のタイルにも乗らない（すり抜け防止）
+            if (_snx >= 1 && _snx < COLS-1 && _sny >= 1 && _sny < ROWS-1 && map[_sny][_snx] !== SYMBOLS.WALL
+                && !(_snx === player.x && _sny === player.y)
+                && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === _snx && o.y === _sny)) {
+                e.x = _snx; e.y = _sny;
+            }
+            continue;
+        }
 
         const _staticTypes = ['TURRET','HOPPER_TURRET','SPAWNER','WISP_SPAWNER','DRAGON','KING','CORE','MIMIC','FAIRY_MIMIC','RING_MIMIC','TOME_MIMIC','WEAPON_MIMIC','ARMOR_MIMIC','WALL_MIMIC','SNAKE','BOAR','LEECH','VULCAN','CLUSTER','PHANTOM','SPLITTER','SPLITTER_MINI','SPLITTER_NANO','AMBULATOR','NESTER','ROULETTE','LETTER','GREEK_ALPHA','GREEK_ZETA'];
         // 通常ダンジョンの派閥なしNORMAL/ORCはランダム行動なし（特殊ステージ・女王支配下は除外）
@@ -37673,7 +38244,7 @@ async function enemyTurn() {
                     if (map[e.y][e.x] === SYMBOLS.LAVA && !e._jArmed) {
                         e._jArmed = true; e._jBoomCounter = 3; e.hp = 1;
                         spawnFloatingText(e.x, e.y, 'ARMED!', '#ef4444');
-                        addLog('The J is triggered by the lava!');
+                        addKeyLog('The J is triggered by the lava!');
                         continue;
                     }
                     const _jChosen = pickFleeDir(e);
@@ -38104,7 +38675,7 @@ async function enemyTurn() {
                     e.disguised = false;
                     e.mimicTransitionEnd = performance.now() + 500;
                     SOUNDS.MIMIC_REVEAL();
-                    addLog(`The ${meta.name} was a MIMIC!`);
+                    addKeyLog(`The ${meta.name} was a MIMIC!`);
                     spawnFloatingText(e.x, e.y, meta.shout, meta.color);
                     setScreenShake(10, 300);
                     e.offsetX = (player.x - e.x) * 8; e.offsetY = (player.y - e.y) * 8;
@@ -38127,7 +38698,7 @@ async function enemyTurn() {
                     e.mimicTransitionEnd = performance.now() + 500;
                     e.moveCooldown = 10;
                     SOUNDS.MIMIC_DISGUISE();
-                    addLog(`The Mimic hid itself as a ${meta.name} again...`);
+                    addKeyLog(`The Mimic hid itself as a ${meta.name} again...`);
                 } else if (rmDist === 1 && !player.isStealth) {
                     // 攻撃
                     e.offsetX = (player.x - e.x) * 10; e.offsetY = (player.y - e.y) * 10;
@@ -38249,7 +38820,7 @@ async function enemyTurn() {
                     if (map[e.y][e.x] !== SYMBOLS.FAIRY) map[e.y][e.x] = SYMBOLS.FLOOR;
                     e.mimicTransitionEnd = performance.now() + 500; // 点滅演出500ms
                     SOUNDS.MIMIC_REVEAL();
-                    addLog("The hole suddenly attacks! It was a MIMIC!");
+                    addKeyLog("The hole suddenly attacks! It was a MIMIC!");
                     spawnFloatingText(e.x, e.y, "MIMIC!!", "#c084fc");
                     setScreenShake(10, 300);
                     e.offsetX = (player.x - e.x) * 10; e.offsetY = (player.y - e.y) * 10;
@@ -38299,7 +38870,7 @@ async function enemyTurn() {
                         map[e.y][e.x] = SYMBOLS.STAIRS;
                         e.moveCooldown = 10;
                         SOUNDS.MIMIC_DISGUISE();
-                        addLog("The Mimic disguised itself as a hole again...");
+                        addKeyLog("The Mimic disguised itself as a hole again...");
                     }
                 } else if (mimicDist < 8 && !player.isStealth) {
                     if (mimicDist === 1) {
@@ -38375,7 +38946,7 @@ async function enemyTurn() {
                     e.mimicTransitionEnd = performance.now() + 500;
                     map[e.y][e.x] = SYMBOLS.WALL;
                     SOUNDS.MIMIC_DISGUISE();
-                    addLog("The Mimic dissolves back into the wall...");
+                    addKeyLog("The Mimic dissolves back into the wall...");
                 } else if (_wmDist <= 7 && !player.isStealth) {
                     if (_wmDist === 1) {
                         // 攻撃
@@ -39329,7 +39900,7 @@ async function enemyTurn() {
                     startTime: performance.now(), duration: 1100, rise: true,
                     font: "9px 'Courier New', Courier, monospace"
                 });
-                addLog(`♥ ${healerLabel} heals an ally (+${actual} HP)`);
+                addKeyLog(`♥ ${healerLabel} heals an ally (+${actual} HP)`);
                 return true;
             };
             const sameSide = (o) => !!o.isAlly === !!e.isAlly;
@@ -39352,7 +39923,7 @@ async function enemyTurn() {
                         startTime: performance.now(), duration: 1100, rise: true,
                         font: "9px 'Courier New', Courier, monospace"
                     });
-                    addLog(`♥ ${healerLabel} heals you (+${actual} HP)`);
+                    addKeyLog(`♥ ${healerLabel} heals you (+${actual} HP)`);
                     healedAny = true;
                 }
             }
@@ -39629,7 +40200,7 @@ async function enemyTurn() {
                 !e.chargingTackle &&
                 Math.random() < 0.4;
             if (playerAboveCore) {
-                addLog("The DRAGONLORD leaps into the air!");
+                addKeyLog("The DRAGONLORD leaps into the air!");
                 SOUNDS.RUMBLE();
 
                 // ジャンプ上昇（2タイル分）
@@ -39816,7 +40387,7 @@ async function enemyTurn() {
 
             // 味方：近くに敵がいれば攻撃・追従、いなければプレイヤーを追いかける
             // 白色静止（_summonedAlly）は障害物扱いのためターゲット対象外
-            const allyTargets = enemies.filter(target => !target.isAlly && !target._summonedAlly && target.hp > 0 && !ALL_COLLECTOR_TYPES.has(target.type));
+            const allyTargets = enemies.filter(target => !target.isAlly && !target._summonedAlly && target.hp > 0 && !ALL_COLLECTOR_TYPES.has(target.type) && target._solarPlanetId !== 'JUPITER');
             let allyBestTarget = null;
             let allyMinDist = 999;
 
@@ -39842,7 +40413,7 @@ async function enemyTurn() {
                         map[allyBestTarget.y][allyBestTarget.x] = SYMBOLS.FLOOR;
                         allyBestTarget.mimicTransitionEnd = performance.now() + 500;
                         SOUNDS.MIMIC_REVEAL();
-                        addLog("The hole was a MIMIC!");
+                        addKeyLog("The hole was a MIMIC!");
                         spawnFloatingText(allyBestTarget.x, allyBestTarget.y, "MIMIC!!", "#c084fc");
                         setScreenShake(8, 200);
                     }
@@ -40319,7 +40890,7 @@ async function enemyTurn() {
                 spawnDamageText(player.x, player.y, _spFinal, '#f87171');
                 player.flashUntil = performance.now() + 200;
                 if (player.hp > 0) animateBounce(player);
-                addLog(`A SPLITTER strikes! (-${_spFinal} HP)`);
+                addKeyLog(`A SPLITTER strikes! (-${_spFinal} HP)`);
                 updateUI(); attackOccurred = true;
                 await _w(150); e.offsetX = 0; e.offsetY = 0;
                 if (player.hp <= 0) { player.hp = 0; updateUI(); triggerGameOver(); return; }
@@ -40516,7 +41087,7 @@ async function enemyTurn() {
                         e._dir *= -1;
                         SOUNDS.CRUSH();
                         spawnDamageText(player.x, player.y, _ambCrushDmg2, '#fbbf24');
-                        addLog(`Crushed between the Ambulator and the wall! (${_ambCrushDmg2} dmg)`);
+                        addKeyLog(`Crushed between the Ambulator and the wall! (${_ambCrushDmg2} dmg)`);
                         updateUI(); attackOccurred = true;
                         if (player.hp <= 0) { player.hp = 0; updateUI(); await _w(150); e.offsetX = 0; triggerGameOver(); return; }
                         await _w(150); e.offsetX = 0;
@@ -40750,7 +41321,7 @@ async function enemyTurn() {
                         spawnDamageText(player.x, player.y, _rFinal, '#f87171');
                         player.flashUntil = performance.now() + 200;
                         if (player.hp > 0) animateBounce(player);
-                        addLog(`R charges at you! (-${_rFinal} HP)`);
+                        addKeyLog(`R charges at you! (-${_rFinal} HP)`);
                         updateUI(); attackOccurred = true;
                         await _w(150); e.offsetX = 0; e.offsetY = 0;
                         if (player.hp <= 0) { player.hp = 0; updateUI(); triggerGameOver(); return; }
@@ -40812,7 +41383,7 @@ async function enemyTurn() {
                         if (!_pIsAmbushed && _rgCheckVision(e)) {
                             e._rgAlert = true;
                             spawnFloatingText(e.x, e.y-1, "!", '#ef4444', 1500);
-                            addLog("⚠️ A guard spotted you! Hide in the dark!");
+                            addKeyLog("⚠️ A guard spotted you! Hide in the dark!");
                         }
                     }
                 } else {
@@ -40905,7 +41476,7 @@ async function enemyTurn() {
                     spawnSlash(player.x, player.y);
                     SOUNDS.ENEMY_ATTACK();
                     damageTexts.push({ x: player.x, y: player.y, text: '起動!!', color: '#f97316', duration: 1000, t: 0, rise: true });
-                    addLog(`Y strikes the leech! The parasite is ARMED! (3 turns)`);
+                    addKeyLog(`Y strikes the leech! The parasite is ARMED! (3 turns)`);
                     await _w(150); e.offsetX = 0; e.offsetY = 0;
                     continue;
                 }
@@ -40948,7 +41519,7 @@ async function enemyTurn() {
                 spawnDamageText(player.x, player.y, _yFinal, '#f87171');
                 player.flashUntil = performance.now() + 200;
                 if (player.hp > 0) animateBounce(player);
-                addLog(`Y strikes from an angle! (-${_yFinal} HP)`);
+                addKeyLog(`Y strikes from an angle! (-${_yFinal} HP)`);
                 updateUI(); attackOccurred = true;
                 await _w(150); e.offsetX = 0; e.offsetY = 0;
                 if (player.hp <= 0) { player.hp = 0; updateUI(); triggerGameOver(); return; }
@@ -40990,7 +41561,7 @@ async function enemyTurn() {
                 spawnDamageText(player.x, player.y, _slFinal, '#e879f9');
                 player.flashUntil = performance.now() + 200;
                 if (player.hp > 0) animateBounce(player);
-                addLog(`λ strikes! (-${_slFinal} HP)`);
+                addKeyLog(`λ strikes! (-${_slFinal} HP)`);
                 updateUI(); attackOccurred = true;
                 await _w(150); e.offsetX = 0; e.offsetY = 0;
                 if (player.hp <= 0) { player.hp = 0; updateUI(); triggerGameOver(); return; }
@@ -41150,7 +41721,7 @@ async function enemyTurn() {
                 e.queen_alerted = true;
                 e.queen_alert_time = performance.now();
                 SOUNDS.QUEEN_ALERT();
-                addLog("👑 The Queen spotted you! Her minions move to protect her!");
+                addKeyLog("👑 The Queen spotted you! Her minions move to protect her!");
                 // 非派閥フロア: 警戒時に全同種敵へ女王派閥を付与して指揮AIを有効化
                 if (!e.faction) {
                     e.faction = 'QUEEN_ALLY';
@@ -41201,7 +41772,7 @@ async function enemyTurn() {
                         const playerLow = player.hp <= player.maxHp / 2;
                         if (playerLow && !e._purgeMode) {
                             e._purgeMode = true;
-                            addLog("👑 The Queen commands: PURGE!");
+                            addKeyLog("👑 The Queen commands: PURGE!");
                         } else if (!playerLow) {
                             e._purgeMode = false;
                         }
@@ -41212,7 +41783,7 @@ async function enemyTurn() {
                     if (qEnemyNormals.length <= 3) {
                         if (!e._purgeMode) {
                             e._purgeMode = true;
-                            addLog("👑 The Queen commands: PURGE!");
+                            addKeyLog("👑 The Queen commands: PURGE!");
                         }
                     } else {
                         e._purgeMode = false;
@@ -42087,7 +42658,7 @@ async function enemyTurn() {
                 }
                 if (damage > 0) {
                     if (e.type === 'SHADOW') {
-                        addLog(`The shadow engulfs you! (-${damage} HP)`);
+                        addKeyLog(`The shadow engulfs you! (-${damage} HP)`);
                         SOUNDS.DAMAGE();
                         player.hp -= damage; player.flashUntil = performance.now() + 200;
                         if (!player.isInfiniteStamina) player.stamina = Math.max(0, player.stamina - 5);
@@ -42100,7 +42671,7 @@ async function enemyTurn() {
                     } else if (e.type === 'PAUPER_SHADE') {
                         // 狂人: 叫び声ログ + 20%で二連撃
                         const madCries = ['"Your gold... give it to me..."', '"I cannot rest... I cannot pass..."', '"Pay my debt... PAY MY DEBT!!"', '"Just one coin... please... just one coin..."'];
-                        addLog(`The Wandering Shade wails: ${madCries[Math.floor(Math.random() * madCries.length)]}`);
+                        addKeyLog(`The Wandering Shade wails: ${madCries[Math.floor(Math.random() * madCries.length)]}`);
                         SOUNDS.DAMAGE(); setScreenShake(6, 150);
                         player.hp -= damage; player.flashUntil = performance.now() + 200;
                         if (!player.isInfiniteStamina) player.stamina = Math.max(0, player.stamina - 5);
@@ -42111,7 +42682,7 @@ async function enemyTurn() {
                         if (player.hp > 0 && Math.random() < 0.20) {
                             await _w(80);
                             const dmg2 = Math.max(1, Math.floor(damage * 0.6));
-                            addLog("The Wandering Shade wails and strikes again!");
+                            addKeyLog("The Wandering Shade wails and strikes again!");
                             SOUNDS.DAMAGE();
                             player.hp -= dmg2; player.flashUntil = performance.now() + 200;
                             spawnDamageText(player.x, player.y, dmg2, '#ef4444');
@@ -42693,7 +43264,7 @@ function _checkRescueBreaker() {
                 flashUntil:0, offsetX:0, offsetY:0, expValue:45, stunTurns:0,
                 _breakTarget: { x: _rbtX, y: _rbtY } });
             SOUNDS.BANG();
-            addLog('⚠️ A Breaker emerges to reclaim the sealed passage!');
+            addKeyLog('⚠️ A Breaker emerges to reclaim the sealed passage!');
             spawnFloatingText(sp.x, sp.y, 'W!', '#f87171');
         } else {
             _passageBlockedTurns[dir.key] = 0;
@@ -42750,7 +43321,7 @@ function _checkPushRingBlockedItems() {
             SOUNDS.BANG();
             const _tName = map[ty][tx] === SYMBOLS.STAIRS ? 'exit hole' :
                            map[ty][tx] === SYMBOLS.KEY ? 'KEY' : 'DOOR';
-            addLog(`⚠️ A Breaker appears to free the sealed ${_tName}!`);
+            addKeyLog(`⚠️ A Breaker appears to free the sealed ${_tName}!`);
             spawnFloatingText(sp.x, sp.y, 'W!', '#f87171');
         }
     }
@@ -42879,7 +43450,7 @@ function launchFlameProjectile(fromX, fromY, dx, dy, fromIceStar = false) {
         player.flashUntil = performance.now() + 200;
         if (player.hp > 0) animateBounce(player);
         spawnDamageText(startX, startY, dmg, '#ef4444');
-        addLog("🔥 Hit by a fire block flame! (-8 HP)");
+        addKeyLog("🔥 Hit by a fire block flame! (-8 HP)");
         SOUNDS.DAMAGE();
         if (player.hp <= 0) { player.hp = 0; updateUI(); triggerGameOver(); }
         return;
@@ -43002,7 +43573,7 @@ function fireStarLaser(fromX, fromY, dx, dy) {
     } else if (chainedBlocks.size > 0) {
         addLog(`★ Star Laser chained ${chainedBlocks.size} block(s)!`);
     } else {
-        addLog("★ Star Laser fires!");
+        addKeyLog("★ Star Laser fires!");
     }
 }
 
@@ -43023,7 +43594,7 @@ async function moveFlameProjectiles() {
                 atCurrent.hp -= dmg;
                 atCurrent.flashUntil = performance.now() + 100;
                 spawnDamageText(fp.x, fp.y, dmg, '#f97316');
-                addLog("🔥 Flames hit the enemy!");
+                addKeyLog("🔥 Flames hit the enemy!");
                 if (atCurrent._bossDragon && !dragonHalfPhaseTriggered && atCurrent.hp <= atCurrent.maxHp * 0.5 && atCurrent.hp > 0) {
                     await dragonHalfPhase();
                 }
@@ -43093,7 +43664,7 @@ async function moveFlameProjectiles() {
                 hitEnemy.hp -= dmg;
                 hitEnemy.flashUntil = performance.now() + 100;
                 spawnDamageText(nx, ny, dmg, '#f97316');
-                addLog("🔥 Flames hit the enemy!");
+                addKeyLog("🔥 Flames hit the enemy!");
                 if (hitEnemy._bossDragon && !dragonHalfPhaseTriggered && hitEnemy.hp <= hitEnemy.maxHp * 0.5 && hitEnemy.hp > 0) {
                     await dragonHalfPhase();
                 }
@@ -43184,7 +43755,7 @@ async function _rgTriggerAmbush() {
     if (screenGrid.rgAlerted[_rgKey]) return;
     screenGrid.rgAlerted[_rgKey] = true;
 
-    addLog("⚠️ Spotted by the patrol! Guards rain from above!");
+    addKeyLog("⚠️ Spotted by the patrol! Guards rain from above!");
     SOUNDS.ENEMY_ATTACK();
     setScreenShake(10, 600);
     damageTexts.push({ x: player.x, y: player.y-1, text: "DETECTED!", color: "#ef4444", duration: 1800, t: 0, startTime: performance.now(), rise: true });
@@ -43416,6 +43987,7 @@ async function triggerGameOver() {
     } catch(e) {}
     updateUI();
     bufferedInput = null; // ゲームオーバー後のバッファ入力を捨てる
+    travelingAllies = []; // 死亡時に仲間をリセット（リトライ時に引き継がないよう）
     // 死亡回数を記録
     const prevDeaths = safeStorageGetInt('minimal_rogue_deaths', 0, 0);
     safeStorageSet('minimal_rogue_deaths', String(prevDeaths + 1));
@@ -43659,8 +44231,10 @@ async function _restoreEscapeRoom() {
     for (let _a = 1; _a >= 0; _a -= 0.25) { transition.alpha = _a; draw(); await new Promise(r => setTimeout(r, 25)); }
     transition.active = false; transition.alpha = 0;
 
-    addLog("✨ Liminal Space — Step on a warp pad to travel to a cleared floor.");
-    addLog(`   RETURN pad (right corner) goes back to B${formatFloor(_escapeRoomSavedFloor)}F.`);
+    startLiminalBGM();
+
+    addKeyLog("✨ Liminal Space — Step on a warp pad to travel to a cleared floor.");
+    addKeyLog(`   RETURN pad (right corner) goes back to B${formatFloor(_escapeRoomSavedFloor)}F.`);
 
     // 着地アニメーション（-400 から落下）
     await animateLanding();
@@ -43690,6 +44264,8 @@ async function continueGame() {
                     gameOverAlpha = 0;
                     turnCount = 0;
                     tempWalls = []; wisps = []; bombs = [];
+                    travelingAllies = [];
+                    enemies = []; // 死亡後コンティニュー: 前フロアの仲間が持ち越されないよう
 
                     if (isInEscapeRoom) {
                         gameState = 'PLAYING';
@@ -43716,6 +44292,8 @@ async function continueGame() {
         gameOverAlpha = 0;
         turnCount = 0;
         tempWalls = []; wisps = []; bombs = [];
+        travelingAllies = [];
+        enemies = []; // 死亡後コンティニュー: 前フロアの仲間が持ち越されないよう
 
         if (isInEscapeRoom) {
             gameState = 'PLAYING';
@@ -44132,13 +44710,13 @@ window.addEventListener('keydown', async e => {
                         player.swordCount--;
                         player.gold += item.sellPrice;
                         SOUNDS.GET_ITEM();
-                        addLog(`Sold SWORD for ${item.sellPrice}G! (Attack count: ${player.swordCount})`);
+                        addKeyLog(`Sold SWORD for ${item.sellPrice}G! (Attack count: ${player.swordCount})`);
                         spawnFloatingText(player.x, player.y, `+${item.sellPrice}G`, "#4ade80");
                     } else if (item.type === 'sell_armor') {
                         player.armorCount--;
                         player.gold += item.sellPrice;
                         SOUNDS.GET_ITEM();
-                        addLog(`Sold ARMOR for ${item.sellPrice}G! (Defense count: ${player.armorCount})`);
+                        addKeyLog(`Sold ARMOR for ${item.sellPrice}G! (Defense count: ${player.armorCount})`);
                         spawnFloatingText(player.x, player.y, `+${item.sellPrice}G`, "#4ade80");
                     } else if (item.type === 'sell_ring') {
                         const _sr = RINGS[item.ringIndex];
@@ -44149,7 +44727,7 @@ window.addEventListener('keydown', async e => {
                         }
                         player.gold += item.sellPrice;
                         SOUNDS.GET_ITEM();
-                        addLog(`Sold ${_sr.name} for ${item.sellPrice}G!`);
+                        addKeyLog(`Sold ${_sr.name} for ${item.sellPrice}G!`);
                         spawnFloatingText(player.x, player.y, `+${item.sellPrice}G`, "#4ade80");
                         // 地形の指輪売却時: 即座にこの商人のストックに追加 + 永続アンロック
                         if (item.ringId === 'TERRAIN_RING') {
@@ -44160,19 +44738,19 @@ window.addEventListener('keydown', async e => {
                             if (!shopBuyStock.some(s => s.type === 'ring' && s.ringIndex === _trIdx)) {
                                 shopBuyStock.unshift({ type: 'ring', ringIndex: _trIdx, cost: _trCost });
                             }
-                            addLog('Terrain Ring: now available for purchase at merchants!');
+                            addKeyLog('Terrain Ring: now available for purchase at merchants!');
                         }
                     } else if (item.type === 'sell_tome') {
                         player[item.field]--;
                         player.gold += item.sellPrice;
                         SOUNDS.GET_ITEM();
-                        addLog(`Sold ${item.name} for ${item.sellPrice}G!`);
+                        addKeyLog(`Sold ${item.name} for ${item.sellPrice}G!`);
                         spawnFloatingText(player.x, player.y, `+${item.sellPrice}G`, "#4ade80");
                     } else if (item.type === 'sell_fairy') {
                         player.fairyCount--;
                         player.gold += item.sellPrice;
                         SOUNDS.GET_ITEM();
-                        addLog(`Sold a Fairy for ${item.sellPrice}G!`);
+                        addKeyLog(`Sold a Fairy for ${item.sellPrice}G!`);
                         spawnFloatingText(player.x, player.y, `+${item.sellPrice}G`, "#f472b6");
                     }
                     // SELLページを再構築
@@ -44754,6 +45332,11 @@ async function tryCharmEnemy() {
             if (charmImmune.includes(enemy.type) || enemy.faction) {
                 spawnFloatingText(enemy.x, enemy.y, "RESIST!", "#ff6b6b");
             } else {
+                // 太陽系パッシブ軌道惑星: チャームで軌道解放（白→青）
+                if (enemy._solarOrbit && enemy._solarPassive) {
+                    enemy._solarPassive = false;
+                    enemy._solarFree = true;
+                }
                 enemy.isAlly = true;
                 // 擬態中のミミックをチャームした場合、擬態解除してSTAIRSタイルを除去
                 if (enemy.type === 'MIMIC' && enemy.disguised) {
@@ -44767,7 +45350,7 @@ async function tryCharmEnemy() {
                     map[enemy.y][enemy.x] = SYMBOLS.KEY;
                     enemy.holdsKey = false;
                     enemy.trailX = null; enemy.trailY = null;
-                    addLog("🔑 The thief dropped the key!");
+                    addKeyLog("🔑 The thief dropped the key!");
                     spawnFloatingText(enemy.x, enemy.y, "KEY DROP!", "#fbbf24");
                     playMelody([{ f: 880, d: 0.1 }, { f: 1108, d: 0.1 }, { f: 1320, d: 0.2 }]);
                 }
@@ -44776,17 +45359,17 @@ async function tryCharmEnemy() {
             }
         });
         if (charmedCount > 0) {
-            addLog(`📜 Charmed ${charmedCount} enemies! They joined you!`);
+            addKeyLog(`📜 Charmed ${charmedCount} enemies! They joined you!`);
             SOUNDS.CHARM();
         } else {
-            addLog("All enemies resisted the charm!");
+            addKeyLog("All enemies resisted the charm!");
             SOUNDS.DAMAGE();
         }
         updateUI();
         return true;
     }
 
-    addLog("No enemy in range to charm...");
+    addKeyLog("No enemy in range to charm...");
     SOUNDS.DAMAGE(); // 失敗時の警告音
     setScreenShake(4, 100); // わずかに揺らす
     return false;
@@ -44802,7 +45385,7 @@ async function tryExplode() {
     }
     tomeEffect.active = false;
 
-    addLog("!!! EXPLOSION !!!");
+    addKeyLog("!!! EXPLOSION !!!");
     SOUNDS.EXPLODE();
     setScreenShake(20, 500);
 
@@ -44855,7 +45438,7 @@ async function tryExplode() {
 function tryActivateShield() {
     player.isShielded = true;
     SOUNDS.SPEED_UP(); // 代用：上昇感のある音
-    addLog("Recited the Guardian Tome! You are shielded from hazards!");
+    addKeyLog("Recited the Guardian Tome! You are shielded from hazards!");
     spawnFloatingText(player.x, player.y, "SHIELD ACTIVE!!", "#4ade80");
     updateUI();
 }
@@ -44898,7 +45481,7 @@ async function useHasteTome() {
     player.hasteTomes--;
     player.isSpeeding = true;
     SOUNDS.SPEED_UP();
-    addLog("Recited the Haste Tome! Your time accelerates!");
+    addKeyLog("Recited the Haste Tome! Your time accelerates!");
     spawnFloatingText(player.x, player.y, "ACCELERATED!!", "#38bdf8");
     updateUI();
 }
@@ -44916,7 +45499,7 @@ async function useStealthTome() {
     player.stealthTomes--;
     player.isStealth = true;
     SOUNDS.SPEED_UP();
-    addLog("Recited the Stealth Tome! You vanished from sight!");
+    addKeyLog("Recited the Stealth Tome! You vanished from sight!");
     spawnFloatingText(player.x, player.y, "INVISIBLE!!", "#94a3b8");
     updateUI();
 }
@@ -44950,7 +45533,7 @@ function _triggerIceCrossMadman(brokenX, brokenY) {
             flashUntil: 0, offsetX: 0, offsetY: 0,
             expValue: 50, stunTurns: 0
         });
-        addLog("!! A Wandering Shade emerges from the shadows!!");
+        addKeyLog("!! A Wandering Shade emerges from the shadows!!");
         spawnFloatingText(spx, spy, "SHADE!!", '#ef4444');
         return;
     }
@@ -44962,7 +45545,7 @@ async function useBreakerTome() {
     player.isBreaker = true;
     player._breakerFirstHit = true;
     SOUNDS.WALL_BREAK();
-    addLog("Recited the Breaker Tome! You can smash walls on this floor!");
+    addKeyLog("Recited the Breaker Tome! You can smash walls on this floor!");
     spawnFloatingText(player.x, player.y, "WALL BREAKER!!", "#f59e0b");
     updateUI();
 }
@@ -44978,7 +45561,7 @@ async function useHealTome() {
     player.healTomes--;
     player.hp = getPlayerMaxHp();
     SOUNDS.HEAL();
-    addLog("Recited the Heal Tome! HP fully restored!");
+    addKeyLog("Recited the Heal Tome! HP fully restored!");
     spawnFloatingText(player.x, player.y, "FULL HEAL!!", "#4ade80");
     updateUI();
 }
