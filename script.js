@@ -42915,32 +42915,42 @@ async function startDeepRun() {
                 "You became a murderer.",
                 "Guilty of killing your own comrades...",
                 "",
-                "あなたは殺人者となった。",
+                "あなたは殺人者となった",
                 "仲間たちを殺した罪で…"
             ],
             [
                 "Fleeing from the executioners,",
-                "you arrived at the ruins of the collapsed dungeon.",
+                "you found yourself at the ruins of the collapsed dungeon.",
                 "",
                 "刑吏から逃れるうちに",
-                "崩壊したダンジョンの跡地へ辿り着いた。"
+                "崩壊したダンジョンの跡地へ来ていた"
             ],
             [
-                "A familiar void—",
-                "the dark pit still remained. You leapt in.",
+                "Someone is calling to you.",
+                "You turned around—a dark pit.",
+                "The collapsed dungeon, breathing again...",
+                "And it is watching you.",
                 "",
-                "懐かしい、暗い穴が残っていた。",
-                "あなたはそこへ飛びこむ。"
+                "だれかが、あなたを呼んでいる",
+                "振り返ると暗い穴があった",
+                "崩壊したはずのダンジョンが、息を吹き返し…",
+                "そして、あなたを見ている"
+            ],
+            [
+                "You made up your mind and leapt in.",
+                "Someone is calling, from deep within the darkness.",
+                "You must go there.",
+                "",
+                "意を決し、穴に飛びこんだ",
+                "だれかが呼んでいる、暗闇の深い場所で",
+                "あなたはそこへ、行かなくてはならない"
             ],
             [
                 "Only the darkness can heal you.",
-                "",
-                "暗闇だけが、あなたを癒やすのだ。"
-            ],
-            [
                 "Falling, endlessly,",
                 "into the depths of the abyss...",
                 "",
+                "暗闇だけが、あなたを癒やす",
                 "落ちていく、どこまでも。",
                 "深淵の奥へ…"
             ],
