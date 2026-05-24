@@ -33349,23 +33349,18 @@ async function attackEnemy(enemy, dx, dy, isMain = true) {
             await applyLaserDamage(); // ノックバック直後の位置でレーザーダメージを即座に適用
             await new Promise(r => setTimeout(r, 60)); // 1マス移動の視認性を高める
 
-            // 氷の上なら滑る
+            // 氷の上なら滑る（即時移動、最後に1回だけ描画・レーザー更新）
+            let _turretSlid = false;
             while (map[enemy.y][enemy.x] === SYMBOLS.ICE) {
                 const sx = enemy.x + kx, sy = enemy.y + ky;
-                // canEnemyMove は壁だけでなく他の「敵」もチェックするため、手前で止まる
                 if (!canEnemyMove(sx, sy, enemy)) break;
-                enemy.x = sx;
-                enemy.y = sy;
-                SOUNDS.ICE_SLIDE();
-                draw();
-                await applyLaserDamage(); // 滑っている最中もレーザーダメージを更新
-
+                enemy.x = sx; enemy.y = sy; _turretSlid = true;
                 if (isRealHole(enemy.x, enemy.y)) {
                     scheduleEnemyFall(enemy, "The Turret slid into the HOLE!");
                     break;
                 }
-                await new Promise(r => setTimeout(r, 40));
             }
+            if (_turretSlid) { SOUNDS.ICE_SLIDE(); draw(); await applyLaserDamage(); }
 
             // 移動後の落下チェック
             if (!enemy._dead && isRealHole(enemy.x, enemy.y)) {
@@ -34568,17 +34563,17 @@ async function enemyTurn() {
     // 女王指揮: 一斉攻撃で今ターン攻撃済みのEを管理（女王死亡でリセット不要、毎ターン作り直し）
     let _factionCombatHappened = false; // 今ターン派閥間攻撃が発生したか（女王の膠着カウンタ用）
     // 派閥AIで移動した敵の氷スライド適用ヘルパー
-    const _iceSlide = async (e, px, py) => {
+    const _iceSlide = (e, px, py) => {
         const sx = e.x - px, sy = e.y - py;
         if ((sx === 0 && sy === 0) || e.type === 'FROST' || e.type === 'BLAZE' || e.type === 'BREAKER' || e.type === 'LAYER' || e.type === 'MINI_DRAGON') return;
+        let slid = false;
         while (map[e.y] && map[e.y][e.x] === SYMBOLS.ICE) {
             const nx = e.x + sx, ny = e.y + sy;
             if (!canEnemyMove(nx, ny, e)) break;
-            e.x = nx; e.y = ny;
-            SOUNDS.ICE_SLIDE(); draw();
+            e.x = nx; e.y = ny; slid = true;
             if (isRealHole(e.x, e.y)) { scheduleEnemyFall(e, "An enemy slid into the HOLE!"); break; }
-            await _w(15);
         }
+        if (slid) SOUNDS.ICE_SLIDE();
     };
     // 帰還ロジック除外タイプ（静止・ボス・特殊AI）
     const _homeReturnExclude = new Set([
@@ -35317,7 +35312,7 @@ async function enemyTurn() {
                             SOUNDS.FREEZE();
                         }
                     }
-                    // 氷床スライド: 同じ方向に壁か敵かプレイヤーにぶつかるまで滑る
+                    // 氷床スライド: 同じ方向に壁か敵かプレイヤーにぶつかるまで滑る（即時移動・音1回）
                     let _smIceSlideSound = false;
                     while (map[e.y]?.[e.x] === SYMBOLS.ICE) {
                         const _ssx = e.x + _smDx, _ssy = e.y + _smDy;
@@ -35325,7 +35320,7 @@ async function enemyTurn() {
                         if (!canEnemyMove(_ssx, _ssy, e)) break;
                         if (_ssx === player.x && _ssy === player.y) break;
                         if (enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === _ssx && o.y === _ssy)) break;
-                        e.x = _ssx; e.y = _ssy;
+                        e.x = _ssx; e.y = _ssy; _smIceSlideSound = true;
                         // FROST: スライド先にも氷を設置
                         if (e.type === 'FROST') {
                             const _st = map[e.y][e.x];
@@ -35334,10 +35329,9 @@ async function enemyTurn() {
                                 SOUNDS.FREEZE();
                             }
                         }
-                        if (!_smIceSlideSound) { SOUNDS.ICE_SLIDE(); _smIceSlideSound = true; }
-                        draw(); await _w(40);
                         if (isRealHole(e.x, e.y)) { scheduleEnemyFall(e, "The sync enemy slid into the abyss!"); break; }
                     }
+                    if (_smIceSlideSound) SOUNDS.ICE_SLIDE();
                 }
             }
             continue;
@@ -39463,17 +39457,16 @@ async function enemyTurn() {
                         e.x = nx; e.y = ny;
                         animateBounce(e);
                         hopped = true;
-                        // 氷の床に乗ったらそのまま同方向にスライド（1コマずつ描画）
+                        // 氷の床に乗ったらそのまま同方向にスライド（即時移動）
+                        let _hopSlid = false;
                         while (map[e.y][e.x] === SYMBOLS.ICE) {
                             const sx = e.x + dx, sy = e.y + dy;
                             if (sx < 0 || sx >= COLS || sy < 0 || sy >= ROWS) break;
                             if (!canEnemyMove(sx, sy, e)) break;
                             if (enemies.some(o => o !== e && o.hp > 0 && o.x === sx && o.y === sy)) break;
-                            e.x = sx; e.y = sy;
-                            SOUNDS.ICE_SLIDE();
-                            draw();
-                            await _w(40);
+                            e.x = sx; e.y = sy; _hopSlid = true;
                         }
+                        if (_hopSlid) SOUNDS.ICE_SLIDE();
                         break;
                     }
                 }
@@ -39969,24 +39962,23 @@ async function enemyTurn() {
 
                         // 地形変化とスライド防止（味方用）
                         let esx = e.x - oldPos.x, esy = e.y - oldPos.y;
+                        let _allySlid = false;
                         while (e.type !== 'FROST' && e.type !== 'BLAZE' && e.type !== 'BREAKER' && e.type !== 'LAYER' && e.type !== 'MINI_DRAGON' && map[e.y][e.x] === SYMBOLS.ICE) {
                             const nx = e.x + esx, ny = e.y + esy;
                             if (nx === e.x && ny === e.y) break;
                             if (!canEnemyMove(nx, ny, e)) break;
                             const oldEPos = { x: e.x, y: e.y };
-                            e.x = nx; e.y = ny;
-                            SOUNDS.ICE_SLIDE();
+                            e.x = nx; e.y = ny; _allySlid = true;
                             if (e.type === 'SNAKE') {
                                 for (let i = e.body.length - 1; i > 0; i--) e.body[i] = { ...e.body[i - 1] };
                                 e.body[0] = oldEPos;
                             }
-                            draw();
                             if (isRealHole(e.x, e.y)) {
                                 scheduleEnemyFall(e, "An ally slid into the HOLE!");
                                 break;
                             }
-                            await _w(15);
                         }
+                        if (_allySlid) SOUNDS.ICE_SLIDE();
 
                         if (!e._dead) {
                             if (e.type === 'FROST') {
@@ -40071,24 +40063,23 @@ async function enemyTurn() {
 
                         // 地形変化とスライド防止（味方用）
                         let esx = e.x - oldPos.x, esy = e.y - oldPos.y;
+                        let _allySlid = false;
                         while (e.type !== 'FROST' && e.type !== 'BLAZE' && e.type !== 'BREAKER' && e.type !== 'LAYER' && e.type !== 'MINI_DRAGON' && map[e.y][e.x] === SYMBOLS.ICE) {
                             const nx = e.x + esx, ny = e.y + esy;
                             if (nx === e.x && ny === e.y) break;
                             if (!canEnemyMove(nx, ny, e)) break;
                             const oldEPos = { x: e.x, y: e.y };
-                            e.x = nx; e.y = ny;
-                            SOUNDS.ICE_SLIDE();
+                            e.x = nx; e.y = ny; _allySlid = true;
                             if (e.type === 'SNAKE') {
                                 for (let i = e.body.length - 1; i > 0; i--) e.body[i] = { ...e.body[i - 1] };
                                 e.body[0] = oldEPos;
                             }
-                            draw();
                             if (isRealHole(e.x, e.y)) {
                                 scheduleEnemyFall(e, "An ally slid into the HOLE!");
                                 break;
                             }
-                            await _w(15);
                         }
+                        if (_allySlid) SOUNDS.ICE_SLIDE();
 
                         if (!e._dead) {
                             if (e.type === 'FROST') {
@@ -42355,28 +42346,25 @@ async function enemyTurn() {
                     e.body[0] = oldPos;
                 }
 
-                // 敵の氷スライド (フロスト・ブレイズ・MADMAN等は滑らない)
+                // 敵の氷スライド (フロスト・ブレイズ・MADMAN等は滑らない、即時移動・音1回)
                 let esx = e.x - oldPos.x, esy = e.y - oldPos.y;
-                let _iceSlideSound = false; // スライド中は1回だけ音を鳴らす
+                let _iceSlideSound = false;
                 while (e.type !== 'FROST' && e.type !== 'BLAZE' && e.type !== 'BREAKER' && e.type !== 'LAYER' && e.type !== 'PAUPER_SHADE' && map[e.y][e.x] === SYMBOLS.ICE) {
                     const nx = e.x + esx, ny = e.y + esy;
                     if (nx === e.x && ny === e.y) break;
                     if (!canEnemyMove(nx, ny, e)) break;
                     const oldEPos = { x: e.x, y: e.y };
-                    e.x = nx; e.y = ny;
-                    if (!_iceSlideSound) { SOUNDS.ICE_SLIDE(); _iceSlideSound = true; }
+                    e.x = nx; e.y = ny; _iceSlideSound = true;
                     if (e.type === 'SNAKE') {
                         for (let i = e.body.length - 1; i > 0; i--) e.body[i] = { ...e.body[i - 1] };
                         e.body[0] = oldEPos;
                     }
-                    draw();
-                    // 穴に落ちるなどのチェック
                     if (isRealHole(e.x, e.y)) {
                         scheduleEnemyFall(e, "An enemy slid into the HOLE!");
                         break;
                     }
-                    await _w(15);
                 }
+                if (_iceSlideSound) SOUNDS.ICE_SLIDE();
 
                 if (!e._dead && moved) {
                     if (e.type === 'FROST') {
