@@ -37981,19 +37981,24 @@ async function enemyTurn() {
                     continue;
                 }
 
-                // LATIN_Y: 斜め移動 + 画面またぎ（kと同様）
+                // LATIN_Y: 斜め移動優先で逃げ + 画面またぎ（斜めが無理なら縦横にフォールバック）
                 if (e.type === 'LATIN_Y') {
-                    if (!e._yDx) { e._yDx = player.x <= e.x ? 1 : -1; e._yDy = player.y <= e.y ? 1 : -1; }
                     if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
                     for (let _yStep = 0; _yStep < 2; _yStep++) {
-                        // 斜め4方向をプレイヤーから遠い順にソート
-                        const _yDiags = [{x:1,y:-1},{x:-1,y:-1},{x:1,y:1},{x:-1,y:1}]
-                            .map(d => ({ d, score: Math.abs((e.x+d.x)-player.x)+Math.abs((e.y+d.y)-player.y)+Math.random()*2 }))
-                            .sort((a,b) => b.score - a.score);
-                        for (const { d } of _yDiags) {
+                        // 斜め4方向＋縦横4方向を合わせてプレイヤーから遠い順にソート
+                        const _yAllDirs = [
+                            {x:1,y:-1},{x:-1,y:-1},{x:1,y:1},{x:-1,y:1},
+                            {x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}
+                        ].map(d => ({ d, score: Math.abs((e.x+d.x)-player.x)+Math.abs((e.y+d.y)-player.y) }))
+                         .sort((a,b) => b.score - a.score);
+                        for (const { d } of _yAllDirs) {
                             const nx = e.x + d.x, ny = e.y + d.y;
                             if (!canEnemyMove(nx, ny, e) || isRealHole(nx, ny)) continue;
                             if (enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) continue;
+                            // 斜め移動は角をすり抜けない
+                            if (d.x !== 0 && d.y !== 0) {
+                                if (!canEnemyMove(e.x+d.x, e.y, e) || !canEnemyMove(e.x, e.y+d.y, e)) continue;
+                            }
                             e.x = nx; e.y = ny; break;
                         }
                     }
