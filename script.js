@@ -11937,55 +11937,58 @@ function initMap() {
             }
         }
         // マルチスクリーン: ラテン文字コレクション敵を低確率スポーン（50F以降・スタート画面除外）
-        // 確率: 0.5% + 0.4% × 部屋数（部屋が多い画面ほど出やすい）
+        // 確率: 0.5% + 0.4% × 部屋数（部屋が多い画面ほど出やすい）・1フロアに最大2体（異なる種類）
         // _bizTypes はギリシア文字ループでも参照するためブロック外に宣言
         const _bizTypes = new Set(['MONSTER_FLOOD','LAVA_SEA','FROZEN_PRISON','VOID_CELLS','CHAOS_ALTAR','TREASURY','BOMBER_MAZE','SPAWNER_HIVE','MIMIC_GARDEN','ISLAND_HAZARD','RIVER_CROSSING','TIGHT_MAZE','FACTION_WAR','FLEEING_HORDE','CIRCLE_SIEGE','KINGS_COURT','VSCROLL_WALLS','BIG_AMBUSH_HALL','STAGE_39','BOAR_CHAMBER','LAVA_CROSS','VERTICAL_RIVER','MAZE_LAVA_CORNER','WARP_CELLS','WARP_CELLS_V','WARP_CELLS_H','AURA_MAZE','bizarre','turret_gauntlet','poison_wasteland','novel_corridor']);
         if (floorLevel >= 50) {
-            const _lcPool = LATIN_ENEMIES.filter(t => !latinKillCounts[t.type] && t.type !== 'LATIN_P');
-            if (_lcPool.length > 0) {
-                let _lcSpawned = false;
-                outer: for (let _lcSy = 0; _lcSy < screenGridRows; _lcSy++) {
-                    for (let _lcSx = 0; _lcSx < screenGridCols; _lcSx++) {
-                        if (_lcSx === _ssX && _lcSy === _ssY) continue; // スタート画面除外
-                        if (!screenGrid.active[_lcSy][_lcSx]) continue;
-                        if (_bizTypes.has(screenGrid.types?.[_lcSy]?.[_lcSx])) continue; // 奇妙な部屋は除外
-                        const _lcMap = screenGrid.maps[_lcSy][_lcSx];
-                        if (!_lcMap) continue;
-                        const _lcRooms = allRooms[`${_lcSx},${_lcSy}`] || [];
-                        const _lcProb = 0.005 + _lcRooms.length * 0.004;
-                        if (Math.random() >= _lcProb) continue;
-                        const _lcType = _lcPool[Math.floor(Math.random() * _lcPool.length)];
-                        const _lcEnemies = screenGrid.enemies[_lcSy][_lcSx];
-                        let _lcX = -1, _lcY = -1;
-                        // 部屋中央を優先して配置先を探す
-                        for (const r of _lcRooms.slice().sort(() => Math.random() - 0.5)) {
-                            if (_lcMap[r.cy]?.[r.cx] === SYMBOLS.FLOOR
-                                    && !_lcEnemies.some(e => e.x === r.cx && e.y === r.cy)) {
-                                _lcX = r.cx; _lcY = r.cy; break;
-                            }
+            let _lcSpawnCount = 0;
+            const _lcSpawnedTypes = new Set(); // このフロアで既に出現した型（重複防止）
+            outer: for (let _lcSy = 0; _lcSy < screenGridRows; _lcSy++) {
+                for (let _lcSx = 0; _lcSx < screenGridCols; _lcSx++) {
+                    if (_lcSpawnCount >= 2) break outer;
+                    if (_lcSx === _ssX && _lcSy === _ssY) continue; // スタート画面除外
+                    if (!screenGrid.active[_lcSy][_lcSx]) continue;
+                    if (_bizTypes.has(screenGrid.types?.[_lcSy]?.[_lcSx])) continue; // 奇妙な部屋は除外
+                    const _lcMap = screenGrid.maps[_lcSy][_lcSx];
+                    if (!_lcMap) continue;
+                    const _lcRooms = allRooms[`${_lcSx},${_lcSy}`] || [];
+                    const _lcProb = 0.005 + _lcRooms.length * 0.004;
+                    if (Math.random() >= _lcProb) continue;
+                    // 未収集かつこのフロア未出現の型からランダム選出
+                    const _lcPool = LATIN_ENEMIES.filter(t => !latinKillCounts[t.type] && t.type !== 'LATIN_P' && !_lcSpawnedTypes.has(t.type));
+                    if (_lcPool.length === 0) break outer;
+                    const _lcType = _lcPool[Math.floor(Math.random() * _lcPool.length)];
+                    const _lcEnemies = screenGrid.enemies[_lcSy][_lcSx];
+                    let _lcX = -1, _lcY = -1;
+                    // 部屋中央を優先して配置先を探す
+                    for (const r of _lcRooms.slice().sort(() => Math.random() - 0.5)) {
+                        if (_lcMap[r.cy]?.[r.cx] === SYMBOLS.FLOOR
+                                && !_lcEnemies.some(e => e.x === r.cx && e.y === r.cy)) {
+                            _lcX = r.cx; _lcY = r.cy; break;
                         }
-                        // フォールバック: ランダムFLOOR探索
-                        if (_lcX < 0) {
-                            for (let _t = 0; _t < 300; _t++) {
-                                const _tx = 2 + Math.floor(Math.random() * (COLS - 4));
-                                const _ty = 2 + Math.floor(Math.random() * (ROWS - 4));
-                                if (_lcMap[_ty][_tx] === SYMBOLS.FLOOR
-                                        && !_lcEnemies.some(e => e.x === _tx && e.y === _ty)) {
-                                    _lcX = _tx; _lcY = _ty; break;
-                                }
-                            }
-                        }
-                        if (_lcX < 0) continue;
-                        const _lcHp = 20 + Math.floor(floorLevel * 0.4);
-                        _lcEnemies.push({
-                            type: _lcType.type, x: _lcX, y: _lcY,
-                            hp: _lcHp, maxHp: _lcHp,
-                            flashUntil: 0, offsetX: 0, offsetY: 0,
-                            expValue: 10, stunTurns: 0,
-                            flee: true, noFleeAnim: false,
-                        });
-                        break outer; // 1フロアに最大1体
                     }
+                    // フォールバック: ランダムFLOOR探索
+                    if (_lcX < 0) {
+                        for (let _t = 0; _t < 300; _t++) {
+                            const _tx = 2 + Math.floor(Math.random() * (COLS - 4));
+                            const _ty = 2 + Math.floor(Math.random() * (ROWS - 4));
+                            if (_lcMap[_ty][_tx] === SYMBOLS.FLOOR
+                                    && !_lcEnemies.some(e => e.x === _tx && e.y === _ty)) {
+                                _lcX = _tx; _lcY = _ty; break;
+                            }
+                        }
+                    }
+                    if (_lcX < 0) continue;
+                    const _lcHp = 20 + Math.floor(floorLevel * 0.4);
+                    _lcEnemies.push({
+                        type: _lcType.type, x: _lcX, y: _lcY,
+                        hp: _lcHp, maxHp: _lcHp,
+                        flashUntil: 0, offsetX: 0, offsetY: 0,
+                        expValue: 10, stunTurns: 0,
+                        flee: true, noFleeAnim: false,
+                    });
+                    _lcSpawnedTypes.add(_lcType.type);
+                    _lcSpawnCount++;
                 }
             }
         }
