@@ -25597,15 +25597,16 @@ function draw(now) {
                     if (e.type === 'LATIN_M' && !e._mRevealed) {
                         if (e._mWallMode) {
                             // 壁に擬態：壁タイルと同じ描画をしてスキップ
+                            // ctx.save()は25387行目で呼ばれているのでここでctx.restore()して帳尻を合わせる
                             const _mWpx = e.x * TILE_SIZE, _mWpy = e.y * TILE_SIZE;
-                            ctx.save();
                             ctx.fillStyle = '#222'; ctx.fillRect(_mWpx, _mWpy, TILE_SIZE, TILE_SIZE);
                             ctx.strokeStyle = '#888'; ctx.lineWidth = 2; ctx.beginPath();
                             ctx.moveTo(_mWpx, _mWpy + 1); ctx.lineTo(_mWpx + TILE_SIZE, _mWpy + 1);
                             ctx.moveTo(_mWpx, _mWpy + TILE_SIZE - 1); ctx.lineTo(_mWpx + TILE_SIZE, _mWpy + TILE_SIZE - 1);
                             ctx.moveTo(_mWpx + 1, _mWpy); ctx.lineTo(_mWpx + 1, _mWpy + TILE_SIZE);
                             ctx.moveTo(_mWpx + TILE_SIZE - 1, _mWpy); ctx.lineTo(_mWpx + TILE_SIZE - 1, _mWpy + TILE_SIZE);
-                            ctx.stroke(); ctx.restore();
+                            ctx.stroke();
+                            ctx.restore(); // 25387のctx.save()に対応
                             return;
                         }
                         eChar = '。';
