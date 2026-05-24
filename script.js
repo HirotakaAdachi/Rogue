@@ -37918,13 +37918,13 @@ async function enemyTurn() {
                     continue;
                 }
 
-                // LATIN_V: 逃げながら炎弾を主人公に向けて発射
+                // LATIN_V: 主人公と同じ行か列に並んだときだけ炎弾を発射
                 if (e.type === 'LATIN_V') {
-                    if (!player.isStealth && (e._vCooldown || 0) <= 0) {
-                        const _vdx = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
-                            ? Math.sign(player.x - e.x) : 0;
-                        const _vdy = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
-                            ? 0 : Math.sign(player.y - e.y);
+                    const _vSameRow = player.y === e.y;
+                    const _vSameCol = player.x === e.x;
+                    if (!player.isStealth && (e._vCooldown || 0) <= 0 && (_vSameRow || _vSameCol)) {
+                        const _vdx = _vSameRow ? Math.sign(player.x - e.x) : 0;
+                        const _vdy = _vSameCol ? Math.sign(player.y - e.y) : 0;
                         if (_vdx !== 0 || _vdy !== 0) {
                             infernoProjectiles.push({ x: e.x, y: e.y, dx: _vdx, dy: _vdy, life: 30, owner: e });
                             SOUNDS.IGNITE();
