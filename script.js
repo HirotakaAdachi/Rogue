@@ -37388,21 +37388,24 @@ async function enemyTurn() {
                 }
                 // ===== LATIN 小文字 個別挙動 =====
 
-                // LATIN_A: 横移動のみ。詰まったら縦
+                // LATIN_A: 横移動で逃げ、壁に詰まったら上下交互にトグル
                 if (e.type === 'LATIN_A') {
                     if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
-                    const _aAway = player.x >= e.x ? -1 : 1;
-                    const _aDirs = [
-                        { x: _aAway, y: 0 }, { x: -_aAway, y: 0 },
-                        { x: 0, y: player.y >= e.y ? -1 : 1 }, { x: 0, y: player.y >= e.y ? 1 : -1 }
-                    ];
+                    if (e._aVDir === undefined) e._aVDir = 1;
                     for (let _aStep = 0; _aStep < 2; _aStep++) {
-                        for (const d of _aDirs) {
-                            const nx = e.x + d.x, ny = e.y + d.y;
-                            if (canEnemyMove(nx, ny, e) && !isRealHole(nx, ny)
-                                    && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
-                                e.x = nx; e.y = ny; break;
+                        const _aAway = player.x >= e.x ? -1 : 1;
+                        const _aNx = e.x + _aAway;
+                        if (canEnemyMove(_aNx, e.y, e) && !isRealHole(_aNx, e.y)
+                                && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === _aNx && o.y === e.y)) {
+                            e.x = _aNx;
+                        } else {
+                            // 横が壁 → 上下をトグル
+                            const _aNy = e.y + e._aVDir;
+                            if (canEnemyMove(e.x, _aNy, e) && !isRealHole(e.x, _aNy)
+                                    && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === e.x && o.y === _aNy)) {
+                                e.y = _aNy;
                             }
+                            e._aVDir = -e._aVDir;
                         }
                     }
                     continue;
