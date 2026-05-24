@@ -1559,7 +1559,7 @@ let testFloor = 1;    // テストプレイ用の開始階層
 let deepTestFloor = 101; // ディープテスト用の開始階層（101〜999）
 let testModeVisible = false; // テストメニューの表示フラグ（秘密キーで解除）
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
-const TITLE_SECRET_SEQ = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown']; // ↑↑↓↓
+const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -1828,6 +1828,7 @@ const ROOM_TEST_TYPES = [
     { id: 'ROULETTE_GUARD', name: 'ROULETTE GUARD', nameJa: 'ルーレット巡回部屋', prob: '奇妙部屋（マルチ専用）', desc: '薄暗い巡回部屋。Rの視野に入ると上からGが大量降下。背後から攻撃すると仲間に。' },
     { id: 'bizarre_all',        name: 'BIZARRE GALLERY',   nameJa: '奇妙ギャラリー',        prob: 'テスト専用', desc: '全20種の奇妙な部屋を5×5フロアで一覧。' },
     { id: 'NOVEL_CORRIDOR',     name: 'NOVEL CORRIDOR',    nameJa: '小説の回廊',            prob: 'テスト専用', desc: '暗闇の横一列100部屋。文字列の敵が小説のように並ぶ。最終部屋の穴で真のエンディングへ。' },
+    { id: 'latin_test',         name: 'LATIN CAVE',        nameJa: 'LATIN検証洞窟',         prob: 'テスト専用', desc: '全26種の小文字ラテン文字敵が棲む洞窟。各敵の挙動を観察・検証できる。' },
 ];
 // マルチスクリーン専用タイプ（ROOM_TEST_TYPESに含まれないもの）の表示名マップ
 const SCREEN_TYPE_EXTRA = {
@@ -18008,6 +18009,86 @@ function initMap() {
             _scN++;
         }
         addLog("🕸 Silk and old bones fill the air...");
+        return;
+    }
+
+    // ===== テストモード: LATIN文字検証洞窟 =====
+    if (isRoomTestMode && forcedLayoutType === 'latin_test' && !multiScreenMode) {
+        addLog("🔤 LATIN CAVE — all 26 small-letter enemies");
+        for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) map[y][x] = SYMBOLS.WALL;
+        // フロンティア拡張で有機的な洞窟を掘る
+        const _ltCarve = (cx, cy, targetTiles, spread) => {
+            const front = [[cx, cy]];
+            const vis = new Set([`${cx},${cy}`]);
+            let n = 0;
+            while (front.length && n < targetTiles) {
+                const idx = Math.floor(Math.random() * Math.min(front.length, 6));
+                const [fx, fy] = front.splice(idx, 1)[0];
+                if (fx < 1 || fx >= COLS-1 || fy < 1 || fy >= ROWS-1) continue;
+                map[fy][fx] = SYMBOLS.FLOOR; n++;
+                for (const [ddx, ddy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]) {
+                    const nx = fx+ddx, ny = fy+ddy, k = `${nx},${ny}`;
+                    if (!vis.has(k) && Math.random() < (spread || 0.65)) { vis.add(k); front.push([nx, ny]); }
+                }
+            }
+        };
+        const _ltTunnel = (x1, y1, x2, y2) => {
+            // L字通路で2点を接続
+            for (let x = Math.min(x1,x2); x <= Math.max(x1,x2); x++)
+                if (x>=1&&x<COLS-1&&y1>=1&&y1<ROWS-1) map[y1][x] = SYMBOLS.FLOOR;
+            for (let y = Math.min(y1,y2); y <= Math.max(y1,y2); y++)
+                if (x2>=1&&x2<COLS-1&&y>=1&&y<ROWS-1) map[y][x2] = SYMBOLS.FLOOR;
+        };
+        // 6つのチェンバーを配置（左→右、上下に分布）
+        _ltCarve(6,  5,  38, 0.60); // 左上チェンバー
+        _ltCarve(20, 4,  42, 0.62); // 中上チェンバー
+        _ltCarve(33, 6,  35, 0.60); // 右上チェンバー
+        _ltCarve(8,  17, 38, 0.60); // 左下チェンバー
+        _ltCarve(22, 18, 42, 0.62); // 中下チェンバー
+        _ltCarve(34, 16, 35, 0.58); // 右下チェンバー
+        // チェンバー間を通路で接続
+        _ltTunnel(6, 5, 20, 4);
+        _ltTunnel(20, 4, 33, 6);
+        _ltTunnel(8, 17, 22, 18);
+        _ltTunnel(22, 18, 34, 16);
+        _ltTunnel(6, 5, 8, 17);
+        _ltTunnel(20, 4, 22, 18);
+        _ltTunnel(33, 6, 34, 16);
+        // プレイヤーと出口を床に確定
+        player.x = 3; player.y = 12;
+        map[player.y][player.x] = SYMBOLS.FLOOR;
+        _ltTunnel(3, 12, 6, 5);
+        map[20][37] = SYMBOLS.STAIRS;
+        _ltTunnel(34, 16, 37, 20);
+        // 床タイル一覧を収集（プレイヤーから3マス以上離れているもの）
+        const _ltFloors = [];
+        for (let y = 1; y < ROWS-1; y++) for (let x = 1; x < COLS-1; x++) {
+            if (map[y][x] === SYMBOLS.FLOOR && (Math.abs(x-player.x)+Math.abs(y-player.y)) > 4) _ltFloors.push({x, y});
+        }
+        // シャッフル
+        for (let i = _ltFloors.length-1; i > 0; i--) {
+            const j = Math.floor(Math.random()*(i+1));
+            [_ltFloors[i], _ltFloors[j]] = [_ltFloors[j], _ltFloors[i]];
+        }
+        // LATIN敵を全26種配置
+        let _ltIdx = 0;
+        for (const def of LATIN_ENEMIES) {
+            while (_ltIdx < _ltFloors.length && enemies.some(oe => oe.x === _ltFloors[_ltIdx].x && oe.y === _ltFloors[_ltIdx].y)) _ltIdx++;
+            if (_ltIdx >= _ltFloors.length) break;
+            const pos = _ltFloors[_ltIdx++];
+            const hp = 20 + floorLevel;
+            const eObj = {
+                type: def.type, x: pos.x, y: pos.y,
+                hp, maxHp: hp, flashUntil: 0, offsetX: 0, offsetY: 0,
+                expValue: 8, stunTurns: 0, flee: true, noFleeAnim: false
+            };
+            if (def.type === 'LATIN_C' || def.type === 'LATIN_O') eObj.trail = [];
+            enemies.push(eObj);
+        }
+        addLog("🔤 26 enemies: a(horizontal) b(charge) c(bounce) d(counter) e(liminal)");
+        addLog("🔤 f(lava trail) g(tackle) h(heal) i(ice trail) J(explodes) k(cross-screen)");
+        addLog("🔤 l(block) m(disguised) n(dig) o(slippery) p(hidden) q(summon) r(fake ally)");
+        addLog("🔤 s(boar) t(fire) u(copy) v(fire) w(dig) x(bomb) y(diagonal) z(Z-drop)");
         return;
     }
 
@@ -43735,43 +43816,49 @@ window.addEventListener('keydown', async e => {
         return;
     }
 
-    // 数値直接入力 (テストメニュー表示中) — IME・テンキー両対応、Arrowより先に処理
+    // 数値直接入力 — IME・テンキー両対応、Arrowより先に処理
     // e.keyがIMEで'Process'になる場合はe.code(Digit0-9 / Numpad0-9)で判定
     {
         const _dk = /^\d$/.test(e.key) ? e.key : (/^(?:Digit|Numpad)(\d)$/.exec(e.code)?.[1] ?? null);
-        if (gameState === 'TITLE' && testModeVisible && _dk !== null) {
-            e.preventDefault();
-            const _num = parseInt(_dk);
-            const _duD = localStorage.getItem('deep_unlocked') === '1';
-            const _dtiD = _duD ? 4 : 3;
-            if (titleSelection === _dtiD) {
-                let nf = (deepTestFloor * 10) % 1000 + _num;
-                if (nf < 100) nf += 100; // 1xx台にフォールバック (例: 15→115)
-                if (nf > 999) nf = 999;
-                if (nf < 101) nf = 101;
-                deepTestFloor = nf;
-            } else {
-                let nf = (testFloor * 10 + _num) % 100;
-                if (nf === 0) nf = 100; // 100階はゼロになるので補正
-                testFloor = nf;
+        if (gameState === 'TITLE' && _dk !== null) {
+            // テストモード未表示時: 秘密シーケンス（1021）検出
+            if (!testModeVisible) {
+                titleSecretBuffer.push(_dk);
+                if (titleSecretBuffer.length > TITLE_SECRET_SEQ.length) titleSecretBuffer.shift();
+                if (titleSecretBuffer.join(',') === TITLE_SECRET_SEQ.join(',')) {
+                    testModeVisible = true;
+                    titleSecretBuffer = [];
+                    SOUNDS.SELECT();
+                    e.preventDefault();
+                    return;
+                }
+                // シーケンス途中でも通常カーソル操作は妨げない（returnしない）
             }
-            SOUNDS.SELECT(); return;
+            // テストモード表示中: 数値入力で階数を変更
+            if (testModeVisible) {
+                e.preventDefault();
+                const _num = parseInt(_dk);
+                const _duD = localStorage.getItem('deep_unlocked') === '1';
+                const _dtiD = _duD ? 4 : 3;
+                if (titleSelection === _dtiD) {
+                    let nf = (deepTestFloor * 10) % 1000 + _num;
+                    if (nf < 100) nf += 100;
+                    if (nf > 999) nf = 999;
+                    if (nf < 101) nf = 101;
+                    deepTestFloor = nf;
+                } else {
+                    let nf = (testFloor * 10 + _num) % 100;
+                    if (nf === 0) nf = 100;
+                    testFloor = nf;
+                }
+                SOUNDS.SELECT(); return;
+            }
         }
     }
 
     if (e.key === 'ArrowUp' || e.key === 'w') {
         e.preventDefault();
         if (gameState === 'TITLE') {
-            // 秘密シーケンス検出（タイトル画面のみ）
-            titleSecretBuffer.push(e.key === 'ArrowUp' ? 'ArrowUp' : e.key);
-            if (titleSecretBuffer.length > TITLE_SECRET_SEQ.length) titleSecretBuffer.shift();
-            if (titleSecretBuffer.join(',') === TITLE_SECRET_SEQ.join(',')) {
-                testModeVisible = !testModeVisible;
-                titleSecretBuffer = [];
-                { const _du = localStorage.getItem('deep_unlocked') === '1'; if (!testModeVisible && titleSelection >= (_du ? 3 : 2)) titleSelection = 0; }
-                SOUNDS.SELECT();
-                return;
-            }
             { const _duU = localStorage.getItem('deep_unlocked') === '1'; const _baseU = _duU ? 3 : 2; const count = testModeVisible ? _baseU + 4 : _baseU; titleSelection = (titleSelection + count - 1) % count; }
             SOUNDS.SELECT(); return;
         }
@@ -43823,16 +43910,6 @@ window.addEventListener('keydown', async e => {
     if (e.key === 'ArrowDown' || e.key === 's') {
         e.preventDefault();
         if (gameState === 'TITLE') {
-            // 秘密シーケンス検出（タイトル画面のみ）
-            titleSecretBuffer.push('ArrowDown');
-            if (titleSecretBuffer.length > TITLE_SECRET_SEQ.length) titleSecretBuffer.shift();
-            if (titleSecretBuffer.join(',') === TITLE_SECRET_SEQ.join(',')) {
-                testModeVisible = !testModeVisible;
-                titleSecretBuffer = [];
-                { const _du = localStorage.getItem('deep_unlocked') === '1'; if (!testModeVisible && titleSelection >= (_du ? 3 : 2)) titleSelection = 0; }
-                SOUNDS.SELECT();
-                return;
-            }
             { const _duD2 = localStorage.getItem('deep_unlocked') === '1'; const _baseD2 = _duD2 ? 3 : 2; const count = testModeVisible ? _baseD2 + 4 : _baseD2; titleSelection = (titleSelection + 1) % count; }
             SOUNDS.SELECT(); return;
         }
