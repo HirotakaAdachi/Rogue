@@ -26115,11 +26115,19 @@ function draw(now) {
             }
         }
 
-        // 4. ウィスプ
+        // 4. ウィスプ（フォント依存を避けてarcで描画）
         wisps.forEach(w => {
-            ctx.fillStyle = '#ededed'; ctx.shadowBlur = 10; ctx.shadowColor = '#ededed';
-            ctx.fillText(SYMBOLS.WISP, w.x * TILE_SIZE + TILE_SIZE / 2, w.y * TILE_SIZE + TILE_SIZE / 2);
-            ctx.shadowBlur = 0;
+            ctx.save();
+            const _wx = w.x * TILE_SIZE + TILE_SIZE / 2;
+            const _wy = w.y * TILE_SIZE + TILE_SIZE / 2;
+            // 外側：やや大きめのグロー球
+            ctx.shadowColor = '#ededed'; ctx.shadowBlur = 14;
+            ctx.fillStyle = '#e2e8f0';
+            ctx.beginPath(); ctx.arc(_wx, _wy, TILE_SIZE * 0.28, 0, Math.PI * 2); ctx.fill();
+            // 中心：明るい白点
+            ctx.shadowBlur = 22; ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.arc(_wx, _wy, TILE_SIZE * 0.12, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
         });
 
         // 4.4.5. 飛翔爆弾
