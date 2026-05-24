@@ -37410,23 +37410,30 @@ async function enemyTurn() {
                 if (e.type === 'LATIN_B') {
                     const _bDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
                     if (_bDist <= 6 && !e._bCharging && e.stunTurns <= 0) {
-                        const _bDx = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
-                            ? -Math.sign(player.x - e.x) : 0;
-                        const _bDy = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
-                            ? 0 : -Math.sign(player.y - e.y);
-                        e._bCharging = true; e._bDx = _bDx || 1; e._bDy = _bDy;
+                        // 4方向を「プレイヤーから遠くなる順」に試して、1マス以上進める方向を選ぶ
+                        const _bDirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]
+                            .filter(d => canEnemyMove(e.x + d.x, e.y + d.y, e))
+                            .sort((a,b) => {
+                                const da = Math.abs((e.x+a.x)-player.x)+Math.abs((e.y+a.y)-player.y);
+                                const db = Math.abs((e.x+b.x)-player.x)+Math.abs((e.y+b.y)-player.y);
+                                return db - da; // 遠い順
+                            });
+                        if (_bDirs.length > 0) {
+                            e._bCharging = true; e._bDx = _bDirs[0].x; e._bDy = _bDirs[0].y;
+                            spawnFloatingText(e.x, e.y, '!', '#ff9f43');
+                        }
                     }
                     if (e._bCharging && e.stunTurns <= 0) {
                         if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
                         let _bHit = false;
-                        for (let _bs = 0; _bs < 4; _bs++) {
+                        for (let _bs = 0; _bs < 5; _bs++) {
                             const nx = e.x + e._bDx, ny = e.y + e._bDy;
                             if (!canEnemyMove(nx, ny, e) || (nx === player.x && ny === player.y)) { _bHit = true; break; }
                             e.x = nx; e.y = ny;
                         }
                         e._bCharging = false;
                         if (_bHit) { e.stunTurns = 4; spawnFloatingText(e.x, e.y, 'STUNNED!', '#94a3b8'); }
-                    } else {
+                    } else if (!e._bCharging) {
                         const _bChosen = pickFleeDir(e);
                         if (_bChosen) {
                             if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
@@ -37772,9 +37779,10 @@ async function enemyTurn() {
                     continue;
                 }
 
-                // LATIN_S: 逃げながら数ターンに一度BOARを召喚
+                // LATIN_S: 逃げながら、主人公が8マス以内に来たときのみBOARを召喚
                 if (e.type === 'LATIN_S') {
-                    if ((e._sSummonCd || 0) <= 0) {
+                    const _sDist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+                    if ((e._sSummonCd || 0) <= 0 && _sDist <= 8 && !player.isStealth) {
                         let _sSPlaced = false;
                         for (let _st = 0; _st < 100 && !_sSPlaced; _st++) {
                             const _sx = e.x + Math.floor(Math.random() * 7) - 3;
@@ -37793,7 +37801,7 @@ async function enemyTurn() {
                             _sSPlaced = true;
                         }
                         if (!_sSPlaced) e._sSummonCd = 3;
-                    } else { e._sSummonCd--; }
+                    } else if ((e._sSummonCd || 0) > 0) { e._sSummonCd--; }
                     const _sChosen = pickFleeDir(e);
                     if (_sChosen) {
                         if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
@@ -43420,7 +43428,7 @@ async function startGame(startFloor = 1, isTestMode = false) {
     await startFloorTransition(); // initMap/spawnQueenIfEligible はstartFloorTransition内で呼ぶ
     isProcessing = false; // 確実に操作可能にする
 
-    if (startFloor === 1) {
+    if (startFloor === 1 && !isRoomTestMode) {
         addLog("Betrayed and fallen... You survived the fall.");
         addLog("Goal: Reach B100F and destroy the Core.");
         await triggerStage1StartStory();
