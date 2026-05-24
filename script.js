@@ -43461,7 +43461,7 @@ async function startGame(startFloor = 1, isTestMode = false) {
         facing: 'LEFT',
         totalKills: 0, offsetX: 0, offsetY: 0, flashUntil: 0,
         hasSword: false, hasKey: false, isDefending: false,
-        hasWand: (startFloor >= 2 || startFloor < 0),
+        hasWand: (startFloor >= 2 || startFloor < 0 || isTestMode),
         itemInHand: null,
         fairyCount: 0,
         isInfiniteStamina: false,
