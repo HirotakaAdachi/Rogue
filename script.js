@@ -25218,7 +25218,9 @@ function draw(now) {
             if ((e.type !== 'CLUSTER' && e.type !== 'LATIN_C' && e.type !== 'LATIN_O') || !e.trail || e.trail.length < 1) continue;
             // 本体と同じ色決定ロジック
             let _clColor = '#f87171'; // デフォルト赤
-            if (e.isAlly) _clColor = '#60a5fa';
+            if (e.type === 'LATIN_C') _clColor = '#ffd43b';
+            else if (e.type === 'LATIN_O') _clColor = '#67e8f9';
+            else if (e.isAlly) _clColor = '#60a5fa';
             else if (e._summonedAlly || e._summonPending) _clColor = '#ffffff';
             else if (e.faction === 'CRIMSON') _clColor = '#4ade80';
             else if (e.faction === 'COBALT')  _clColor = '#a855f7';
@@ -37453,7 +37455,7 @@ async function enemyTurn() {
                         e._cDy = player.y <= e.y ? 1 : -1;
                     }
                     e.trail.unshift({ x: e.x, y: e.y });
-                    if (e.trail.length > 4) e.trail.pop();
+                    if (e.trail.length > 2) e.trail.pop();
                     for (let _cStep = 0; _cStep < 2; _cStep++) {
                         const _cXok = canEnemyMove(e.x + e._cDx, e.y, e);
                         const _cYok = canEnemyMove(e.x, e.y + e._cDy, e);
@@ -37726,7 +37728,7 @@ async function enemyTurn() {
                 if (e.type === 'LATIN_O') {
                     if (!e.trail) e.trail = [];
                     e.trail.unshift({ x: e.x, y: e.y });
-                    if (e.trail.length > 8) e.trail.pop();
+                    if (e.trail.length > 4) e.trail.pop();
                     if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
                     const _oChosen = pickFleeDir(e);
                     if (_oChosen) {
