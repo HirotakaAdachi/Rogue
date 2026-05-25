@@ -20112,10 +20112,13 @@ function initMap() {
     }
 
     // 指輪のフロア落下（低確率: 10階以降、3.3% — 100Fまで平均約3個）
+    // TERRAIN_RING・SUMMON_RINGは101F以降のみプールに加わる
     if (floorLevel >= 10 && Math.random() < 0.033) {
-        // TERRAIN_RING・SUMMON_RINGは通常プールから除外（101F+専用スポーンで対応）
         const ringPool = [];
-        RINGS.forEach((r, i) => { if (r.id === 'TERRAIN_RING' || r.id === 'SUMMON_RING') return; for (let _w = 0; _w < 4; _w++) ringPool.push(i); });
+        RINGS.forEach((r, i) => {
+            if ((r.id === 'TERRAIN_RING' || r.id === 'SUMMON_RING') && floorLevel < 101) return;
+            for (let _w = 0; _w < 4; _w++) ringPool.push(i);
+        });
         const ringIdx = ringPool[Math.floor(Math.random() * ringPool.length)];
         const ringRooms = rooms.slice(1);
         if (ringRooms.length > 0) {
@@ -20126,29 +20129,6 @@ function initMap() {
                 if (map[ry][rx] === SYMBOLS.FLOOR && !(rx === player.x && ry === player.y)) {
                     map[ry][rx] = SYMBOLS.RING;
                     ringDrops.push({ x: rx, y: ry, ringId: RINGS[ringIdx].id });
-                    addKeyLog(`💍 Something sparkles in the dungeon...`);
-                    break;
-                }
-            }
-        }
-    }
-
-    // 地形の指輪・召喚の指輪のフロア落下（101F以降、各2%の低確率）
-    if (floorLevel >= 101) {
-        const _specialRingIds = ['TERRAIN_RING', 'SUMMON_RING'];
-        for (const _spId of _specialRingIds) {
-            if (Math.random() >= 0.02) continue;
-            const _spIdx = RINGS.findIndex(r => r.id === _spId);
-            if (_spIdx < 0) continue;
-            const _spRooms = rooms.slice(1);
-            if (_spRooms.length === 0) continue;
-            const _spRoom = _pickSmallRoom(_spRooms);
-            for (let _st = 0; _st < 20; _st++) {
-                const _sx = _spRoom.x + Math.floor(Math.random() * _spRoom.w);
-                const _sy = _spRoom.y + Math.floor(Math.random() * _spRoom.h);
-                if (map[_sy][_sx] === SYMBOLS.FLOOR && !(_sx === player.x && _sy === player.y)) {
-                    map[_sy][_sx] = SYMBOLS.RING;
-                    ringDrops.push({ x: _sx, y: _sy, ringId: _spId });
                     addKeyLog(`💍 Something sparkles in the dungeon...`);
                     break;
                 }
