@@ -45881,10 +45881,10 @@ addLog("Game Ready.");
 .tc-btn:active { background: #2e2e2e; color: #fff; }
 #tc-center-btn { color: #3a3a3a; font-size: 14px; }
 #tc-block-btn {
-    width: 60px; height: 60px;
+    width: 120px; height: 120px;
     background: #1a1a1a; border: 1px solid #2e2e2e; color: #666;
-    font-size: 28px;
-    border-radius: 8px; display: flex;
+    font-size: 48px;
+    border-radius: 12px; display: flex;
     align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
 }
@@ -46012,7 +46012,7 @@ addLog("Game Ready.");
         }
     }
 
-    // Dパッド
+    // Dパッド（長押しで連続入力）
     const _tcDpad = [
         ['tc-up',         0, -1],
         ['tc-down',       0,  1],
@@ -46020,11 +46020,28 @@ addLog("Game Ready.");
         ['tc-right',      1,  0],
         ['tc-center-btn', 0,  0],
     ];
+    let _dpadRepeatTimer = null;
+    let _dpadRepeatInterval = null;
+    function _clearDpadRepeat() {
+        clearTimeout(_dpadRepeatTimer);
+        clearInterval(_dpadRepeatInterval);
+        _dpadRepeatTimer = null;
+        _dpadRepeatInterval = null;
+    }
     for (const [id, dx, dy] of _tcDpad) {
-        document.getElementById(id).addEventListener('touchstart', e => {
+        const btn = document.getElementById(id);
+        btn.addEventListener('touchstart', e => {
             e.preventDefault();
+            _clearDpadRepeat();
             _tcMove(dx, dy);
+            if (dx !== 0 || dy !== 0) {
+                _dpadRepeatTimer = setTimeout(() => {
+                    _dpadRepeatInterval = setInterval(() => _tcMove(dx, dy), 120);
+                }, 400);
+            }
         }, { passive: false });
+        btn.addEventListener('touchend',    e => { e.preventDefault(); _clearDpadRepeat(); }, { passive: false });
+        btn.addEventListener('touchcancel', e => { e.preventDefault(); _clearDpadRepeat(); }, { passive: false });
     }
 
     // BLOCK ボタン（ホールド型）
@@ -46044,8 +46061,11 @@ addLog("Game Ready.");
         if (!_tcBlockActive) return;
         const _wasUsed = spaceUsedForBlock;
         _tcResetBlock();
-        if (!_wasUsed && gameState === 'PLAYING' && !isProcessing) {
-            handleAction(0, 0); // 防御発動（スペース単押しと同じ）
+        if (!_wasUsed) {
+            if (gameState === 'PLAYING' && !isProcessing) {
+                handleAction(0, 0); // 防御発動（スペース単押しと同じ）
+            }
+            _tcSimKey('Enter'); // 決定キーとしても機能
         }
     }, { passive: false });
 
