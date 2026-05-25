@@ -45969,7 +45969,7 @@ addLog("Game Ready.");
     const _ZOOM_SCALE = 1.5;
 
     function _applyZoom() {
-        const shouldZoom = _tcZoomMode && gameState === 'PLAYING';
+        const shouldZoom = _tcZoomMode && ['PLAYING','MENU','STATUS','INVENTORY','SHOP','CONFIRM_BUY','RINGS','CONFIRM_ESCAPE'].includes(gameState);
 
         // 状態変化時のみDOM操作
         if (shouldZoom !== _zoomModeActive) {
@@ -46022,10 +46022,14 @@ addLog("Game Ready.");
             // プレイヤー追従モード
             const px = (player.x + 0.5) * TILE_SIZE;
             const py = (player.y + 0.5) * TILE_SIZE;
+            // 下端5マス以内はカメラを上にシフト（コントローラー重なり回避）
+            const _bottomTiles = Math.max(0, (ROWS - 1) - player.y);
+            const _ctrlShift = Math.max(0, (5 - _bottomTiles) / 5) * 90; // 最大90canvaspx上シフト
             tx = px - vpW / (_ZOOM_SCALE * 2);
-            ty = py - vpH / (_ZOOM_SCALE * 2);
+            ty = py - vpH / (_ZOOM_SCALE * 2) - _ctrlShift;
             tx = Math.max(0, Math.min(tx, Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
-            ty = Math.max(0, Math.min(ty, Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
+            // 縦：上端クランプのみ（下端は黒エリア表示を許可）
+            ty = Math.max(0, _ctrlShift > 0 ? ty : Math.min(ty, Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
         }
         _zoomCanvas.style.transformOrigin = '0 0';
         _zoomCanvas.style.transform = `scale(${_ZOOM_SCALE}) translate(${-tx}px, ${-ty}px)`;
