@@ -329,7 +329,7 @@ const RING_DOUBLED_DESC = {
     NECRO_RING:     { ja: '蘇生時HP全快 + 攻撃力+3',                          en: 'Revived allies at full HP + attack +3' },
     RED_TEAR_RING:  { ja: '発動閾値 HP10% → HP20% 未満に拡大',                en: 'Activation threshold HP10% → HP20%' },
     TERRAIN_RING:   { ja: '特殊地形を移動後、通常の地面へ戻す。', en: 'Walk over special terrain to restore it to normal ground.' },
-    SUMMON_RING:    { ja: 'HP消費なしで討伐済みの敵（味方）を召喚。', en: 'Summon allies from defeated enemy types with no HP cost.' },
+    SUMMON_RING:    { ja: '体力を消費せずに、討伐済みの敵を召喚。', en: 'Summon defeated enemy types with no HP cost.' },
     PUSH_RING:      { ja: 'たくさんの壁を押すことができる。', en: 'Can push a large section of wall.' },
     WEB_RING:       { ja: '炎上する赤い蜘蛛の巣を放つ。', en: 'Launch a red burning spider web.' },
 };
