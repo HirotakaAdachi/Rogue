@@ -21772,6 +21772,25 @@ function initMap() {
         }
     }
 
+    // === 深層300F+: 大文字英字の通常敵をギリシア文字敵に段階的に入れ替え ===
+    // 300F=10%, 550F=50% で線形増加（それ以降は50%上限で維持）
+    if (floorLevel >= 300) {
+        const _greekDeepPool = GREEK_ENEMIES.filter(g => g.type !== 'GREEK_OMEGA' && g.type !== 'GREEK_TAU' && g.type !== 'GREEK_RHO');
+        const _greekReplaceRate = Math.min(0.10 + (floorLevel - 300) * 0.0016, 0.50);
+        const _greekReplaceTypes = new Set(['NORMAL', 'ORC', 'BLAZE', 'FROST', 'LAYER', 'BOAR', 'HEALER', 'BREAKER']);
+        const _greekReplaceable = enemies.filter(e => _greekReplaceTypes.has(e.type) && !e._dead && e.hp > 0);
+        for (const _gre of _greekReplaceable) {
+            if (Math.random() >= _greekReplaceRate) continue;
+            const _grDef = _greekDeepPool[Math.floor(Math.random() * _greekDeepPool.length)];
+            _gre.type = _grDef.type;
+            _gre.hp = 3; _gre.maxHp = 3;
+            _gre.expValue = 300 + floorLevel;
+            _gre.flee = true;
+            delete _gre.summonedBy;
+            delete _gre.faction;
+        }
+    }
+
     // === コレクター敵（ギリシア+ラテン）: 101F+・未収集のみ・深さスケーリング確率でスポーン ===
     if (floorLevel >= 101) {
         const _cPool = [
@@ -30156,6 +30175,24 @@ async function handleAction(dx, dy) {
                         _sre.flee = true;
                         delete _sre.summonedBy;
                         delete _sre.faction;
+                    }
+                }
+
+                // 深層300F+: 大文字英字通常敵をギリシア文字敵に段階的置換（画面遷移時）
+                if (floorLevel >= 300) {
+                    const _scrGreekPool = GREEK_ENEMIES.filter(g => g.type !== 'GREEK_OMEGA' && g.type !== 'GREEK_TAU' && g.type !== 'GREEK_RHO');
+                    const _scrGreekRate = Math.min(0.10 + (floorLevel - 300) * 0.0016, 0.50);
+                    const _scrGreekTypes = new Set(['NORMAL', 'ORC', 'BLAZE', 'FROST', 'LAYER', 'BOAR', 'HEALER', 'BREAKER']);
+                    for (const _sgre of enemies) {
+                        if (!_scrGreekTypes.has(_sgre.type) || _sgre._dead || _sgre.hp <= 0) continue;
+                        if (Math.random() >= _scrGreekRate) continue;
+                        const _sgrDef = _scrGreekPool[Math.floor(Math.random() * _scrGreekPool.length)];
+                        _sgre.type = _sgrDef.type;
+                        _sgre.hp = 3; _sgre.maxHp = 3;
+                        _sgre.expValue = 300 + floorLevel;
+                        _sgre.flee = true;
+                        delete _sgre.summonedBy;
+                        delete _sgre.faction;
                     }
                 }
 
