@@ -21773,10 +21773,10 @@ function initMap() {
     }
 
     // === 深層300F+: 大文字英字の通常敵をギリシア文字敵に段階的に入れ替え ===
-    // 300F=10%, 550F=50% で線形増加（それ以降は50%上限で維持）
+    // 300F=10%, 700F=50% で線形増加（それ以降は50%上限で維持）
     if (floorLevel >= 300) {
         const _greekDeepPool = GREEK_ENEMIES.filter(g => g.type !== 'GREEK_OMEGA' && g.type !== 'GREEK_TAU' && g.type !== 'GREEK_RHO');
-        const _greekReplaceRate = Math.min(0.10 + (floorLevel - 300) * 0.0016, 0.50);
+        const _greekReplaceRate = Math.min(0.10 + (floorLevel - 300) * 0.001, 0.50);
         const _greekReplaceTypes = new Set(['NORMAL', 'ORC', 'BLAZE', 'FROST', 'LAYER', 'BOAR', 'HEALER', 'BREAKER']);
         const _greekReplaceable = enemies.filter(e => _greekReplaceTypes.has(e.type) && !e._dead && e.hp > 0);
         for (const _gre of _greekReplaceable) {
@@ -30181,7 +30181,7 @@ async function handleAction(dx, dy) {
                 // 深層300F+: 大文字英字通常敵をギリシア文字敵に段階的置換（画面遷移時）
                 if (floorLevel >= 300) {
                     const _scrGreekPool = GREEK_ENEMIES.filter(g => g.type !== 'GREEK_OMEGA' && g.type !== 'GREEK_TAU' && g.type !== 'GREEK_RHO');
-                    const _scrGreekRate = Math.min(0.10 + (floorLevel - 300) * 0.0016, 0.50);
+                    const _scrGreekRate = Math.min(0.10 + (floorLevel - 300) * 0.001, 0.50);
                     const _scrGreekTypes = new Set(['NORMAL', 'ORC', 'BLAZE', 'FROST', 'LAYER', 'BOAR', 'HEALER', 'BREAKER']);
                     for (const _sgre of enemies) {
                         if (!_scrGreekTypes.has(_sgre.type) || _sgre._dead || _sgre.hp <= 0) continue;
