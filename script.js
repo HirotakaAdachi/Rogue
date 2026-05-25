@@ -45905,7 +45905,7 @@ addLog("Game Ready.");
     grid-template-columns: repeat(3, 52px);
     grid-template-rows: repeat(3, 52px);
     gap: 3px;
-    padding: 18px; margin: -18px; /* タッチ面積を外側に拡張（見た目は不変） */
+    padding: 18px 0; margin: -18px 0; /* 上下のみ拡張（左右拡張は隣接ボタンを覆うため無効） */
 }
 .tc-btn {
     background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
