@@ -45853,10 +45853,10 @@ addLog("Game Ready.");
 }
 /* ── 縦向き: 半透明オーバーレイ（下部） ── */
 #tc-wrap {
-    position: fixed; bottom: 52px; left: 0; right: 0; z-index: 1000;
+    position: fixed; bottom: 8px; left: 0; right: 0; z-index: 1000;
     display: flex; flex-direction: row;
     justify-content: space-around; align-items: center;
-    padding: 8px 16px;
+    padding: 8px 16px env(safe-area-inset-bottom, 8px);
     background: rgba(0,0,0,0.38);
     user-select: none; -webkit-user-select: none;
     pointer-events: none;
