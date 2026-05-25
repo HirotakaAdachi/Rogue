@@ -325,7 +325,7 @@ const RING_DOUBLED_DESC = {
     GOLEM_RING:     { ja: 'スタミナに関係なく敵を押し飛ばす',                    en: 'Knockback works regardless of stamina' },
     NECRO_RING:     { ja: '蘇生時HP全快 + 攻撃力+3',                          en: 'Revived allies at full HP + attack +3' },
     RED_TEAR_RING:  { ja: '発動閾値 HP10% → HP20% 未満に拡大',                en: 'Activation threshold HP10% → HP20%' },
-    TERRAIN_RING:   { ja: '壁設置動作で敵（味方）を召喚。\n倒した敵のみ召喚可。通常ダンジョン：MaxHP10%消費。\n狭間の階層：HP消費なし。\n特殊な地形を通過すると通常の地面にもどせる。', en: 'Block action summons an ally (killed types only).\nNormal dungeon: costs 10% MaxHP.\nLiminal Space: no HP cost.\nWalk over special terrain to restore it to normal ground.' },
+    TERRAIN_RING:   { ja: '壁設置動作で敵（味方）を召喚。\n倒した敵のみ召喚可。通常ダンジョン：MaxHP10%消費。\n狭間の階層：HP消費なし。\n特殊地形を移動後、通常の地面へ戻す。', en: 'Block action summons an ally (killed types only).\nNormal dungeon: costs 10% MaxHP.\nLiminal Space: no HP cost.\nWalk over special terrain to restore it to normal ground.' },
     PUSH_RING:      { ja: 'たくさんの壁を押すことができる。', en: 'Can push a large section of wall.' },
     WEB_RING:       { ja: '炎上する赤い蜘蛛の巣を放つ。', en: 'Launch a red burning spider web.' },
 };
