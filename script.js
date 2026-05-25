@@ -223,7 +223,7 @@ const RINGS = [
   { id: 'STAR_RING',       name: 'Star Ring',       nameJa: '星の指輪',     desc: 'Place blocks that shoot stars when attacked',               descJa: '星を発射する壁を設置',                  cost: 1000, symbol: '◎', color: '#fde047' },
   { id: 'WEB_RING',      name: 'Spider Web Ring', nameJa: '蜘蛛の巣の指輪', desc: 'Consume HP to launch a spider web.\nCannot build walls.\nIncompatible with some rings.', descJa: '体力を消費し、蜘蛛の巣を放つ。壁作りはできなくなる。\n一部の指輪との併用は不可。', cost: 1500, symbol: '◎', color: '#c084fc' },
   { id: 'TERRAIN_RING',  name: 'Terrain Ring',    nameJa: '地形の指輪',   desc: 'Cannot place or destroy walls, but can change floor terrain.\nIncompatible with some rings.', descJa: '壁の作成・破壊はできないが、地形を変更できる。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#84cc16' },
-  { id: 'SUMMON_RING',  name: 'Summon Ring',     nameJa: '召喚の指輪',   desc: 'Block action summons an ally (defeated enemy types only).\nNormal dungeon: costs 10% MaxHP.\nLiminal Space: no HP cost.\nIncompatible with some rings.', descJa: '壁設置動作で討伐済みの敵（味方）を召喚。\n通常ダンジョン：MaxHP10%消費。\n狭間の階層：HP消費なし。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#a78bfa' },
+  { id: 'SUMMON_RING',  name: 'Summon Ring',     nameJa: '召喚の指輪',   desc: 'Block action summons an ally (defeated enemy types only).\nNormal dungeon: costs 10% MaxHP.\nLiminal Space: no HP cost.\nIncompatible with some rings.', descJa: '体力を消費し、討伐済みの敵を召喚。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#a78bfa' },
   { id: 'PUSH_RING',    name: 'Push Ring',       nameJa: '壁押しの指輪', desc: 'Can push a small section of wall.', descJa: 'すこしの壁を押すことができる。', cost: 1000, symbol: '◎', color: '#78716c' },
 ];
 
