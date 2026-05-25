@@ -1417,15 +1417,20 @@ function stopBGM() {
 }
 
 function startLiminalBGM() {
-    if (!bgmEnabled) return;
-    stopBGM();
-    bgmActive = true;
-    bgmAudio.src = 'A.mp3';
-    bgmAudio.volume = getBGMVolume();
-    bgmAudio.currentTime = 0;
-    bgmAudio.play().catch(() => { bgmActive = false; });
+    if (!bgmActive) return; // すでに無音なら何もしない
+    // 現在のBGMを3秒でフェードアウトして無音へ
     if (bgmFadeTimer) { clearTimeout(bgmFadeTimer); bgmFadeTimer = null; }
-    bgmFadeTimer = setTimeout(startBGMFadeOut, BGM_PLAY_DURATION);
+    if (bgmFadeInterval) { clearInterval(bgmFadeInterval); bgmFadeInterval = null; }
+    const _liStartVol = bgmAudio.volume;
+    let _liStep = 0;
+    bgmFadeInterval = setInterval(() => {
+        _liStep++;
+        bgmAudio.volume = Math.max(0, _liStartVol * (1 - _liStep / 30));
+        if (_liStep >= 30) {
+            clearInterval(bgmFadeInterval); bgmFadeInterval = null;
+            bgmAudio.pause(); bgmActive = false;
+        }
+    }, 100); // 100ms × 30ステップ = 3秒
 }
 
 // ===== NOVEL_CORRIDOR: 地響きシステム =====
@@ -1481,7 +1486,7 @@ function playBossBGM(src) {
     bgmAudio.currentTime = 0;
     bgmActive = true;
     bgmAudio.src = src;
-    bgmAudio.volume = getBGMVolume();
+    bgmAudio.volume = Math.min(1, getBGMVolume() * 1.3);
     bgmAudio.play().catch(() => { bgmActive = false; });
 }
 
@@ -21747,6 +21752,26 @@ function initMap() {
         }
     }
 
+    // === 深層250F+: 大文字英字の通常敵を小文字LATIN敵に段階的に入れ替え ===
+    // 250F=10%, 500F=50% で線形増加（それ以降は50%上限で維持）
+    if (floorLevel >= 250) {
+        const _latDeepPool = LATIN_ENEMIES.filter(g => g.type !== 'LATIN_P');
+        const _latReplaceRate = Math.min(0.10 + (floorLevel - 250) * 0.0016, 0.50);
+        // 置き換え対象: 大文字英字で表示される一般的な戦闘敵
+        const _replaceableTypes = new Set(['NORMAL', 'ORC', 'BLAZE', 'FROST', 'LAYER', 'BOAR', 'HEALER', 'BREAKER']);
+        const _replaceable = enemies.filter(e => _replaceableTypes.has(e.type) && !e._dead && e.hp > 0);
+        for (const _re of _replaceable) {
+            if (Math.random() >= _latReplaceRate) continue;
+            const _ldDef = _latDeepPool[Math.floor(Math.random() * _latDeepPool.length)];
+            _re.type = _ldDef.type;
+            _re.hp = 3; _re.maxHp = 3;
+            _re.expValue = 300 + floorLevel;
+            _re.flee = true;
+            delete _re.summonedBy;
+            delete _re.faction;
+        }
+    }
+
     // === コレクター敵（ギリシア+ラテン）: 101F+・未収集のみ・深さスケーリング確率でスポーン ===
     if (floorLevel >= 101) {
         const _cPool = [
@@ -22278,6 +22303,7 @@ function isWallAt(x, y) {
 }
 
 async function startFloorTransition() {
+    const _wasEscapeRoom = isInEscapeRoom; // リミナルスペースからの遷移か記録
     // 旧フロアの風状態を即座にクリア（isWindFloor=true のまま残ると updateUI でタイマーが進む）
     isWindFloor = false;
     windTimer = 0;
@@ -22455,10 +22481,11 @@ async function startFloorTransition() {
     }
 
     // 着地後にBGM処理（100階・99階・エンドクレジットは無音）
-    // 再生中なら次フロアへ引き継ぐ。無音状態でフロア移動したときだけ新しく開始する。
+    // リミナルスペースから来た場合は必ず新しいBGMを開始。それ以外は無音時のみ開始。
     if (floorLevel !== 100 && floorLevel !== 99 && floorLevel !== -1 &&
-        !(isRoomTestMode && forcedLayoutType === 'NOVEL_CORRIDOR') &&
-        !bgmActive) changeBGMTrack();
+        !(isRoomTestMode && forcedLayoutType === 'NOVEL_CORRIDOR')) {
+        if (_wasEscapeRoom || !bgmActive) changeBGMTrack();
+    }
 
     // 階層ごとのストーリー演出
     if (floorLevel === 100) {
@@ -25680,8 +25707,7 @@ function draw(now) {
                     color = '#60a5fa';
                     ctx.shadowBlur = 8;
                 } else if (e._betrayed) {
-                    // 赤色（敵対）: 赤く脈打つ
-                    color = `rgb(255, ${20 + Math.round((Math.sin(now / 200) * 0.5 + 0.5) * 60)}, 20)`;
+                    color = '#f87171';
                     ctx.shadowBlur = 14;
                 } else {
                     // ラスボスD（100F）: HP半分でオレンジ、それ以上は黄白
@@ -25710,7 +25736,7 @@ function draw(now) {
                 } else if (e.isAlly) {
                     _mdColor = '#60a5fa'; ctx.shadowBlur = 8;
                 } else if (e._betrayed) {
-                    _mdColor = `rgb(255,${20 + Math.round((Math.sin(now / 200) * 0.5 + 0.5) * 60)},20)`;
+                    _mdColor = '#f87171';
                     ctx.shadowBlur = 12;
                 } else {
                     _mdColor = '#f87171'; ctx.shadowBlur = 0;
@@ -26100,9 +26126,9 @@ function draw(now) {
                     eChar = e._char || '?';
                     if (e._solarSun) {
                         if (!e._friendly && !e.isAlly) {
-                            // 太陽敵対状態: 赤色
-                            eColor = '#ef4444';
-                            ctx.shadowColor = '#ef4444';
+                            // 太陽敵対状態: 赤色（標準敵色 #f87171）
+                            eColor = '#f87171';
+                            ctx.shadowColor = '#f87171';
                             ctx.shadowBlur = 14;
                         } else {
                             // 友好状態: 黄金色にパルスするグロー
@@ -26342,18 +26368,16 @@ function draw(now) {
             }
         }
 
-        // 4. ウィスプ（フォント依存を避けてarcで描画）
+        // 4. ウィスプ（※ 記号で描画）
         wisps.forEach(w => {
             ctx.save();
             const _wx = w.x * TILE_SIZE + TILE_SIZE / 2;
             const _wy = w.y * TILE_SIZE + TILE_SIZE / 2;
-            // 外側：やや大きめのグロー球
-            ctx.shadowColor = '#ededed'; ctx.shadowBlur = 14;
+            ctx.font = `bold 14px 'Courier New', Courier, monospace`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.shadowColor = '#ededed'; ctx.shadowBlur = 12;
             ctx.fillStyle = '#e2e8f0';
-            ctx.beginPath(); ctx.arc(_wx, _wy, TILE_SIZE * 0.28, 0, Math.PI * 2); ctx.fill();
-            // 中心：明るい白点
-            ctx.shadowBlur = 22; ctx.fillStyle = '#ffffff';
-            ctx.beginPath(); ctx.arc(_wx, _wy, TILE_SIZE * 0.12, 0, Math.PI * 2); ctx.fill();
+            ctx.fillText('※', _wx, _wy);
             ctx.restore();
         });
 
@@ -30117,6 +30141,24 @@ async function handleAction(dx, dy) {
                 screenGrid.enemies[newScreenY][newScreenX] = enemies;
                 screenGrid.wisps[newScreenY][newScreenX] = wisps;
 
+                // 深層250F+: 大文字英字通常敵を小文字LATIN敵に段階的置換（画面遷移時）
+                if (floorLevel >= 250) {
+                    const _scrLatPool = LATIN_ENEMIES.filter(g => g.type !== 'LATIN_P');
+                    const _scrReplaceRate = Math.min(0.10 + (floorLevel - 250) * 0.0016, 0.50);
+                    const _scrReplaceTypes = new Set(['NORMAL', 'ORC', 'BLAZE', 'FROST', 'LAYER', 'BOAR', 'HEALER', 'BREAKER']);
+                    for (const _sre of enemies) {
+                        if (!_scrReplaceTypes.has(_sre.type) || _sre._dead || _sre.hp <= 0) continue;
+                        if (Math.random() >= _scrReplaceRate) continue;
+                        const _srDef = _scrLatPool[Math.floor(Math.random() * _scrLatPool.length)];
+                        _sre.type = _srDef.type;
+                        _sre.hp = 3; _sre.maxHp = 3;
+                        _sre.expValue = 300 + floorLevel;
+                        _sre.flee = true;
+                        delete _sre.summonedBy;
+                        delete _sre.faction;
+                    }
+                }
+
                 // 仲間をフィルター後にプレイヤー近くの空きマスへ配置
                 const allyDirs = [{x:0,y:1},{x:1,y:0},{x:-1,y:0},{x:0,y:-1},{x:1,y:1},{x:-1,y:1},{x:1,y:-1},{x:-1,y:-1}];
                 for (const ally of travelingAllies) {
@@ -31239,6 +31281,7 @@ async function handleAction(dx, dy) {
                     return;
                 } else {
                     addLog("The door is locked.");
+                    SOUNDS.WALL_BUMP();
                     player.offsetX = dx * 5; player.offsetY = dy * 5;
                     await new Promise(r => setTimeout(r, 50));
                     player.offsetX = 0; player.offsetY = 0;
@@ -35566,7 +35609,7 @@ async function enemyTurn() {
                     SOUNDS.DEFEAT();
                     await new Promise(r => setTimeout(r, 600));
                     _wDying.forEach(d => { d.dyingAnimation = false; });
-                    for (const d of _wDying) { await handleEnemyDeath(d, false, false, true); }
+                    await Promise.all(_wDying.map(d => handleEnemyDeath(d, false, false, true)));
                 }
             }
             continue;
@@ -35680,9 +35723,9 @@ async function enemyTurn() {
             continue;
         }
 
-        // SUMMONERが召喚した非NORMAL敵はその場に静止（NORMAL/赤のみ動く）
+        // SUMMONERが召喚したKEY_RUNNER以外の敵は通常AIで動く
         // ただしステージ88のボスSUMMONERが召喚した敵、および召喚KEY_RUNNERは専用AIへ進む
-        if (e.summonedBy && e.type !== 'NORMAL' && e.type !== 'KEY_RUNNER' && floorLevel !== 88) continue;
+        // (ORC/BLAZE/FROSTも含めて動かす)
 
         // ===== 太陽系軌道: _solarOrbit フラグ付き敵を正方形軌道で移動 =====
         if (e._solarOrbit) {
@@ -35894,10 +35937,10 @@ async function enemyTurn() {
                             }
                         }
                     }
-                    // fall through to chase below
+                    continue; // 土星は静止（召喚した敵に戦わせる）
                 }
 
-                // その他 / S (土星) の移動: プレイヤー追跡
+                // その他の惑星の移動: プレイヤー追跡
                 const _chDirs = [..._pDirs4].sort((a, b) => {
                     const da = Math.abs(e.x+a.x-player.x)+Math.abs(e.y+a.y-player.y);
                     const db = Math.abs(e.x+b.x-player.x)+Math.abs(e.y+b.y-player.y);
@@ -38150,6 +38193,8 @@ async function enemyTurn() {
                             if (map[_fPy2][_fPx2] === SYMBOLS.FLOOR) map[_fPy2][_fPx2] = SYMBOLS.LAVA;
                         }
                     }
+                    // fが現在立っているマス目も溶岩にする
+                    if (map[e.y][e.x] === SYMBOLS.FLOOR) map[e.y][e.x] = SYMBOLS.LAVA;
                     continue;
                 }
 
@@ -38259,7 +38304,29 @@ async function enemyTurn() {
 
                 // LATIN_K: MADMANのように画面端まで逃げると隣スクリーンへ転送
                 if (e.type === 'LATIN_K') {
-                    const _kChosen = pickFleeDir(e);
+                    // 同室脱出: プレイヤーと同じ部屋内なら廊下出口方向をBFSで探して優先
+                    let _kExitDir = null;
+                    if (_floorRooms.length) {
+                        const _kPRoom = _floorRooms.find(r => player.x >= r.x && player.x < r.x + r.w && player.y >= r.y && player.y < r.y + r.h);
+                        if (_kPRoom && e.x >= _kPRoom.x && e.x < _kPRoom.x + _kPRoom.w && e.y >= _kPRoom.y && e.y < _kPRoom.y + _kPRoom.h) {
+                            const _kVis = new Set([`${e.x},${e.y}`]);
+                            const _kBQ = [[e.x, e.y, null]];
+                            for (let qi = 0; qi < _kBQ.length && qi < 300 && !_kExitDir; qi++) {
+                                const [cx, cy, fd] = _kBQ[qi];
+                                for (const d of [{x:0,y:-1},{x:1,y:0},{x:0,y:1},{x:-1,y:0}]) {
+                                    const nx = cx+d.x, ny = cy+d.y;
+                                    const kk = `${nx},${ny}`;
+                                    if (_kVis.has(kk)) continue; _kVis.add(kk);
+                                    if (!canEnemyMove(nx, ny, e) || isRealHole(nx, ny)) continue;
+                                    if (enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) continue;
+                                    const nfd = fd || d;
+                                    if (!(nx >= _kPRoom.x && nx < _kPRoom.x + _kPRoom.w && ny >= _kPRoom.y && ny < _kPRoom.y + _kPRoom.h)) { _kExitDir = nfd; break; }
+                                    _kBQ.push([nx, ny, nfd]);
+                                }
+                            }
+                        }
+                    }
+                    const _kChosen = _kExitDir || pickFleeDir(e);
                     if (_kChosen) {
                         if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
                         e.x += _kChosen.x; e.y += _kChosen.y;
@@ -38584,7 +38651,36 @@ async function enemyTurn() {
                 // LATIN_Y: 斜め移動優先で逃げ + 画面またぎ（斜めが無理なら縦横にフォールバック）
                 if (e.type === 'LATIN_Y') {
                     if (!_collectorStepPlayedThisTurn) { SOUNDS.COLLECTOR_STEP(); _collectorStepPlayedThisTurn = true; }
+                    // 同室脱出: プレイヤーと同じ部屋内なら廊下出口方向をBFSで探して1歩目に優先
+                    let _yExitDir = null;
+                    if (_floorRooms.length) {
+                        const _yPRoom = _floorRooms.find(r => player.x >= r.x && player.x < r.x + r.w && player.y >= r.y && player.y < r.y + r.h);
+                        if (_yPRoom && e.x >= _yPRoom.x && e.x < _yPRoom.x + _yPRoom.w && e.y >= _yPRoom.y && e.y < _yPRoom.y + _yPRoom.h) {
+                            const _yVis = new Set([`${e.x},${e.y}`]);
+                            const _yBQ = [[e.x, e.y, null]];
+                            for (let qi = 0; qi < _yBQ.length && qi < 300 && !_yExitDir; qi++) {
+                                const [cx, cy, fd] = _yBQ[qi];
+                                for (const d of [{x:0,y:-1},{x:1,y:0},{x:0,y:1},{x:-1,y:0}]) {
+                                    const nx = cx+d.x, ny = cy+d.y;
+                                    const kk = `${nx},${ny}`;
+                                    if (_yVis.has(kk)) continue; _yVis.add(kk);
+                                    if (!canEnemyMove(nx, ny, e) || isRealHole(nx, ny)) continue;
+                                    if (enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) continue;
+                                    const nfd = fd || d;
+                                    if (!(nx >= _yPRoom.x && nx < _yPRoom.x + _yPRoom.w && ny >= _yPRoom.y && ny < _yPRoom.y + _yPRoom.h)) { _yExitDir = nfd; break; }
+                                    _yBQ.push([nx, ny, nfd]);
+                                }
+                            }
+                        }
+                    }
                     for (let _yStep = 0; _yStep < 2; _yStep++) {
+                        // 1歩目: 同室脱出方向があればそちらへ優先移動
+                        if (_yStep === 0 && _yExitDir) {
+                            const nx = e.x + _yExitDir.x, ny = e.y + _yExitDir.y;
+                            if (canEnemyMove(nx, ny, e) && !isRealHole(nx, ny) && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
+                                e.x = nx; e.y = ny; continue;
+                            }
+                        }
                         // 斜め4方向＋縦横4方向を合わせてプレイヤーから遠い順にソート
                         const _yAllDirs = [
                             {x:1,y:-1},{x:-1,y:-1},{x:1,y:1},{x:-1,y:1},
@@ -40128,16 +40224,25 @@ async function enemyTurn() {
         // ===== AI: MINI_DRAGON =====
         // 白色(_summonedAlly): 静止・何もしない
         if (e.type === 'MINI_DRAGON' && (e._summonedAlly || e._summonPending)) continue;
-        // 青色(isAlly): 最も近い敵を追跡して攻撃
+        // 青色(isAlly): 最も近い敵をジャンプ→吹き飛ばし攻撃
         if (e.type === 'MINI_DRAGON' && e.isAlly) {
-            const _mdAllyTarget = enemies.find(oe => oe !== e && oe.hp > 0 && !oe._dead && !oe.isAlly && !oe._summonedAlly);
+            let _mdAllyTarget = null, _mdAllyDist = Infinity;
+            for (const oe of enemies) {
+                if (oe === e || oe.hp <= 0 || oe._dead || oe.isAlly || oe._summonedAlly) continue;
+                const _d = Math.abs(oe.x - e.x) + Math.abs(oe.y - e.y);
+                if (_d < _mdAllyDist) { _mdAllyDist = _d; _mdAllyTarget = oe; }
+            }
             if (_mdAllyTarget) {
-                const _mdAdjX = Math.abs(_mdAllyTarget.x - e.x), _mdAdjY = Math.abs(_mdAllyTarget.y - e.y);
-                if (_mdAdjX + _mdAdjY === 1) {
-                    const _atkDmg = Math.floor((floorLevel / 2 + 18) * 3);
-                    _mdAllyTarget.hp -= _atkDmg; _mdAllyTarget.flashUntil = performance.now() + 100;
-                    spawnDamageText(_mdAllyTarget.x, _mdAllyTarget.y, _atkDmg, '#60a5fa');
-                    if (_mdAllyTarget.hp <= 0) handleEnemyDeath(_mdAllyTarget);
+                const _mdDx = _mdAllyTarget.x - e.x, _mdDy = _mdAllyTarget.y - e.y;
+                const _mdAdj = (Math.abs(_mdDx) === 1 && _mdDy === 0) || (_mdDx === 0 && Math.abs(_mdDy) === 1);
+                if (_mdAdj) {
+                    const _jh = -TILE_SIZE * 1.5, _jFrames = 10;
+                    for (let _ji = 0; _ji < _jFrames; _ji++) {
+                        e.offsetY = _jh * Math.sin((_ji / _jFrames) * Math.PI); draw(); await _w(30);
+                    }
+                    e.offsetY = 0;
+                    SOUNDS.LANDING_THUD();
+                    await knockbackEnemy(_mdAllyTarget, _mdDx, _mdDy, Math.floor((floorLevel / 2 + 18) * 5), true);
                 } else {
                     const _step = enemyGroundBFS(e.x, e.y, _mdAllyTarget.x, _mdAllyTarget.y);
                     if (_step && canEnemyMove(e.x + _step.dx, e.y + _step.dy, e)) { e.x += _step.dx; e.y += _step.dy; }
@@ -40145,13 +40250,26 @@ async function enemyTurn() {
             }
             continue;
         }
-        // 赤色(_betrayed)または通常: プレイヤーを追跡してジャンプ攻撃
+        // 赤色(_betrayed)または通常: プレイヤー＆isAlly敵を追跡してジャンプ攻撃
         if (e.type === 'MINI_DRAGON') {
             if (!e._miniMoveCd) e._miniMoveCd = 0;
             const _mdDx = player.x - e.x;
             const _mdDy = player.y - e.y;
             const _mdAdjacent = (Math.abs(_mdDx) === 1 && _mdDy === 0) || (_mdDx === 0 && Math.abs(_mdDy) === 1);
-            if (_mdAdjacent && !_factionIgnorePlayer) {
+            // 隣接している青色D（isAlly）を探す
+            const _mdAllyAdj = enemies.find(oe => oe !== e && oe.hp > 0 && !oe._dead && oe.isAlly &&
+                ((Math.abs(oe.x - e.x) === 1 && oe.y === e.y) || (oe.x === e.x && Math.abs(oe.y - e.y) === 1)));
+            if (_mdAllyAdj) {
+                // 青色Dへジャンプ→吹き飛ばし攻撃
+                const _aeDx = _mdAllyAdj.x - e.x, _aeDy = _mdAllyAdj.y - e.y;
+                const _jh = -TILE_SIZE * 1.5, _jFrames = 10;
+                for (let _ji = 0; _ji < _jFrames; _ji++) {
+                    e.offsetY = _jh * Math.sin((_ji / _jFrames) * Math.PI); draw(); await _w(30);
+                }
+                e.offsetY = 0;
+                SOUNDS.LANDING_THUD();
+                await knockbackEnemy(_mdAllyAdj, _aeDx, _aeDy, Math.floor((floorLevel / 2 + 18) * 5), true);
+            } else if (_mdAdjacent && !_factionIgnorePlayer) {
                 const _jh = -TILE_SIZE * 1.5, _jFrames = 10;
                 for (let _ji = 0; _ji < _jFrames; _ji++) {
                     e.offsetY = _jh * Math.sin((_ji / _jFrames) * Math.PI); draw(); await _w(30);
@@ -40364,6 +40482,28 @@ async function enemyTurn() {
         }
         if (e._summonedAlly || e._summonPending || e._colorCycling) {
             // 白い仲間・点滅中召喚・色切り替え中は静止
+            continue;
+        }
+        // NESTER(青/isAlly): 最も近い敵から逃げ回る
+        if (e.type === 'NESTER' && e.isAlly) {
+            const _nHostiles = enemies.filter(t => t !== e && !t._dead && t.hp > 0 && !t.isAlly && !t._summonedAlly);
+            if (_nHostiles.length > 0) {
+                const _nThreat = _nHostiles.reduce((a, b) =>
+                    (Math.abs(a.x-e.x)+Math.abs(a.y-e.y)) < (Math.abs(b.x-e.x)+Math.abs(b.y-e.y)) ? a : b);
+                const _nFDirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+                const _nFValid = _nFDirs.filter(d => {
+                    const nx = e.x+d.x, ny = e.y+d.y;
+                    return canEnemyMove(nx, ny, e) && !isRealHole(nx, ny) &&
+                           !enemies.some(t => t!==e && t.x===nx && t.y===ny && t.hp>0 && !t._dead);
+                });
+                if (_nFValid.length > 0) {
+                    const _nFScored = _nFValid.map(d => ({
+                        d, score: Math.abs((e.x+d.x)-_nThreat.x) + Math.abs((e.y+d.y)-_nThreat.y) + Math.random()*2
+                    }));
+                    _nFScored.sort((a, b) => b.score - a.score);
+                    e.x += _nFScored[0].d.x; e.y += _nFScored[0].d.y;
+                }
+            }
             continue;
         }
         if (e.isAlly && e.type !== 'AMBULATOR') {
@@ -41259,6 +41399,24 @@ async function enemyTurn() {
                         .sort((a, b) => b.score - a.score);
                     if (_nWalkDirs.length > 0) { e.x += _nWalkDirs[0].dx; e.y += _nWalkDirs[0].dy; }
                 }
+            }
+            continue;
+        }
+
+        // NESTER(赤/_betrayed): プレイヤーから逃げ回る
+        if (e.type === 'NESTER' && e._betrayed) {
+            const _nBDirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+            const _nBValid = _nBDirs.filter(d => {
+                const nx = e.x+d.x, ny = e.y+d.y;
+                return canEnemyMove(nx, ny, e) && !isRealHole(nx, ny) &&
+                       !enemies.some(t => t!==e && t.x===nx && t.y===ny && t.hp>0 && !t._dead);
+            });
+            if (_nBValid.length > 0) {
+                const _nBScored = _nBValid.map(d => ({
+                    d, score: Math.abs((e.x+d.x)-player.x) + Math.abs((e.y+d.y)-player.y) + Math.random()*2
+                }));
+                _nBScored.sort((a, b) => b.score - a.score);
+                e.x += _nBScored[0].d.x; e.y += _nBScored[0].d.y;
             }
             continue;
         }
