@@ -3314,7 +3314,7 @@ async function enterEscapeRoom() {
     isProcessing = false;
 }
 
-function saveGame() {
+function saveGame(notify = false) {
     // オートセーブ：フロア開始時のプレイヤー状態のみ保存。
     // マップ・敵はコンティニュー時に再生成するので保存不要。
     const data = {
@@ -3380,7 +3380,7 @@ function saveGame() {
         terrainRingMerchantUnlocked: terrainRingMerchantUnlocked,
     };
     safeStorageSetJSON('minimal_rogue_save', data);
-    // オートセーブは無音・無表示で行う
+    if (notify) addLog("[ Saved ]");
 }
 
 function saveEscapeRoomData() {
@@ -22451,7 +22451,7 @@ async function startFloorTransition() {
     player.hp = getPlayerMaxHp();
     updateUI();
     // フロア開始時点の状態をオートセーブ
-    saveGame();
+    saveGame(true);
     isPlayerVisible = false; // 着地アニメーションまで非表示を維持
 
     if (floorLevel > 1) {
