@@ -45806,24 +45806,29 @@ updateUI();
 requestAnimationFrame(gameLoop);
 addLog("Game Ready.");
 
-// タッチコントロールパネルの予約高さ（スケーリング計算に使用）
-let _tcReservedH = 0;
-
 // ウィンドウサイズに合わせてゲーム全体をスケーリング
 (function initScale() {
     const wrapper = document.querySelector('.game-wrapper');
     if (!wrapper) return;
     const baseW = COLS * TILE_SIZE + 42;
     const baseH = ROWS * TILE_SIZE + 217;
-    const MARGIN_V = 50;
-    const MARGIN_H = 20;
+    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     function applyScale() {
+        const MARGIN_V = isMobile ? 8 : 50;
+        const MARGIN_H = isMobile ? 4 : 20;
+        const panel = document.getElementById('tc-wrap');
+        const isLandscape = window.innerWidth > window.innerHeight;
+        // 横向き: パネルが右に固定 → 幅を予約。縦向き: 下に固定 → 高さを予約
+        const reservedH = (panel && !isLandscape) ? panel.offsetHeight : 0;
+        const reservedW = (panel && isLandscape)  ? panel.offsetWidth  : 0;
         const scale = Math.min(
-            (window.innerHeight - _tcReservedH - MARGIN_V * 2) / baseH,
-            (window.innerWidth  - MARGIN_H * 2) / baseW
+            (window.innerHeight - reservedH - MARGIN_V * 2) / baseH,
+            (window.innerWidth  - reservedW - MARGIN_H * 2) / baseW
         );
         wrapper.style.transformOrigin = 'center center';
         wrapper.style.transform = `scale(${Math.max(0.1, scale)})`;
+        // 横向き: ゲームをパネルの左側に収める
+        wrapper.style.marginRight = (isLandscape && reservedW) ? `${reservedW}px` : '';
     }
     applyScale();
     window.addEventListener('resize', applyScale);
@@ -45837,12 +45842,27 @@ let _tcReservedH = 0;
 
     // CSS
     document.head.insertAdjacentHTML('beforeend', `<style id="tc-style">
+/* ── 縦向き: 下部バー ── */
 #tc-wrap {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
-    display: flex; justify-content: space-around; align-items: center;
+    display: flex; flex-direction: row;
+    justify-content: space-around; align-items: center;
     padding: 8px 16px env(safe-area-inset-bottom, 8px);
     background: #0c0c0c; border-top: 1px solid #1e1e1e;
     user-select: none; -webkit-user-select: none;
+}
+/* ── 横向き（スマートフォン高さ ≤ 500px）: 右サイドパネル ── */
+@media (orientation: landscape) and (max-height: 500px) {
+    #tc-wrap {
+        top: 0; right: 0; bottom: 0; left: auto;
+        width: 172px; height: auto;
+        flex-direction: column;
+        justify-content: space-around; align-items: center;
+        border-top: none; border-left: 1px solid #1e1e1e;
+        padding: 8px 4px env(safe-area-inset-right, 4px);
+    }
+    #tc-actions { flex-direction: row; gap: 4px; }
+    .tc-act { width: 52px; height: 40px; font-size: 11px; }
 }
 #tc-dpad {
     display: grid;
@@ -45880,10 +45900,14 @@ let _tcReservedH = 0;
 .tc-act:active { background: #2e2e2e; color: #fff; }
 </style>`);
 
-    // DOM
+    // DOM（左から: MENU/OK → Dパッド → BLOCK）
     const _tcWrap = document.createElement('div');
     _tcWrap.id = 'tc-wrap';
     _tcWrap.innerHTML = `
+        <div id="tc-actions">
+            <button class="tc-act" id="tc-menu">MENU</button>
+            <button class="tc-act" id="tc-ok">OK</button>
+        </div>
         <div id="tc-dpad">
             <div></div>
             <button class="tc-btn" id="tc-up">↑</button>
@@ -45896,18 +45920,14 @@ let _tcReservedH = 0;
             <div></div>
         </div>
         <button id="tc-block-btn"><span>⬛</span><span>BLOCK</span></button>
-        <div id="tc-actions">
-            <button class="tc-act" id="tc-menu">MENU</button>
-            <button class="tc-act" id="tc-ok">OK</button>
-        </div>
     `;
     document.body.appendChild(_tcWrap);
 
-    // タッチコントロールパネルの高さをスケーリングに反映
-    requestAnimationFrame(() => {
-        _tcReservedH = _tcWrap.offsetHeight;
-        window.dispatchEvent(new Event('resize'));
-    });
+    // レイアウト確定後にスケーリングを更新（縦/横両対応）
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    window.addEventListener('orientationchange', () =>
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 150)
+    );
 
     // ユーティリティ
     function _tcSimKey(key) {
