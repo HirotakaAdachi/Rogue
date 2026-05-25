@@ -46031,9 +46031,20 @@ addLog("Game Ready.");
             if (gameState === 'MENU') {
                 focusX = 12 + 185 / 2;  // COMMANDウィンドウ中心 x=104
                 focusY = 12 + 145 / 2;  // y=84
-            } else if (gameState === 'STATUS' || gameState === 'RINGS' || gameState === 'INVENTORY') {
+            } else if (gameState === 'INVENTORY') {
+                focusX = 154 + 250 / 2; // ITEM BAGパネル中心 x=279
+                focusY = CANVAS_H / 2;  // y=251
+            } else if (gameState === 'RINGS') {
+                if (ringEquipPhase === 'RING') {
+                    focusX = 12 + 310 / 2;  // SELECT RINGリスト中心 x=167
+                    focusY = 210 + (CANVAS_H - 210 - 12) / 2; // y=350
+                } else {
+                    focusX = 154 + 150;  // SLOTSウィンドウ左寄り x=304
+                    focusY = 12 + 190 / 2; // y=107
+                }
+            } else if (gameState === 'STATUS') {
                 focusX = 154 + (CANVAS_W - 154 - 12) / 2; // 右パネル中心 x=471
-                focusY = CANVAS_H / 2;                     // y=251
+                focusY = CANVAS_H / 2;
             } else {
                 focusX = CANVAS_W / 2;  // SHOP/CONFIRM系：キャンバス中心
                 focusY = CANVAS_H / 2;
