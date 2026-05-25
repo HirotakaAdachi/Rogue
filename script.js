@@ -45017,7 +45017,7 @@ window.addEventListener('keydown', async e => {
             gameState = 'SHOP';
             e.preventDefault();
         }
-        if (e.key.toLowerCase() === 'x' || e.key === 'Escape') {
+        if (e.key.toLowerCase() === 'x' || e.key.toLowerCase() === 'z' || e.key === 'Escape') {
             gameState = 'SHOP'; SOUNDS.SELECT(); e.preventDefault();
         }
         return;
@@ -45042,7 +45042,7 @@ window.addEventListener('keydown', async e => {
             }
             e.preventDefault();
         }
-        if (e.key.toLowerCase() === 'x') {
+        if (e.key.toLowerCase() === 'x' || e.key.toLowerCase() === 'z') {
             gameState = 'INVENTORY'; SOUNDS.SELECT(); e.preventDefault();
         }
         return;
@@ -45358,7 +45358,7 @@ window.addEventListener('keydown', async e => {
         }
     }
 
-    if (e.key.toLowerCase() === 'x' || e.key.toLowerCase() === 'i') {
+    if (e.key.toLowerCase() === 'x' || e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'i') {
         if (gameState === 'PLAYING' && !isProcessing) { gameState = 'MENU'; menuSelection = 0; SOUNDS.SELECT(); }
         else if (gameState === 'MENU') { gameState = 'PLAYING'; SOUNDS.SELECT(); }
         else if (gameState === 'STATUS' || gameState === 'INVENTORY') { gameState = 'MENU'; SOUNDS.SELECT(); }
