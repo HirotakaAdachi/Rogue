@@ -45901,7 +45901,7 @@ addLog("Game Ready.");
 #tc-block-btn {
     width: 120px; height: 120px;
     background: rgba(26,26,26,0.7); border: 2px solid #2e2e2e; color: #fff;
-    font-size: 86px; font-family: 'Courier New', monospace; line-height: 1;
+    font-size: 80px; font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif; line-height: 1;
     border-radius: 50%; display: flex;
     align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
@@ -45962,8 +45962,10 @@ addLog("Game Ready.");
     document.body.appendChild(_mHud);
 
     // ── ズームモード ──
-    let _tcZoomMode = false;
-    let _zoomModeActive = false; // 実際に全画面になっているか
+    let _tcZoomMode = false;      // ズームON/OFF
+    let _zoomFreePan = false;     // 自由パンモード
+    let _manualTx = 0, _manualTy = 0; // 自由パン時のカメラ位置
+    let _zoomModeActive = false;  // 実際に全画面になっているか
     const _ZOOM_SCALE = 1.5;
 
     function _applyZoom() {
@@ -46007,15 +46009,24 @@ addLog("Game Ready.");
             }
         }
 
-        // 画面サイズ基準でカメラ計算
+        // カメラ計算
         const vpW = window.innerWidth;
         const vpH = window.innerHeight;
-        const px = (player.x + 0.5) * TILE_SIZE;
-        const py = (player.y + 0.5) * TILE_SIZE;
-        let tx = px - vpW / (_ZOOM_SCALE * 2);
-        let ty = py - vpH / (_ZOOM_SCALE * 2);
-        tx = Math.max(0, Math.min(tx, Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
-        ty = Math.max(0, Math.min(ty, Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
+        let tx, ty;
+        if (_zoomFreePan) {
+            // 自由パンモード：_manualTx/tyをそのまま使用（マップ外も表示可）
+            const maxOverflow = 200 / _ZOOM_SCALE; // 端から200px以上は出ない
+            tx = Math.max(-maxOverflow, Math.min(_manualTx, CANVAS_W - vpW / _ZOOM_SCALE + maxOverflow));
+            ty = Math.max(-maxOverflow, Math.min(_manualTy, CANVAS_H - vpH / _ZOOM_SCALE + maxOverflow));
+        } else {
+            // プレイヤー追従モード
+            const px = (player.x + 0.5) * TILE_SIZE;
+            const py = (player.y + 0.5) * TILE_SIZE;
+            tx = px - vpW / (_ZOOM_SCALE * 2);
+            ty = py - vpH / (_ZOOM_SCALE * 2);
+            tx = Math.max(0, Math.min(tx, Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
+            ty = Math.max(0, Math.min(ty, Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
+        }
         _zoomCanvas.style.transformOrigin = '0 0';
         _zoomCanvas.style.transform = `scale(${_ZOOM_SCALE}) translate(${-tx}px, ${-ty}px)`;
     }
@@ -46023,18 +46034,53 @@ addLog("Game Ready.");
     // ズームrAFループ（毎フレームcanvas transformを更新）
     (function _zoomLoop() { _applyZoom(); requestAnimationFrame(_zoomLoop); })();
 
-    // キャンバスタップでズーム切り替え（12px以内の移動 = タップ）
+    // キャンバスタッチ：タップでズーム切替、スライドで自由パン
     let _zoomTapX = 0, _zoomTapY = 0;
+    let _zoomLastX = 0, _zoomLastY = 0;
+    let _zoomIsPanning = false;
+
     _zoomVP.addEventListener('touchstart', e => {
         if (e.touches.length !== 1) return;
-        _zoomTapX = e.touches[0].clientX;
-        _zoomTapY = e.touches[0].clientY;
+        _zoomTapX  = e.touches[0].clientX;
+        _zoomTapY  = e.touches[0].clientY;
+        _zoomLastX = _zoomTapX;
+        _zoomLastY = _zoomTapY;
+        _zoomIsPanning = false;
     }, { passive: true });
+
+    _zoomVP.addEventListener('touchmove', e => {
+        if (!_tcZoomMode || e.touches.length !== 1) return;
+        e.preventDefault();
+        const cx = e.touches[0].clientX;
+        const cy = e.touches[0].clientY;
+        const totalDx = cx - _zoomTapX;
+        const totalDy = cy - _zoomTapY;
+        if (totalDx * totalDx + totalDy * totalDy > 100) {
+            if (!_zoomFreePan) {
+                // 自由パン開始：現在のプレイヤー中心位置をカメラ初期値に
+                const vpW = window.innerWidth, vpH = window.innerHeight;
+                const px = (player.x + 0.5) * TILE_SIZE;
+                const py = (player.y + 0.5) * TILE_SIZE;
+                _manualTx = px - vpW / (_ZOOM_SCALE * 2);
+                _manualTy = py - vpH / (_ZOOM_SCALE * 2);
+                _zoomFreePan = true;
+            }
+            _zoomIsPanning = true;
+            _manualTx -= (cx - _zoomLastX) / _ZOOM_SCALE;
+            _manualTy -= (cy - _zoomLastY) / _ZOOM_SCALE;
+        }
+        _zoomLastX = cx;
+        _zoomLastY = cy;
+    }, { passive: false });
+
     _zoomVP.addEventListener('touchend', e => {
         if (e.changedTouches.length !== 1) return;
-        const dx = e.changedTouches[0].clientX - _zoomTapX;
-        const dy = e.changedTouches[0].clientY - _zoomTapY;
-        if (dx * dx + dy * dy < 144) _tcZoomMode = !_tcZoomMode;
+        if (!_zoomIsPanning) {
+            // タップ：ズームOFF（自由パンも解除）
+            _tcZoomMode = !_tcZoomMode;
+            if (!_tcZoomMode) _zoomFreePan = false;
+        }
+        _zoomIsPanning = false;
     }, { passive: true });
 
     // レイアウト確定後にスケーリングを更新（縦/横両対応）
