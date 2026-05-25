@@ -45832,6 +45832,7 @@ addLog("Game Ready.");
     if (!('ontouchstart' in window) && !(navigator.maxTouchPoints > 0)) return;
 
     let _tcBlockActive = false;
+    let _blockFlickStartX = 0, _blockFlickStartY = 0;
 
     // CSS
     document.head.insertAdjacentHTML('beforeend', `<style id="tc-style">
@@ -45887,6 +45888,7 @@ addLog("Game Ready.");
     grid-template-columns: repeat(3, 52px);
     grid-template-rows: repeat(3, 52px);
     gap: 3px;
+    padding: 18px; margin: -18px; /* タッチ面積を外側に拡張（見た目は不変） */
 }
 .tc-btn {
     background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
@@ -46064,14 +46066,24 @@ addLog("Game Ready.");
         }
     }
 
-    // Dパッド（長押しで連続入力）
-    const _tcDpad = [
-        ['tc-up',         0, -1],
-        ['tc-down',       0,  1],
-        ['tc-left',      -1,  0],
-        ['tc-right',      1,  0],
-        ['tc-center-btn', 0,  0],
-    ];
+    // Dパッド（コンテナタッチ方式：ボタン外18px以内も反応）
+    const _dpadEl = document.getElementById('tc-dpad');
+    const _DPAD_VIS = 3 * 52 + 2 * 3; // 162px（視覚上のサイズ）
+    const _DPAD_PAD = 18;              // 拡張幅
+
+    function _dpadCalcDir(clientX, clientY) {
+        const r = _dpadEl.getBoundingClientRect();
+        // getBoundingClientRect はパディングを含む外形を返す
+        // 視覚上のDパッドはパディング分オフセットされた内側にある
+        const x = clientX - r.left - _DPAD_PAD;
+        const y = clientY - r.top  - _DPAD_PAD;
+        const cx = _DPAD_VIS / 2, cy = _DPAD_VIS / 2;
+        const adx = Math.abs(x - cx), ady = Math.abs(y - cy);
+        if (adx < _DPAD_VIS * 0.15 && ady < _DPAD_VIS * 0.15) return [0, 0]; // 中心
+        if (adx > ady) return [x > cx ? 1 : -1, 0];
+        return [0, y > cy ? 1 : -1];
+    }
+
     let _dpadRepeatTimer = null;
     let _dpadRepeatInterval = null;
     function _clearDpadRepeat() {
@@ -46080,28 +46092,33 @@ addLog("Game Ready.");
         _dpadRepeatTimer = null;
         _dpadRepeatInterval = null;
     }
-    for (const [id, dx, dy] of _tcDpad) {
-        const btn = document.getElementById(id);
-        btn.addEventListener('touchstart', e => {
-            e.preventDefault();
-            _clearDpadRepeat();
-            _tcMove(dx, dy);
-            if (dx !== 0 || dy !== 0) {
-                _dpadRepeatTimer = setTimeout(() => {
-                    _dpadRepeatInterval = setInterval(() => _tcMove(dx, dy), 120);
-                }, 400);
-            }
-        }, { passive: false });
-        btn.addEventListener('touchend',    e => { e.preventDefault(); _clearDpadRepeat(); }, { passive: false });
-        btn.addEventListener('touchcancel', e => { e.preventDefault(); _clearDpadRepeat(); }, { passive: false });
-    }
+
+    _dpadEl.addEventListener('touchstart', e => {
+        e.preventDefault();
+        _clearDpadRepeat();
+        const t = e.touches[0];
+        const [dx, dy] = _dpadCalcDir(t.clientX, t.clientY);
+        _tcMove(dx, dy);
+        if (dx !== 0 || dy !== 0) {
+            _dpadRepeatTimer = setTimeout(() => {
+                _dpadRepeatInterval = setInterval(() => {
+                    const tt = null; // repeat same direction
+                    _tcMove(dx, dy);
+                }, 120);
+            }, 400);
+        }
+    }, { passive: false });
+    _dpadEl.addEventListener('touchend',    e => { e.preventDefault(); _clearDpadRepeat(); }, { passive: false });
+    _dpadEl.addEventListener('touchcancel', e => { e.preventDefault(); _clearDpadRepeat(); }, { passive: false });
 
     // BLOCK ボタン（ホールド型）
     // 押している間: isSpacePressed = true（防御+ブロック設置モード、ボタン点灯）
     // 離した時: ブロック未設置なら handleAction(0,0) で防御発動、点灯解除
     _tcBlockBtn.addEventListener('touchstart', e => {
         e.preventDefault();
-        _tcBlockActive = true; // 常にセット（Enter兼用のため）
+        _tcBlockActive = true;
+        _blockFlickStartX = e.touches[0].clientX;
+        _blockFlickStartY = e.touches[0].clientY;
         if (gameState === 'PLAYING' && !isProcessing) {
             isSpacePressed = true;
             spaceUsedForBlock = false;
@@ -46109,16 +46126,32 @@ addLog("Game Ready.");
         }
     }, { passive: false });
 
+    _tcBlockBtn.addEventListener('touchmove', e => {
+        e.preventDefault(); // フリック中スクロール防止
+    }, { passive: false });
+
     _tcBlockBtn.addEventListener('touchend', e => {
         e.preventDefault();
         if (!_tcBlockActive) return;
+        const touch = e.changedTouches[0];
+        const fdx = touch.clientX - _blockFlickStartX;
+        const fdy = touch.clientY - _blockFlickStartY;
+        const flickDist = Math.sqrt(fdx * fdx + fdy * fdy);
         const _wasUsed = spaceUsedForBlock;
-        _tcResetBlock();
-        if (!_wasUsed) {
-            if (gameState === 'PLAYING' && !isProcessing) {
-                handleAction(0, 0); // 防御発動（スペース単押しと同じ）
+
+        if (flickDist > 30 && gameState === 'PLAYING' && !isProcessing) {
+            // フリック：方向移動／ブロック設置（isSpacePressed=trueのまま呼ぶ）
+            const adx = Math.abs(fdx), ady = Math.abs(fdy);
+            const mx = adx > ady ? (fdx > 0 ? 1 : -1) : 0;
+            const my = adx > ady ? 0 : (fdy > 0 ? 1 : -1);
+            handleAction(mx, my);
+            _tcResetBlock();
+        } else {
+            _tcResetBlock();
+            if (!_wasUsed) {
+                if (gameState === 'PLAYING' && !isProcessing) handleAction(0, 0);
+                _tcSimKey('Enter');
             }
-            _tcSimKey('Enter'); // 決定キーとしても機能
         }
     }, { passive: false });
 
