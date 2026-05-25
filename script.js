@@ -223,6 +223,7 @@ const RINGS = [
   { id: 'STAR_RING',       name: 'Star Ring',       nameJa: '星の指輪',     desc: 'Place blocks that shoot stars when attacked',               descJa: '星を発射する壁を設置',                  cost: 1000, symbol: '◎', color: '#fde047' },
   { id: 'WEB_RING',      name: 'Spider Web Ring', nameJa: '蜘蛛の巣の指輪', desc: 'Consume HP to launch a spider web.\nCannot build walls.\nIncompatible with some rings.', descJa: '体力を消費し、蜘蛛の巣を放つ。壁作りはできなくなる。\n一部の指輪との併用は不可。', cost: 1500, symbol: '◎', color: '#c084fc' },
   { id: 'TERRAIN_RING',  name: 'Terrain Ring',    nameJa: '地形の指輪',   desc: 'Cannot place or destroy walls, but can change floor terrain.\nIncompatible with some rings.', descJa: '壁の作成・破壊はできないが、地形を変更できる。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#84cc16' },
+  { id: 'SUMMON_RING',  name: 'Summon Ring',     nameJa: '召喚の指輪',   desc: 'Block action summons an ally (defeated enemy types only).\nNormal dungeon: costs 10% MaxHP.\nLiminal Space: no HP cost.', descJa: '壁設置動作で討伐済みの敵（味方）を召喚。\n通常ダンジョン：MaxHP10%消費。\n狭間の階層：HP消費なし。', cost: 2500, symbol: '◎', color: '#a78bfa' },
   { id: 'PUSH_RING',    name: 'Push Ring',       nameJa: '壁押しの指輪', desc: 'Can push a small section of wall.', descJa: 'すこしの壁を押すことができる。', cost: 1000, symbol: '◎', color: '#78716c' },
 ];
 
@@ -325,7 +326,7 @@ const RING_DOUBLED_DESC = {
     GOLEM_RING:     { ja: 'スタミナに関係なく敵を押し飛ばす',                    en: 'Knockback works regardless of stamina' },
     NECRO_RING:     { ja: '蘇生時HP全快 + 攻撃力+3',                          en: 'Revived allies at full HP + attack +3' },
     RED_TEAR_RING:  { ja: '発動閾値 HP10% → HP20% 未満に拡大',                en: 'Activation threshold HP10% → HP20%' },
-    TERRAIN_RING:   { ja: '壁設置動作で敵（味方）を召喚。\n倒した敵のみ召喚可。通常ダンジョン：MaxHP10%消費。\n狭間の階層：HP消費なし。\n特殊地形を移動後、通常の地面へ戻す。', en: 'Block action summons an ally (killed types only).\nNormal dungeon: costs 10% MaxHP.\nLiminal Space: no HP cost.\nWalk over special terrain to restore it to normal ground.' },
+    TERRAIN_RING:   { ja: '特殊地形を移動後、通常の地面へ戻す。', en: 'Walk over special terrain to restore it to normal ground.' },
     PUSH_RING:      { ja: 'たくさんの壁を押すことができる。', en: 'Can push a large section of wall.' },
     WEB_RING:       { ja: '炎上する赤い蜘蛛の巣を放つ。', en: 'Launch a red burning spider web.' },
 };
@@ -27225,10 +27226,10 @@ function tryPlaceBlock(dx, dy) {
     const bx = player.x + dx, by = player.y + dy;
     if (bx < 0 || bx >= COLS || by < 0 || by >= ROWS) return false;
 
-    // 地形の指輪×2: 敵（味方）を召喚
+    // 召喚の指輪: 敵（味方）を召喚
     // 通常ダンジョン・狭間の階層ともに: 倒した敵のみ召喚可
     // 狭間の階層: HP消費なし
-    if (hasRingDoubled('TERRAIN_RING')) {
+    if (hasRing('SUMMON_RING')) {
         // 利用可能な召喚タイプを決定（スポーンブロック系は除外、倒した敵のみ）
         const _summonExclude = new Set(['SPAWNER', 'WISP_SPAWNER']);
         // キルチャート表示順でプールを構築（各エントリから代表タイプを1つ選出）
@@ -45238,7 +45239,7 @@ window.addEventListener('keydown', async e => {
     // Tier3: GREEK_ENEMIES   (アルファベット順位で対応: A→Alpha, B→Beta, ..., X→Omega)
     // 矢印キーは常に移動。WASD はプールにタイプがある時のみ横取り（移動優先）。
     // 他の文字キー（X=メニュー、G/E/C/R/H/B/F=魔導書ショートカット等）は常に横取り。
-    if (gameState === 'PLAYING' && !isProcessing && hasRingDoubled('TERRAIN_RING')) {
+    if (gameState === 'PLAYING' && !isProcessing && hasRing('SUMMON_RING')) {
         const _kPend = enemies.find(e => e._summonPending);
         if (_kPend && /^[A-Za-z]$/.test(e.key)) {
             const _kc = e.key;
