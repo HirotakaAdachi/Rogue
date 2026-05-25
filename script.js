@@ -45939,7 +45939,7 @@ addLog("Game Ready.");
             <button class="tc-act" id="tc-menu">MENU</button>
             <button class="tc-act" id="tc-ok">↵</button>
         </div>
-        <button id="tc-block-btn">@</button>
+        <button id="tc-block-btn">＠</button>
     `;
     document.body.appendChild(_tcWrap);
 
@@ -45984,6 +45984,8 @@ addLog("Game Ready.");
                 _mHud.style.display = 'none';
                 _zoomCanvas.style.transform = '';
                 _zoomCanvas.style.transformOrigin = '';
+                // initScale を再実行してゲーム画面を中央に再配置
+                window.dispatchEvent(new Event('resize'));
                 return;
             }
         }
