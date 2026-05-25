@@ -46243,14 +46243,15 @@ addLog("Game Ready.");
     // Dパッド（コンテナタッチ方式：ボタン外18px以内も反応）
     const _dpadEl = document.getElementById('tc-dpad');
     const _DPAD_VIS = 3 * 52 + 2 * 3; // 162px（視覚上のサイズ）
-    const _DPAD_PAD = 18;              // 拡張幅
+    const _DPAD_PAD_X = 0;             // 水平方向拡張なし（隣接ボタン干渉防止）
+    const _DPAD_PAD_Y = 18;            // 上下方向18px拡張
 
     function _dpadCalcDir(clientX, clientY) {
         const r = _dpadEl.getBoundingClientRect();
         // getBoundingClientRect はパディングを含む外形を返す
-        // 視覚上のDパッドはパディング分オフセットされた内側にある
-        const x = clientX - r.left - _DPAD_PAD;
-        const y = clientY - r.top  - _DPAD_PAD;
+        // 上下のみ18px拡張なので、y だけオフセットする
+        const x = clientX - r.left - _DPAD_PAD_X;
+        const y = clientY - r.top  - _DPAD_PAD_Y;
         const cx = _DPAD_VIS / 2, cy = _DPAD_VIS / 2;
         const adx = Math.abs(x - cx), ady = Math.abs(y - cy);
         if (adx < _DPAD_VIS * 0.15 && ady < _DPAD_VIS * 0.15) return [0, 0]; // 中心
