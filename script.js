@@ -45929,9 +45929,8 @@ let _tcReservedH = 0;
             if (dx === 0 && dy === 0) {
                 handleAction(0, 0);
             } else {
-                handleAction(dx, dy).then(() => {
-                    if (_tcBlockActive) _tcResetBlock();
-                });
+                // ブロック設置後もホールド中はモードを維持（touchend でリセット）
+                handleAction(dx, dy);
             }
         } else {
             // MENU / SHOP / TITLE 等: キーシミュレーション
@@ -45960,20 +45959,25 @@ let _tcReservedH = 0;
         }, { passive: false });
     }
 
-    // BLOCK ボタン（タップでトグル）
-    // 有効化: isSpacePressed = true（防御+ブロック設置モード）
-    // 再タップで解除: handleAction(0,0) → 防御モード発動（スペース単押しと同じ）
+    // BLOCK ボタン（ホールド型）
+    // 押している間: isSpacePressed = true（防御+ブロック設置モード、ボタン点灯）
+    // 離した時: ブロック未設置なら handleAction(0,0) で防御発動、点灯解除
     _tcBlockBtn.addEventListener('touchstart', e => {
         e.preventDefault();
         if (gameState !== 'PLAYING' || isProcessing) return;
-        if (_tcBlockActive) {
-            _tcResetBlock();
-            handleAction(0, 0); // 防御発動（キーボードのspace単押し相当）
-        } else {
-            _tcBlockActive = true;
-            isSpacePressed = true;
-            spaceUsedForBlock = false;
-            _tcBlockBtn.classList.add('tc-active');
+        _tcBlockActive = true;
+        isSpacePressed = true;
+        spaceUsedForBlock = false;
+        _tcBlockBtn.classList.add('tc-active');
+    }, { passive: false });
+
+    _tcBlockBtn.addEventListener('touchend', e => {
+        e.preventDefault();
+        if (!_tcBlockActive) return;
+        const _wasUsed = spaceUsedForBlock;
+        _tcResetBlock();
+        if (!_wasUsed && gameState === 'PLAYING' && !isProcessing) {
+            handleAction(0, 0); // 防御発動（スペース単押しと同じ）
         }
     }, { passive: false });
 
