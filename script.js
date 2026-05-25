@@ -45881,9 +45881,9 @@ addLog("Game Ready.");
 #tc-block-btn {
     width: 60px; height: 60px;
     background: #1a1a1a; border: 1px solid #2e2e2e; color: #666;
-    font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
-    border-radius: 8px; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; text-align: center; line-height: 1.5;
+    font-size: 28px;
+    border-radius: 8px; display: flex;
+    align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
 }
 #tc-block-btn.tc-active {
@@ -45904,10 +45904,6 @@ addLog("Game Ready.");
     const _tcWrap = document.createElement('div');
     _tcWrap.id = 'tc-wrap';
     _tcWrap.innerHTML = `
-        <div id="tc-actions">
-            <button class="tc-act" id="tc-menu">MENU</button>
-            <button class="tc-act" id="tc-ok">OK</button>
-        </div>
         <div id="tc-dpad">
             <div></div>
             <button class="tc-btn" id="tc-up">↑</button>
@@ -45919,7 +45915,11 @@ addLog("Game Ready.");
             <button class="tc-btn" id="tc-down">↓</button>
             <div></div>
         </div>
-        <button id="tc-block-btn"><span>⬛</span><span>BLOCK</span></button>
+        <div id="tc-actions">
+            <button class="tc-act" id="tc-menu">MENU</button>
+            <button class="tc-act" id="tc-ok">↵</button>
+        </div>
+        <button id="tc-block-btn">▬</button>
     `;
     document.body.appendChild(_tcWrap);
 
