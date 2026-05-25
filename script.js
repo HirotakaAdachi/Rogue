@@ -45961,13 +45961,20 @@ let _tcReservedH = 0;
     }
 
     // BLOCK ボタン（タップでトグル）
+    // 有効化: isSpacePressed = true（防御+ブロック設置モード）
+    // 再タップで解除: handleAction(0,0) → 防御モード発動（スペース単押しと同じ）
     _tcBlockBtn.addEventListener('touchstart', e => {
         e.preventDefault();
         if (gameState !== 'PLAYING' || isProcessing) return;
-        _tcBlockActive = !_tcBlockActive;
-        isSpacePressed = _tcBlockActive;
-        spaceUsedForBlock = false;
-        _tcBlockBtn.classList.toggle('tc-active', _tcBlockActive);
+        if (_tcBlockActive) {
+            _tcResetBlock();
+            handleAction(0, 0); // 防御発動（キーボードのspace単押し相当）
+        } else {
+            _tcBlockActive = true;
+            isSpacePressed = true;
+            spaceUsedForBlock = false;
+            _tcBlockBtn.classList.add('tc-active');
+        }
     }, { passive: false });
 
     // MENU ボタン
