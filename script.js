@@ -3684,6 +3684,7 @@ function updateUI() {
 
 function updateMinimap() {
     const el = document.getElementById('minimap');
+    const _zmEl = document.getElementById('zoom-minimap');
     if (!el) return;
     if (isInEscapeRoom) {
         el.style.display = 'block';
@@ -3698,11 +3699,13 @@ function updateMinimap() {
             html += '</div>';
         }
         el.innerHTML = html;
+        if (_zmEl) { _zmEl.innerHTML = html; _zmEl.style.display = 'block'; }
         return;
     }
     if (!multiScreenMode || !visitedScreens) {
         el.style.display = 'none';
         el.innerHTML = '';
+        if (_zmEl) { _zmEl.innerHTML = ''; _zmEl.style.display = 'none'; }
         return;
     }
     el.style.display = 'block';
@@ -3750,6 +3753,7 @@ function updateMinimap() {
         html += '</div>';
     }
     el.innerHTML = html;
+    if (_zmEl) { _zmEl.innerHTML = html; _zmEl.style.display = 'block'; }
 }
 
 // ===== SECTION: MAP GENERATION =====
@@ -22782,7 +22786,7 @@ async function animateEnemyFallOld(e) {
     setScreenShake(8, 150);
 }
 
-async function showStoryPages(pages, useMiddlePos = false, useTopPos = false, autoAdvanceMs = 0, splitBlocks = false, solidWindow = false) {
+async function showStoryPages(pages, useMiddlePos = false, useTopPos = false, autoAdvanceMs = 0, splitBlocks = false, solidWindow = true) {
     for (let i = 0; i < pages.length; i++) {
         const isLastPage = (i === pages.length - 1);
         storyMessage = {
@@ -26887,7 +26891,7 @@ function draw(now) {
                 _solidWinH = _dlgH;
                 currentY = _dlgY + Math.round((_dlgH - totalH) / 2);
             }
-            if (storyMessage.solidWindow) {
+            if (storyMessage.solidWindow && !storyMessage.useMiddlePos) {
                 drawDQWindow(_solidWinX, _solidWinY, _solidWinW, _solidWinH);
             }
             lines.forEach(line => {
@@ -45848,9 +45852,22 @@ addLog("Game Ready.");
 #mobile-hud {
     position: fixed; top: 0; left: 0; right: 0; z-index: 500;
     display: none; flex-direction: row; gap: 10px; align-items: center;
-    background: rgba(0,0,0,0.6); padding: 4px 10px;
-    font: 11px 'Courier New', monospace; color: #aaa;
+    background: rgba(0,0,0,0.6); padding: 6px 12px;
+    font: 14px 'Courier New', monospace; color: #aaa;
     pointer-events: none;
+}
+/* ── ズームモード ミニマップ オーバーレイ（右上） ── */
+#zoom-minimap {
+    position: fixed; top: 6px; right: 8px; z-index: 400;
+    display: none;
+    background: rgba(0,0,0,0.5); padding: 4px 6px; border-radius: 4px;
+    pointer-events: none; opacity: 0.75;
+}
+#zoom-minimap .minimap-row {
+    display: flex; justify-content: flex-start;
+}
+#zoom-minimap .minimap-row span {
+    width: 14px; height: 8px; line-height: 8px; font-size: 7px;
 }
 /* ── 縦向き: 半透明オーバーレイ（下部） ── */
 #tc-wrap {
@@ -45928,10 +45945,13 @@ addLog("Game Ready.");
 .tc-act:active { background: #2e2e2e; color: #fff; }
 </style>`);
 
-    // DOM（左から: MENU/OK → Dパッド → BLOCK）
+    // DOM（縦向き: MENU → Dパッド → BLOCK）
     const _tcWrap = document.createElement('div');
     _tcWrap.id = 'tc-wrap';
     _tcWrap.innerHTML = `
+        <div id="tc-actions">
+            <button class="tc-act" id="tc-menu">MENU</button>
+        </div>
         <div id="tc-dpad">
             <div></div>
             <button class="tc-btn" id="tc-up">↑</button>
@@ -45942,9 +45962,6 @@ addLog("Game Ready.");
             <div></div>
             <button class="tc-btn" id="tc-down">↓</button>
             <div></div>
-        </div>
-        <div id="tc-actions">
-            <button class="tc-act" id="tc-menu">MENU</button>
         </div>
         <button id="tc-block-btn"><span id="tc-block-visual"><span id="tc-block-icon" style="display:inline-block;transition:transform 0.05s ease-out;">＠</span></span></button>
     `;
@@ -45965,13 +45982,19 @@ addLog("Game Ready.");
     // ── モバイルHUD（ズームモード時に全画面の上に表示） ──
     const _mHud = document.createElement('div');
     _mHud.id = 'mobile-hud';
-    _mHud.innerHTML = `<span id="mhud-hp"></span><span id="mhud-st-wrap" style="display:inline-flex;align-items:center;gap:2px;"><span style="font-size:9px;color:#555">ST</span><span style="width:36px;height:5px;background:#222;border:1px solid #333;display:inline-block;vertical-align:middle;"><span id="mhud-st-bar" style="height:100%;display:block;width:100%;background:#38bdf8;"></span></span></span><span>|</span><span id="mhud-floor"></span>`;
+    _mHud.innerHTML = `<span id="mhud-hp"></span><span id="mhud-st-wrap" style="display:inline-flex;align-items:center;gap:4px;"><span style="font-size:11px;color:#555">ST</span><span style="width:56px;height:8px;background:#222;border:1px solid #333;display:inline-block;vertical-align:middle;"><span id="mhud-st-bar" style="height:100%;display:block;width:100%;background:#38bdf8;"></span></span></span><span>|</span><span id="mhud-floor"></span>`;
     document.body.appendChild(_mHud);
+
+    // ── ズームモード ミニマップ オーバーレイ ──
+    const _zoomMinimap = document.createElement('div');
+    _zoomMinimap.id = 'zoom-minimap';
+    document.body.appendChild(_zoomMinimap);
 
     // ── ズームモード ──
     let _tcZoomMode = false;      // ズームON/OFF
     let _zoomFreePan = false;     // 自由パンモード
     let _manualTx = 0, _manualTy = 0; // 自由パン時のカメラ位置
+    let _lastTx = 0, _lastTy = 0;    // _applyZoom が最後に計算した実際のカメラ位置
     let _zoomModeActive = false;  // 実際に全画面になっているか
     const _ZOOM_SCALE = 1.5;
 
@@ -45986,11 +46009,13 @@ addLog("Game Ready.");
                 document.body.insertBefore(_zoomVP, _mHud);
                 _zoomVP.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;overflow:hidden;background:#000;`;
                 _mHud.style.display = 'flex';
+                _zoomMinimap.style.display = _zoomMinimap.innerHTML ? 'block' : 'none';
             } else {
                 // canvas-viewport を元の位置（log-rowの前）に戻す
                 _zoomVPOrigParent.insertBefore(_zoomVP, _zoomVPOrigSibling);
                 _zoomVP.style.cssText = `width:${CANVAS_W}px;height:${CANVAS_H}px;overflow:hidden;border:1px solid var(--border-color);background:#000;display:block;`;
                 _mHud.style.display = 'none';
+                _zoomMinimap.style.display = 'none';
                 _zoomCanvas.style.transform = '';
                 _zoomCanvas.style.transformOrigin = '';
                 // initScale を再実行してゲーム画面を中央に再配置
@@ -46064,6 +46089,8 @@ addLog("Game Ready.");
             // 縦：上端クランプのみ（下端は黒エリア表示を許可）
             ty = Math.max(0, _ctrlShift > 0 ? ty : Math.min(ty, Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
         }
+        _lastTx = tx;
+        _lastTy = ty;
         _zoomCanvas.style.transformOrigin = '0 0';
         _zoomCanvas.style.transform = `scale(${_ZOOM_SCALE}) translate(${-tx}px, ${-ty}px)`;
     }
@@ -46094,12 +46121,9 @@ addLog("Game Ready.");
         const totalDy = cy - _zoomTapY;
         if (totalDx * totalDx + totalDy * totalDy > 100) {
             if (!_zoomFreePan) {
-                // 自由パン開始：現在のプレイヤー中心位置をカメラ初期値に
-                const vpW = window.innerWidth, vpH = window.innerHeight;
-                const px = (player.x + 0.5) * TILE_SIZE;
-                const py = (player.y + 0.5) * TILE_SIZE;
-                _manualTx = px - vpW / (_ZOOM_SCALE * 2);
-                _manualTy = py - vpH / (_ZOOM_SCALE * 2);
+                // 自由パン開始：現在実際に表示されているカメラ位置をそのまま引き継ぐ
+                _manualTx = _lastTx;
+                _manualTy = _lastTy;
                 _zoomFreePan = true;
             }
             _zoomIsPanning = true;
@@ -46113,12 +46137,23 @@ addLog("Game Ready.");
     _zoomVP.addEventListener('touchend', e => {
         if (e.changedTouches.length !== 1) return;
         if (!_zoomIsPanning) {
+            // ストーリーメッセージ待機中：タップでページ送り
+            if (isTutorialInputActive) {
+                isTutorialInputActive = false;
+                _zoomIsPanning = false;
+                return;
+            }
             // タップ：ズームOFF（自由パンも解除）
             _tcZoomMode = !_tcZoomMode;
             if (!_tcZoomMode) _zoomFreePan = false;
         }
         _zoomIsPanning = false;
     }, { passive: true });
+
+    // ストーリーメッセージ待機中：画面タッチでページ送り（非ズームモード含む）
+    document.addEventListener('touchend', () => {
+        if (isTutorialInputActive) isTutorialInputActive = false;
+    });
 
     // レイアウト確定後にスケーリングを更新（縦/横両対応）
     requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
