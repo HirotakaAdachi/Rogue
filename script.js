@@ -45843,6 +45843,14 @@ addLog("Game Ready.");
     display: block;
 }
 #game-canvas { border: none !important; display: block; }
+/* ── モバイルHUD（ズームモード時） ── */
+#mobile-hud {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 500;
+    display: none; flex-direction: row; gap: 10px; align-items: center;
+    background: rgba(0,0,0,0.6); padding: 4px 10px;
+    font: 11px 'Courier New', monospace; color: #aaa;
+    pointer-events: none;
+}
 /* ── 縦向き: 半透明オーバーレイ（下部） ── */
 #tc-wrap {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
@@ -45854,16 +45862,24 @@ addLog("Game Ready.");
     pointer-events: none;
 }
 #tc-wrap > * { pointer-events: auto; }
-/* ── 横向き（スマートフォン高さ ≤ 500px）: 右サイドオーバーレイ ── */
+/* ── 横向き: 全画面overlay・Dパッド左下・その他ボタン右側 ── */
 @media (orientation: landscape) and (max-height: 500px) {
     #tc-wrap {
-        top: 0; right: 0; bottom: 0; left: auto;
-        width: 172px; height: auto;
-        flex-direction: column;
-        justify-content: space-around; align-items: center;
-        padding: 8px 4px env(safe-area-inset-right, 4px);
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: transparent;
+        display: block; padding: 0;
     }
-    #tc-actions { flex-direction: row; gap: 4px; }
+    #tc-dpad {
+        position: absolute; bottom: 12px; left: 12px;
+    }
+    #tc-actions {
+        position: absolute; right: 12px; top: 50%;
+        transform: translateY(-50%);
+        display: flex; flex-direction: column; gap: 8px;
+    }
+    #tc-block-btn {
+        position: absolute; bottom: 12px; right: 12px;
+    }
     .tc-act { width: 52px; height: 40px; font-size: 11px; }
 }
 #tc-dpad {
@@ -45873,7 +45889,7 @@ addLog("Game Ready.");
     gap: 3px;
 }
 .tc-btn {
-    background: #1a1a1a; border: 1px solid #2e2e2e; color: #bbb;
+    background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
     font-size: 22px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
@@ -45882,19 +45898,19 @@ addLog("Game Ready.");
 #tc-center-btn { color: #3a3a3a; font-size: 14px; }
 #tc-block-btn {
     width: 120px; height: 120px;
-    background: #1a1a1a; border: 1px solid #2e2e2e; color: #666;
-    font-size: 48px;
-    border-radius: 12px; display: flex;
+    background: rgba(26,26,26,0.7); border: 2px solid #2e2e2e; color: #888;
+    font-size: 44px; font-family: 'Courier New', monospace;
+    border-radius: 50%; display: flex;
     align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
 }
 #tc-block-btn.tc-active {
-    background: #2a2000; border-color: #c8a000; color: #ffd700;
+    background: rgba(42,32,0,0.85); border-color: #c8a000; color: #ffd700;
 }
 #tc-actions { display: flex; flex-direction: column; gap: 6px; }
 .tc-act {
     width: 68px; height: 44px;
-    background: #1a1a1a; border: 1px solid #2e2e2e; color: #bbb;
+    background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
     font-size: 12px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
@@ -45921,7 +45937,7 @@ addLog("Game Ready.");
             <button class="tc-act" id="tc-menu">MENU</button>
             <button class="tc-act" id="tc-ok">↵</button>
         </div>
-        <button id="tc-block-btn">▬</button>
+        <button id="tc-block-btn">@</button>
     `;
     document.body.appendChild(_tcWrap);
 
@@ -45933,23 +45949,59 @@ addLog("Game Ready.");
     _zoomVP.style.height = CANVAS_H + 'px';
     _zoomCanvas.parentNode.insertBefore(_zoomVP, _zoomCanvas);
     _zoomVP.appendChild(_zoomCanvas);
+    // ズームOFF時にviewportを元の場所に戻すための参照
+    const _zoomVPOrigParent  = _zoomVP.parentElement;
+    const _zoomVPOrigSibling = _zoomVP.nextSibling; // = .log-row
+
+    // ── モバイルHUD（ズームモード時に全画面の上に表示） ──
+    const _mHud = document.createElement('div');
+    _mHud.id = 'mobile-hud';
+    _mHud.innerHTML = `<span id="mhud-hp"></span><span>|</span><span id="mhud-floor"></span>`;
+    document.body.appendChild(_mHud);
 
     // ── ズームモード ──
     let _tcZoomMode = false;
+    let _zoomModeActive = false; // 実際に全画面になっているか
     const _ZOOM_SCALE = 3;
 
     function _applyZoom() {
-        if (!_tcZoomMode || gameState !== 'PLAYING') {
-            _zoomCanvas.style.transform = '';
-            _zoomCanvas.style.transformOrigin = '';
-            return;
+        const shouldZoom = _tcZoomMode && gameState === 'PLAYING';
+
+        // 状態変化時のみDOM操作
+        if (shouldZoom !== _zoomModeActive) {
+            _zoomModeActive = shouldZoom;
+            if (shouldZoom) {
+                // canvas-viewport を body直下に移動（game-wrapperのtransformの影響を受けないように）
+                document.body.insertBefore(_zoomVP, _mHud);
+                _zoomVP.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;overflow:hidden;background:#000;`;
+                _mHud.style.display = 'flex';
+            } else {
+                // canvas-viewport を元の位置（log-rowの前）に戻す
+                _zoomVPOrigParent.insertBefore(_zoomVP, _zoomVPOrigSibling);
+                _zoomVP.style.cssText = `width:${CANVAS_W}px;height:${CANVAS_H}px;overflow:hidden;border:1px solid var(--border-color);background:#000;display:block;`;
+                _mHud.style.display = 'none';
+                _zoomCanvas.style.transform = '';
+                _zoomCanvas.style.transformOrigin = '';
+                return;
+            }
         }
+        if (!shouldZoom) return;
+
+        // HUD更新
+        const _hpEl = document.getElementById('hp');
+        const _flEl = document.getElementById('floor');
+        if (_hpEl) document.getElementById('mhud-hp').textContent = 'HP ' + _hpEl.textContent;
+        if (_flEl) document.getElementById('mhud-floor').textContent = 'F' + _flEl.textContent;
+
+        // 画面サイズ基準でカメラ計算
+        const vpW = window.innerWidth;
+        const vpH = window.innerHeight;
         const px = (player.x + 0.5) * TILE_SIZE;
         const py = (player.y + 0.5) * TILE_SIZE;
-        let tx = px - CANVAS_W / (_ZOOM_SCALE * 2);
-        let ty = py - CANVAS_H / (_ZOOM_SCALE * 2);
-        tx = Math.max(0, Math.min(tx, CANVAS_W * (1 - 1 / _ZOOM_SCALE)));
-        ty = Math.max(0, Math.min(ty, CANVAS_H * (1 - 1 / _ZOOM_SCALE)));
+        let tx = px - vpW / (_ZOOM_SCALE * 2);
+        let ty = py - vpH / (_ZOOM_SCALE * 2);
+        tx = Math.max(0, Math.min(tx, Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
+        ty = Math.max(0, Math.min(ty, Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
         _zoomCanvas.style.transformOrigin = '0 0';
         _zoomCanvas.style.transform = `scale(${_ZOOM_SCALE}) translate(${-tx}px, ${-ty}px)`;
     }
@@ -46049,11 +46101,12 @@ addLog("Game Ready.");
     // 離した時: ブロック未設置なら handleAction(0,0) で防御発動、点灯解除
     _tcBlockBtn.addEventListener('touchstart', e => {
         e.preventDefault();
-        if (gameState !== 'PLAYING' || isProcessing) return;
-        _tcBlockActive = true;
-        isSpacePressed = true;
-        spaceUsedForBlock = false;
-        _tcBlockBtn.classList.add('tc-active');
+        _tcBlockActive = true; // 常にセット（Enter兼用のため）
+        if (gameState === 'PLAYING' && !isProcessing) {
+            isSpacePressed = true;
+            spaceUsedForBlock = false;
+            _tcBlockBtn.classList.add('tc-active');
+        }
     }, { passive: false });
 
     _tcBlockBtn.addEventListener('touchend', e => {
