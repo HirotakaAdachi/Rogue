@@ -1936,6 +1936,7 @@ let maxReachedFloor = 1; // 最高到達階層
 let _f24ItemsTaken = { sword: false, escape: false, warpText: false }; // 24F固定アイテム取得済みフラグ
 let _fixedFloorState = {}; // フロアごとのアイテム取得済み状態
 let terrainRingMerchantUnlocked = false; // 地形の指輪を商人に売った場合、商人での再購入がアンロック
+let summonRingMerchantUnlocked = false;  // 召喚の指輪を商人に売った場合、商人での再購入がアンロック
 const _FIXED_PERSIST_FL = new Set([2, 9, 10, 18, 23, 26, 34, 40, 47, 50]);
 let _killedEnemyTypes = new Set();
 const _KILL_CHART_ROWS = [
@@ -2335,6 +2336,7 @@ function loadGame() {
     if (data.latinKillCounts) latinKillCounts = { ...data.latinKillCounts };
 
     if (data.terrainRingMerchantUnlocked) terrainRingMerchantUnlocked = data.terrainRingMerchantUnlocked;
+    if (data.summonRingMerchantUnlocked) summonRingMerchantUnlocked = data.summonRingMerchantUnlocked;
 
     // マップ・敵・フロア状態はコンティニュー時に再生成するためここでは復元しない
     updateUI();
@@ -3380,6 +3382,7 @@ function saveGame(notify = false) {
 
         // 地形の指輪：商人再購入アンロックフラグ
         terrainRingMerchantUnlocked: terrainRingMerchantUnlocked,
+        summonRingMerchantUnlocked: summonRingMerchantUnlocked,
     };
     safeStorageSetJSON('minimal_rogue_save', data);
     if (notify) addLog("[ Saved ]");
@@ -3545,6 +3548,7 @@ function resetNewGamePersistentData() {
     _killedEnemyTypes = new Set();
     ringFloorSeeds = {};
     terrainRingMerchantUnlocked = false;
+    summonRingMerchantUnlocked = false;
     hasShownStage1Tut = false;
     hasShownGoldTut = false;
     hasShownSaveTut = false;
@@ -30847,7 +30851,7 @@ async function handleAction(dx, dy) {
         if (map[ny][nx] === SYMBOLS.MERCHANT && !(merchantState && merchantState.dyingUntil)) {
             SOUNDS.GET_ITEM();
             if (shopBuyStock.length === 0) {
-                const pool = RINGS.map((r, i) => i).filter(i => RINGS[i].id !== 'TERRAIN_RING');
+                const pool = RINGS.map((r, i) => i).filter(i => RINGS[i].id !== 'TERRAIN_RING' && RINGS[i].id !== 'SUMMON_RING');
                 const shuffled = pool.slice().sort(() => Math.random() - 0.5);
                 const priceMult = floorLevel >= 75 ? 3 : floorLevel >= 50 ? 2 : 1;
                 shopRingPriceMult = priceMult;
@@ -30857,6 +30861,12 @@ async function handleAction(dx, dy) {
                     const _trIdx = RINGS.findIndex(r => r.id === 'TERRAIN_RING');
                     const _trCost = Math.min(Math.max(RINGS[_trIdx].cost, 2000), Math.floor(RINGS[_trIdx].cost * priceMult));
                     ringItems.unshift({ type: 'ring', ringIndex: _trIdx, cost: _trCost });
+                }
+                // 召喚の指輪を商人に売った場合、再購入アイテムとして先頭に追加
+                if (summonRingMerchantUnlocked && !player.ownedRings.includes('SUMMON_RING')) {
+                    const _srIdx = RINGS.findIndex(r => r.id === 'SUMMON_RING');
+                    const _srCost = Math.min(Math.max(RINGS[_srIdx].cost, 2000), Math.floor(RINGS[_srIdx].cost * priceMult));
+                    ringItems.unshift({ type: 'ring', ringIndex: _srIdx, cost: _srCost });
                 }
                 const equipBase = (floorLevel === 10) ? 100 : (80 + Math.floor(Math.random() * 121));
                 const equipCost = Math.floor(equipBase * priceMult);
@@ -44936,6 +44946,17 @@ window.addEventListener('keydown', async e => {
                                 shopBuyStock.unshift({ type: 'ring', ringIndex: _trIdx, cost: _trCost });
                             }
                             addKeyLog('Terrain Ring: now available for purchase at merchants!');
+                        }
+                        // 召喚の指輪売却時: 即座にこの商人のストックに追加 + 永続アンロック
+                        if (item.ringId === 'SUMMON_RING') {
+                            summonRingMerchantUnlocked = true;
+                            saveGame();
+                            const _smIdx = item.ringIndex;
+                            const _smCost = Math.min(Math.max(RINGS[_smIdx].cost, 2000), Math.floor(RINGS[_smIdx].cost * shopRingPriceMult));
+                            if (!shopBuyStock.some(s => s.type === 'ring' && s.ringIndex === _smIdx)) {
+                                shopBuyStock.unshift({ type: 'ring', ringIndex: _smIdx, cost: _smCost });
+                            }
+                            addKeyLog('Summon Ring: now available for purchase at merchants!');
                         }
                     } else if (item.type === 'sell_tome') {
                         player[item.field]--;
