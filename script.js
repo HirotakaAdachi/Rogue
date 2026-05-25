@@ -45958,7 +45958,7 @@ addLog("Game Ready.");
     // ── モバイルHUD（ズームモード時に全画面の上に表示） ──
     const _mHud = document.createElement('div');
     _mHud.id = 'mobile-hud';
-    _mHud.innerHTML = `<span id="mhud-hp"></span><span>|</span><span id="mhud-floor"></span>`;
+    _mHud.innerHTML = `<span id="mhud-hp"></span><span id="mhud-st-wrap" style="display:inline-flex;align-items:center;gap:2px;"><span style="font-size:9px;color:#555">ST</span><span style="width:36px;height:5px;background:#222;border:1px solid #333;display:inline-block;vertical-align:middle;"><span id="mhud-st-bar" style="height:100%;display:block;width:100%;background:#38bdf8;"></span></span></span><span>|</span><span id="mhud-floor"></span>`;
     document.body.appendChild(_mHud);
 
     // ── ズームモード ──
@@ -45994,6 +45994,16 @@ addLog("Game Ready.");
         const _flEl = document.getElementById('floor');
         if (_hpEl) document.getElementById('mhud-hp').textContent = 'HP ' + _hpEl.textContent;
         if (_flEl) document.getElementById('mhud-floor').textContent = 'F' + _flEl.textContent;
+        const _stBar = document.getElementById('mhud-st-bar');
+        if (_stBar) {
+            if (player.isInfiniteStamina) {
+                _stBar.style.width = '100%';
+                _stBar.style.background = '#fbbf24';
+            } else {
+                _stBar.style.width = player.stamina + '%';
+                _stBar.style.background = player.stamina < 30 ? '#f87171' : '#38bdf8';
+            }
+        }
 
         // 画面サイズ基準でカメラ計算
         const vpW = window.innerWidth;
