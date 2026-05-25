@@ -45898,8 +45898,8 @@ addLog("Game Ready.");
 #tc-center-btn { color: #3a3a3a; font-size: 14px; }
 #tc-block-btn {
     width: 120px; height: 120px;
-    background: rgba(26,26,26,0.7); border: 2px solid #2e2e2e; color: #888;
-    font-size: 44px; font-family: 'Courier New', monospace;
+    background: rgba(26,26,26,0.7); border: 2px solid #2e2e2e; color: #fff;
+    font-size: 64px; font-family: 'Courier New', monospace;
     border-radius: 50%; display: flex;
     align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
@@ -45937,7 +45937,7 @@ addLog("Game Ready.");
             <button class="tc-act" id="tc-menu">MENU</button>
             <button class="tc-act" id="tc-ok">↵</button>
         </div>
-        <button id="tc-block-btn">@</button>
+        <button id="tc-block-btn">＠</button>
     `;
     document.body.appendChild(_tcWrap);
 
