@@ -45962,7 +45962,7 @@ addLog("Game Ready.");
     // ── ズームモード ──
     let _tcZoomMode = false;
     let _zoomModeActive = false; // 実際に全画面になっているか
-    const _ZOOM_SCALE = 3;
+    const _ZOOM_SCALE = 2;
 
     function _applyZoom() {
         const shouldZoom = _tcZoomMode && gameState === 'PLAYING';
