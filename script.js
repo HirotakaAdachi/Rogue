@@ -45934,6 +45934,16 @@ addLog("Game Ready.");
 #tc-block-btn.tc-active #tc-block-visual {
     background: rgba(42,32,0,0.85); border-color: #c8a000; color: #ffd700;
 }
+/* ボタン＠ 被ダメージバウンス */
+@keyframes tc-hurt-bounce {
+    0%   { transform: translateY(0); }
+    22%  { transform: translateY(-14px); }
+    55%  { transform: translateY(-14px); }
+    88%  { transform: translateY(0); }
+    100% { transform: translateY(0); }
+}
+#tc-block-visual.tc-hurt { animation: tc-hurt-bounce 0.52s ease-out forwards; }
+#tc-block-icon { transition: transform 0.05s ease-out, color 0.4s ease-out; }
 #tc-actions { display: flex; flex-direction: column; gap: 6px; }
 .tc-act {
     width: 60px; height: 60px;
@@ -46095,13 +46105,43 @@ addLog("Game Ready.");
         _zoomCanvas.style.transform = `scale(${_ZOOM_SCALE}) translate(${-tx}px, ${-ty}px)`;
     }
 
-    // ズームrAFループ（毎フレームcanvas transformを更新）
-    (function _zoomLoop() { _applyZoom(); requestAnimationFrame(_zoomLoop); })();
+    // ズームrAFループ（毎フレームcanvas transformを更新 + ボタン＠連動）
+    (function _zoomLoop() {
+        _applyZoom();
+        // ボタン＠ ← プレイヤー連動
+        if (typeof player !== 'undefined') {
+            const _bIcon = document.getElementById('tc-block-icon');
+            // 向き：ブロック操作中は上書きしない
+            if (_bIcon && !_tcBlockActive) {
+                _bIcon.style.transform = player.facing === 'RIGHT' ? 'scaleX(-1)' : '';
+            }
+            // 被ダメージ検知
+            const _now = performance.now();
+            if (player.flashUntil > _tcLastFlashUntil && player.flashUntil > _now) {
+                _tcLastFlashUntil = player.flashUntil;
+                const _bVis = document.getElementById('tc-block-visual');
+                if (_bVis && _bIcon) {
+                    _bVis.classList.remove('tc-hurt');
+                    void _bVis.offsetWidth; // reflow で animation をリセット
+                    _bVis.classList.add('tc-hurt');
+                    _bIcon.style.color = '#f87171';
+                    clearTimeout(_tcHurtTimer);
+                    _tcHurtTimer = setTimeout(() => {
+                        _bVis.classList.remove('tc-hurt');
+                        _bIcon.style.color = '';
+                    }, 620);
+                }
+            }
+        }
+        requestAnimationFrame(_zoomLoop);
+    })();
 
     // キャンバスタッチ：タップでズーム切替、スライドで自由パン
     let _zoomTapX = 0, _zoomTapY = 0;
     let _zoomLastX = 0, _zoomLastY = 0;
     let _zoomIsPanning = false;
+    // ボタン＠ 連動用
+    let _tcLastFlashUntil = 0, _tcHurtTimer = null;
 
     _zoomVP.addEventListener('touchstart', e => {
         if (e.touches.length !== 1) return;
@@ -46175,7 +46215,8 @@ addLog("Game Ready.");
         spaceUsedForBlock = false;
         _tcBlockBtn.classList.remove('tc-active');
         const icon = _tcBlockIcon();
-        if (icon) icon.style.transform = '';
+        // フリック解除後は向きを復元（rAFループが次フレームで上書きするが、過渡期のちらつき防止）
+        if (icon) icon.style.transform = (typeof player !== 'undefined' && player.facing === 'RIGHT') ? 'scaleX(-1)' : '';
     }
 
     function _tcMove(dx, dy) {
