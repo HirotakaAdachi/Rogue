@@ -45881,7 +45881,7 @@ addLog("Game Ready.");
     #tc-block-btn {
         position: absolute; bottom: 12px; right: 12px;
     }
-    .tc-act { width: 52px; height: 40px; font-size: 11px; }
+    .tc-act { width: 50px; height: 50px; font-size: 11px; }
 }
 #tc-dpad {
     display: grid;
@@ -45900,20 +45900,28 @@ addLog("Game Ready.");
 #tc-center-btn { color: #3a3a3a; font-size: 14px; }
 #tc-block-btn {
     width: 120px; height: 120px;
-    background: rgba(26,26,26,0.7); border: 2px solid #2e2e2e; color: #fff;
-    font-size: 80px; font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif; line-height: 1;
+    background: transparent; border: none; padding: 0;
     border-radius: 50%; display: flex;
     align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
 }
-#tc-block-btn.tc-active {
+#tc-block-visual {
+    width: 88px; height: 88px;
+    background: rgba(26,26,26,0.7); border: 2px solid #2e2e2e; color: #fff;
+    font-size: 72px; font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif; line-height: 1;
+    border-radius: 50%; display: flex;
+    align-items: center; justify-content: center;
+    pointer-events: none;
+    transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+#tc-block-btn.tc-active #tc-block-visual {
     background: rgba(42,32,0,0.85); border-color: #c8a000; color: #ffd700;
 }
 #tc-actions { display: flex; flex-direction: column; gap: 6px; }
 .tc-act {
-    width: 68px; height: 44px;
+    width: 60px; height: 60px;
     background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
-    font-size: 12px; border-radius: 8px;
+    font-size: 11px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
 }
@@ -45937,9 +45945,8 @@ addLog("Game Ready.");
         </div>
         <div id="tc-actions">
             <button class="tc-act" id="tc-menu">MENU</button>
-            <button class="tc-act" id="tc-ok">↵</button>
         </div>
-        <button id="tc-block-btn"><span id="tc-block-icon" style="display:inline-block;transition:transform 0.05s ease-out;">＠</span></button>
+        <button id="tc-block-btn"><span id="tc-block-visual"><span id="tc-block-icon" style="display:inline-block;transition:transform 0.05s ease-out;">＠</span></span></button>
     `;
     document.body.appendChild(_tcWrap);
 
@@ -46196,7 +46203,7 @@ addLog("Game Ready.");
         const t = e.touches[0];
         const fdx = t.clientX - _blockFlickStartX;
         const fdy = t.clientY - _blockFlickStartY;
-        const MAX_SHIFT = 8;
+        const MAX_SHIFT = 14;
         const dist = Math.sqrt(fdx * fdx + fdy * fdy);
         let sx = 0, sy = 0;
         if (dist > 4) {
@@ -46240,10 +46247,5 @@ addLog("Game Ready.");
         _tcSimKey('x');
     }, { passive: false });
 
-    // OK ボタン
-    document.getElementById('tc-ok').addEventListener('touchstart', e => {
-        e.preventDefault();
-        _tcSimKey('Enter');
-    }, { passive: false });
 
 })();
