@@ -46025,6 +46025,21 @@ addLog("Game Ready.");
             const maxOverflow = 200 / _ZOOM_SCALE; // 端から200px以上は出ない
             tx = Math.max(-maxOverflow, Math.min(_manualTx, CANVAS_W - vpW / _ZOOM_SCALE + maxOverflow));
             ty = Math.max(-maxOverflow, Math.min(_manualTy, CANVAS_H - vpH / _ZOOM_SCALE + maxOverflow));
+        } else if (gameState !== 'PLAYING') {
+            // メニュー中心モード：最前面ウィンドウのキャンバス座標を中心に
+            let focusX, focusY;
+            if (gameState === 'MENU') {
+                focusX = 12 + 185 / 2;  // COMMANDウィンドウ中心 x=104
+                focusY = 12 + 145 / 2;  // y=84
+            } else if (gameState === 'STATUS' || gameState === 'RINGS' || gameState === 'INVENTORY') {
+                focusX = 154 + (CANVAS_W - 154 - 12) / 2; // 右パネル中心 x=471
+                focusY = CANVAS_H / 2;                     // y=251
+            } else {
+                focusX = CANVAS_W / 2;  // SHOP/CONFIRM系：キャンバス中心
+                focusY = CANVAS_H / 2;
+            }
+            tx = Math.max(0, Math.min(focusX - vpW / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
+            ty = Math.max(0, Math.min(focusY - vpH / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
         } else {
             // プレイヤー追従モード
             const px = (player.x + 0.5) * TILE_SIZE;
