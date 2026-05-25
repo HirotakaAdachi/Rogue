@@ -45939,7 +45939,7 @@ addLog("Game Ready.");
             <button class="tc-act" id="tc-menu">MENU</button>
             <button class="tc-act" id="tc-ok">↵</button>
         </div>
-        <button id="tc-block-btn">＠</button>
+        <button id="tc-block-btn"><span id="tc-block-icon" style="display:inline-block;transition:transform 0.05s ease-out;">＠</span></button>
     `;
     document.body.appendChild(_tcWrap);
 
@@ -46100,11 +46100,14 @@ addLog("Game Ready.");
 
     const _tcBlockBtn = document.getElementById('tc-block-btn');
 
+    const _tcBlockIcon = () => document.getElementById('tc-block-icon');
     function _tcResetBlock() {
         _tcBlockActive = false;
         isSpacePressed = false;
         spaceUsedForBlock = false;
         _tcBlockBtn.classList.remove('tc-active');
+        const icon = _tcBlockIcon();
+        if (icon) icon.style.transform = '';
     }
 
     function _tcMove(dx, dy) {
@@ -46189,7 +46192,20 @@ addLog("Game Ready.");
     }, { passive: false });
 
     _tcBlockBtn.addEventListener('touchmove', e => {
-        e.preventDefault(); // フリック中スクロール防止
+        e.preventDefault();
+        const t = e.touches[0];
+        const fdx = t.clientX - _blockFlickStartX;
+        const fdy = t.clientY - _blockFlickStartY;
+        const MAX_SHIFT = 8;
+        const dist = Math.sqrt(fdx * fdx + fdy * fdy);
+        let sx = 0, sy = 0;
+        if (dist > 4) {
+            const scale = Math.min(1, dist / 30) * MAX_SHIFT / dist;
+            sx = fdx * scale;
+            sy = fdy * scale;
+        }
+        const icon = _tcBlockIcon();
+        if (icon) icon.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
     }, { passive: false });
 
     _tcBlockBtn.addEventListener('touchend', e => {
