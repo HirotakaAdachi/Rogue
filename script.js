@@ -45806,18 +45806,20 @@ updateUI();
 requestAnimationFrame(gameLoop);
 addLog("Game Ready.");
 
+// タッチコントロールパネルの予約高さ（スケーリング計算に使用）
+let _tcReservedH = 0;
+
 // ウィンドウサイズに合わせてゲーム全体をスケーリング
 (function initScale() {
     const wrapper = document.querySelector('.game-wrapper');
     if (!wrapper) return;
-    // キャンバス固定サイズ＋CSS既知値からベースサイズを算出（計測タイミングに依存しない）
-    const baseW = COLS * TILE_SIZE + 42;   // canvas幅 + padding20×2 + border1×2
-    const baseH = ROWS * TILE_SIZE + 217;  // canvas高さ + padding40 + stats65 + gap20 + log80 + border2 + 余裕10
-    const MARGIN_V = 50; // 上下各50pxの黒い余白を確保
-    const MARGIN_H = 20; // 左右各20px
+    const baseW = COLS * TILE_SIZE + 42;
+    const baseH = ROWS * TILE_SIZE + 217;
+    const MARGIN_V = 50;
+    const MARGIN_H = 20;
     function applyScale() {
         const scale = Math.min(
-            (window.innerHeight - MARGIN_V * 2) / baseH,
+            (window.innerHeight - _tcReservedH - MARGIN_V * 2) / baseH,
             (window.innerWidth  - MARGIN_H * 2) / baseW
         );
         wrapper.style.transformOrigin = 'center center';
@@ -45825,4 +45827,160 @@ addLog("Game Ready.");
     }
     applyScale();
     window.addEventListener('resize', applyScale);
+})();
+
+// ===== TOUCH CONTROLS (スマートフォン操作) =====
+(function _initTouchControls() {
+    if (!('ontouchstart' in window) && !(navigator.maxTouchPoints > 0)) return;
+
+    let _tcBlockActive = false;
+
+    // CSS
+    document.head.insertAdjacentHTML('beforeend', `<style id="tc-style">
+#tc-wrap {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
+    display: flex; justify-content: space-around; align-items: center;
+    padding: 8px 16px env(safe-area-inset-bottom, 8px);
+    background: #0c0c0c; border-top: 1px solid #1e1e1e;
+    user-select: none; -webkit-user-select: none;
+}
+#tc-dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 52px);
+    grid-template-rows: repeat(3, 52px);
+    gap: 3px;
+}
+.tc-btn {
+    background: #1a1a1a; border: 1px solid #2e2e2e; color: #bbb;
+    font-size: 22px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+.tc-btn:active { background: #2e2e2e; color: #fff; }
+#tc-center-btn { color: #3a3a3a; font-size: 14px; }
+#tc-block-btn {
+    width: 60px; height: 60px;
+    background: #1a1a1a; border: 1px solid #2e2e2e; color: #666;
+    font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
+    border-radius: 8px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; line-height: 1.5;
+    -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+#tc-block-btn.tc-active {
+    background: #2a2000; border-color: #c8a000; color: #ffd700;
+}
+#tc-actions { display: flex; flex-direction: column; gap: 6px; }
+.tc-act {
+    width: 68px; height: 44px;
+    background: #1a1a1a; border: 1px solid #2e2e2e; color: #bbb;
+    font-size: 12px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+.tc-act:active { background: #2e2e2e; color: #fff; }
+</style>`);
+
+    // DOM
+    const _tcWrap = document.createElement('div');
+    _tcWrap.id = 'tc-wrap';
+    _tcWrap.innerHTML = `
+        <div id="tc-dpad">
+            <div></div>
+            <button class="tc-btn" id="tc-up">↑</button>
+            <div></div>
+            <button class="tc-btn" id="tc-left">←</button>
+            <button class="tc-btn" id="tc-center-btn">·</button>
+            <button class="tc-btn" id="tc-right">→</button>
+            <div></div>
+            <button class="tc-btn" id="tc-down">↓</button>
+            <div></div>
+        </div>
+        <button id="tc-block-btn"><span>⬛</span><span>BLOCK</span></button>
+        <div id="tc-actions">
+            <button class="tc-act" id="tc-menu">MENU</button>
+            <button class="tc-act" id="tc-ok">OK</button>
+        </div>
+    `;
+    document.body.appendChild(_tcWrap);
+
+    // タッチコントロールパネルの高さをスケーリングに反映
+    requestAnimationFrame(() => {
+        _tcReservedH = _tcWrap.offsetHeight;
+        window.dispatchEvent(new Event('resize'));
+    });
+
+    // ユーティリティ
+    function _tcSimKey(key) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    }
+
+    const _tcBlockBtn = document.getElementById('tc-block-btn');
+
+    function _tcResetBlock() {
+        _tcBlockActive = false;
+        isSpacePressed = false;
+        spaceUsedForBlock = false;
+        _tcBlockBtn.classList.remove('tc-active');
+    }
+
+    function _tcMove(dx, dy) {
+        if (gameState === 'PLAYING') {
+            if (isProcessing) return;
+            if (dx === 0 && dy === 0) {
+                handleAction(0, 0);
+            } else {
+                handleAction(dx, dy).then(() => {
+                    if (_tcBlockActive) _tcResetBlock();
+                });
+            }
+        } else {
+            // MENU / SHOP / TITLE 等: キーシミュレーション
+            const _km = {
+                '0,-1': 'ArrowUp', '0,1': 'ArrowDown',
+                '-1,0': 'ArrowLeft', '1,0': 'ArrowRight',
+                '0,0':  'Enter',
+            };
+            const k = _km[`${dx},${dy}`];
+            if (k) _tcSimKey(k);
+        }
+    }
+
+    // Dパッド
+    const _tcDpad = [
+        ['tc-up',         0, -1],
+        ['tc-down',       0,  1],
+        ['tc-left',      -1,  0],
+        ['tc-right',      1,  0],
+        ['tc-center-btn', 0,  0],
+    ];
+    for (const [id, dx, dy] of _tcDpad) {
+        document.getElementById(id).addEventListener('touchstart', e => {
+            e.preventDefault();
+            _tcMove(dx, dy);
+        }, { passive: false });
+    }
+
+    // BLOCK ボタン（タップでトグル）
+    _tcBlockBtn.addEventListener('touchstart', e => {
+        e.preventDefault();
+        if (gameState !== 'PLAYING' || isProcessing) return;
+        _tcBlockActive = !_tcBlockActive;
+        isSpacePressed = _tcBlockActive;
+        spaceUsedForBlock = false;
+        _tcBlockBtn.classList.toggle('tc-active', _tcBlockActive);
+    }, { passive: false });
+
+    // MENU ボタン
+    document.getElementById('tc-menu').addEventListener('touchstart', e => {
+        e.preventDefault();
+        _tcResetBlock();
+        _tcSimKey('x');
+    }, { passive: false });
+
+    // OK ボタン
+    document.getElementById('tc-ok').addEventListener('touchstart', e => {
+        e.preventDefault();
+        _tcSimKey('Enter');
+    }, { passive: false });
+
 })();
