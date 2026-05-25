@@ -3136,12 +3136,12 @@ function buildEscapeRoomMap() {
         }
     }
 
-    // 下段右から二番目のLiminal Space部屋（page 8）: 右下の毒沼に地形の指輪を配置
+    // 下段右から二番目のLiminal Space部屋（page 8）: 右下の毒沼に召喚の指輪を配置
     {
         const _p8Map = _escapeRoomPageMaps[8];
         const _p8RingX = 32, _p8RingY = 21;
         _p8Map[_p8RingY][_p8RingX] = SYMBOLS.RING;
-        _escapeRoomPageRings[8].push({ x: _p8RingX, y: _p8RingY, ringId: 'TERRAIN_RING', forced: true });
+        _escapeRoomPageRings[8].push({ x: _p8RingX, y: _p8RingY, ringId: 'SUMMON_RING', forced: true });
     }
 
     // 深層到達ワープ床（B100Fのあるpage9の右下に追加）
