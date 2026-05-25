@@ -45899,7 +45899,7 @@ addLog("Game Ready.");
 #tc-block-btn {
     width: 120px; height: 120px;
     background: rgba(26,26,26,0.7); border: 2px solid #2e2e2e; color: #fff;
-    font-size: 64px; font-family: 'Courier New', monospace;
+    font-size: 86px; font-family: 'Courier New', monospace; line-height: 1;
     border-radius: 50%; display: flex;
     align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
@@ -45937,7 +45937,7 @@ addLog("Game Ready.");
             <button class="tc-act" id="tc-menu">MENU</button>
             <button class="tc-act" id="tc-ok">↵</button>
         </div>
-        <button id="tc-block-btn">＠</button>
+        <button id="tc-block-btn">@</button>
     `;
     document.body.appendChild(_tcWrap);
 
@@ -45962,7 +45962,7 @@ addLog("Game Ready.");
     // ── ズームモード ──
     let _tcZoomMode = false;
     let _zoomModeActive = false; // 実際に全画面になっているか
-    const _ZOOM_SCALE = 2;
+    const _ZOOM_SCALE = 1.5;
 
     function _applyZoom() {
         const shouldZoom = _tcZoomMode && gameState === 'PLAYING';
