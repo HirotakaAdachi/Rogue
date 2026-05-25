@@ -45806,7 +45806,7 @@ updateUI();
 requestAnimationFrame(gameLoop);
 addLog("Game Ready.");
 
-// ウィンドウサイズに合わせてゲーム全体をスケーリング
+// ウィンドウサイズに合わせてゲーム全体をスケーリング（タッチコントロールはオーバーレイなので余白不要）
 (function initScale() {
     const wrapper = document.querySelector('.game-wrapper');
     if (!wrapper) return;
@@ -45816,19 +45816,12 @@ addLog("Game Ready.");
     function applyScale() {
         const MARGIN_V = isMobile ? 8 : 50;
         const MARGIN_H = isMobile ? 4 : 20;
-        const panel = document.getElementById('tc-wrap');
-        const isLandscape = window.innerWidth > window.innerHeight;
-        // 横向き: パネルが右に固定 → 幅を予約。縦向き: 下に固定 → 高さを予約
-        const reservedH = (panel && !isLandscape) ? panel.offsetHeight : 0;
-        const reservedW = (panel && isLandscape)  ? panel.offsetWidth  : 0;
         const scale = Math.min(
-            (window.innerHeight - reservedH - MARGIN_V * 2) / baseH,
-            (window.innerWidth  - reservedW - MARGIN_H * 2) / baseW
+            (window.innerHeight - MARGIN_V * 2) / baseH,
+            (window.innerWidth  - MARGIN_H * 2) / baseW
         );
         wrapper.style.transformOrigin = 'center center';
         wrapper.style.transform = `scale(${Math.max(0.1, scale)})`;
-        // 横向き: ゲームをパネルの左側に収める
-        wrapper.style.marginRight = (isLandscape && reservedW) ? `${reservedW}px` : '';
     }
     applyScale();
     window.addEventListener('resize', applyScale);
@@ -45842,23 +45835,32 @@ addLog("Game Ready.");
 
     // CSS
     document.head.insertAdjacentHTML('beforeend', `<style id="tc-style">
-/* ── 縦向き: 下部バー ── */
+/* ── キャンバスビューポート（ズームclip用） ── */
+#canvas-viewport {
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    background: #000;
+    display: block;
+}
+#game-canvas { border: none !important; display: block; }
+/* ── 縦向き: 半透明オーバーレイ（下部） ── */
 #tc-wrap {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
     display: flex; flex-direction: row;
     justify-content: space-around; align-items: center;
     padding: 8px 16px env(safe-area-inset-bottom, 8px);
-    background: #0c0c0c; border-top: 1px solid #1e1e1e;
+    background: rgba(0,0,0,0.38);
     user-select: none; -webkit-user-select: none;
+    pointer-events: none;
 }
-/* ── 横向き（スマートフォン高さ ≤ 500px）: 右サイドパネル ── */
+#tc-wrap > * { pointer-events: auto; }
+/* ── 横向き（スマートフォン高さ ≤ 500px）: 右サイドオーバーレイ ── */
 @media (orientation: landscape) and (max-height: 500px) {
     #tc-wrap {
         top: 0; right: 0; bottom: 0; left: auto;
         width: 172px; height: auto;
         flex-direction: column;
         justify-content: space-around; align-items: center;
-        border-top: none; border-left: 1px solid #1e1e1e;
         padding: 8px 4px env(safe-area-inset-right, 4px);
     }
     #tc-actions { flex-direction: row; gap: 4px; }
@@ -45922,6 +45924,52 @@ addLog("Game Ready.");
         <button id="tc-block-btn">▬</button>
     `;
     document.body.appendChild(_tcWrap);
+
+    // ── キャンバスをviewportでラップ（ズームのoverflow clip用） ──
+    const _zoomCanvas = document.getElementById('game-canvas');
+    const _zoomVP = document.createElement('div');
+    _zoomVP.id = 'canvas-viewport';
+    _zoomVP.style.width  = CANVAS_W + 'px';
+    _zoomVP.style.height = CANVAS_H + 'px';
+    _zoomCanvas.parentNode.insertBefore(_zoomVP, _zoomCanvas);
+    _zoomVP.appendChild(_zoomCanvas);
+
+    // ── ズームモード ──
+    let _tcZoomMode = false;
+    const _ZOOM_SCALE = 3;
+
+    function _applyZoom() {
+        if (!_tcZoomMode || gameState !== 'PLAYING') {
+            _zoomCanvas.style.transform = '';
+            _zoomCanvas.style.transformOrigin = '';
+            return;
+        }
+        const px = (player.x + 0.5) * TILE_SIZE;
+        const py = (player.y + 0.5) * TILE_SIZE;
+        let tx = px - CANVAS_W / (_ZOOM_SCALE * 2);
+        let ty = py - CANVAS_H / (_ZOOM_SCALE * 2);
+        tx = Math.max(0, Math.min(tx, CANVAS_W * (1 - 1 / _ZOOM_SCALE)));
+        ty = Math.max(0, Math.min(ty, CANVAS_H * (1 - 1 / _ZOOM_SCALE)));
+        _zoomCanvas.style.transformOrigin = '0 0';
+        _zoomCanvas.style.transform = `scale(${_ZOOM_SCALE}) translate(${-tx}px, ${-ty}px)`;
+    }
+
+    // ズームrAFループ（毎フレームcanvas transformを更新）
+    (function _zoomLoop() { _applyZoom(); requestAnimationFrame(_zoomLoop); })();
+
+    // キャンバスタップでズーム切り替え（12px以内の移動 = タップ）
+    let _zoomTapX = 0, _zoomTapY = 0;
+    _zoomVP.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) return;
+        _zoomTapX = e.touches[0].clientX;
+        _zoomTapY = e.touches[0].clientY;
+    }, { passive: true });
+    _zoomVP.addEventListener('touchend', e => {
+        if (e.changedTouches.length !== 1) return;
+        const dx = e.changedTouches[0].clientX - _zoomTapX;
+        const dy = e.changedTouches[0].clientY - _zoomTapY;
+        if (dx * dx + dy * dy < 144) _tcZoomMode = !_tcZoomMode;
+    }, { passive: true });
 
     // レイアウト確定後にスケーリングを更新（縦/横両対応）
     requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
