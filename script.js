@@ -327,6 +327,7 @@ const RING_DOUBLED_DESC = {
     NECRO_RING:     { ja: '蘇生時HP全快 + 攻撃力+3',                          en: 'Revived allies at full HP + attack +3' },
     RED_TEAR_RING:  { ja: '発動閾値 HP10% → HP20% 未満に拡大',                en: 'Activation threshold HP10% → HP20%' },
     TERRAIN_RING:   { ja: '特殊地形を移動後、通常の地面へ戻す。', en: 'Walk over special terrain to restore it to normal ground.' },
+    SUMMON_RING:    { ja: 'HP消費なしで討伐済みの敵（味方）を召喚。', en: 'Summon allies from defeated enemy types with no HP cost.' },
     PUSH_RING:      { ja: 'たくさんの壁を押すことができる。', en: 'Can push a large section of wall.' },
     WEB_RING:       { ja: '炎上する赤い蜘蛛の巣を放つ。', en: 'Launch a red burning spider web.' },
 };
@@ -27275,8 +27276,8 @@ function tryPlaceBlock(dx, dy) {
             return false;
         }
 
-        // 通常ダンジョン: HP10%消費チェック
-        const _summonHpCost = isInEscapeRoom ? 0 : Math.max(1, Math.floor(getPlayerMaxHp() * 0.1));
+        // 通常ダンジョン: HP10%消費チェック（召喚の指輪×2なら無料）
+        const _summonHpCost = (isInEscapeRoom || hasRingDoubled('SUMMON_RING')) ? 0 : Math.max(1, Math.floor(getPlayerMaxHp() * 0.1));
         if (_summonHpCost > 0 && player.hp <= _summonHpCost) {
             addKeyLog("Not enough HP to summon! (costs 10% MaxHP)");
             spawnFloatingText(player.x, player.y, 'LOW HP!', '#ef4444');
