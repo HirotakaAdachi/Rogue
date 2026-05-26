@@ -45952,7 +45952,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 }
 #tc-block-visual {
     width: 88px; height: 88px;
-    background: rgba(26,26,26,0.7); border: 2px solid #2e2e2e; color: #fff;
+    background: rgba(26,26,26,0.7); border: 2px solid #2e2e2e; color: #ededed;
     font-size: 72px; font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif; line-height: 1;
     border-radius: 50%; display: flex;
     align-items: center; justify-content: center;
@@ -46151,9 +46151,12 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
         // ボタン＠ ← プレイヤー連動
         if (typeof player !== 'undefined') {
             const _bIcon = document.getElementById('tc-block-icon');
-            // 向き：ブロック操作中は上書きしない
+            // 向き＋攻撃/衝突のnudge：ブロック操作中は上書きしない
             if (_bIcon && !_tcBlockActive) {
-                _bIcon.style.transform = player.facing === 'RIGHT' ? 'scaleX(-1)' : '';
+                const _scaleX = player.facing === 'RIGHT' ? -1 : 1;
+                const _nudgeX = (player.offsetX * 0.55).toFixed(1);
+                const _nudgeY = (player.offsetY * 0.55).toFixed(1);
+                _bIcon.style.transform = `translate(${_nudgeX}px,${_nudgeY}px) scaleX(${_scaleX})`;
             }
             // 被ダメージ検知
             const _now = performance.now();
