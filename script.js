@@ -46240,9 +46240,13 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
                     _bIcon.classList.remove('tc-icon-fall-out', 'tc-icon-fall-in');
                 }
             }
-            // animateLanding開始検知: player.offsetYが大きく負 → nudge解放しoverflow:hiddenに任せる
+            // animateLanding開始検知: player.offsetYが大きく負 → transform先にセットしてからopacity解除
             if (_tcFallAnimating && !_isFalling && !_tcLastFalling && player.offsetY < -80) {
-                if (_bIcon) _bIcon.style.opacity = '';
+                if (_bIcon) {
+                    const _scaleX = player.facing === 'RIGHT' ? -1 : 1;
+                    _bIcon.style.transform = `translate(${(player.offsetX*0.55).toFixed(1)}px,${(player.offsetY*0.55).toFixed(1)}px) scaleX(${_scaleX})`;
+                    _bIcon.style.opacity = '';  // transform適用後にopacity解除 → overflow:hiddenでクリップ済み
+                }
                 _tcFallAnimating = false;
             }
             _tcLastFalling = _isFalling;
