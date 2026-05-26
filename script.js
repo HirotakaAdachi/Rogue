@@ -12922,6 +12922,15 @@ function initMap() {
 
         // ゴール (左へ。右端に壁を残す)
         map[12][34] = SYMBOLS.STAIRS;
+
+        // 隠し部屋（ルーム1の真下）
+        // 底壁(y=16)の中心(x=8)を1タイル開通して通路とし、その先に隠し部屋を配置
+        map[16][8] = SYMBOLS.FLOOR; // 底壁中心の通路
+        for (let _hy = 17; _hy <= 21; _hy++) {
+            for (let _hx = 4; _hx <= 12; _hx++) {
+                map[_hy][_hx] = SYMBOLS.FLOOR;
+            }
+        }
         return;
     }
 
