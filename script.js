@@ -45818,14 +45818,26 @@ addLog("Game Ready.");
     const baseH = ROWS * TILE_SIZE + 217;
     const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     function applyScale() {
+        const isPortrait = isMobile && window.innerHeight > window.innerWidth;
         const MARGIN_V = isMobile ? 8 : 50;
         const MARGIN_H = isMobile ? 4 : 20;
         const scale = Math.min(
             (window.innerHeight - MARGIN_V * 2) / baseH,
             (window.innerWidth  - MARGIN_H * 2) / baseW
         );
-        wrapper.style.transformOrigin = 'center center';
-        wrapper.style.transform = `scale(${Math.max(0.1, scale)})`;
+        const s = Math.max(0.1, scale);
+        if (isPortrait) {
+            // 縦持ち：上寄せ（コントローラーとの重なりを減らす）
+            wrapper.style.transformOrigin = 'center top';
+            wrapper.style.transform = `scale(${s})`;
+            document.body.style.alignItems = 'flex-start';
+            document.body.style.paddingTop = MARGIN_V + 'px';
+        } else {
+            wrapper.style.transformOrigin = 'center center';
+            wrapper.style.transform = `scale(${s})`;
+            document.body.style.alignItems = '';
+            document.body.style.paddingTop = '';
+        }
     }
     applyScale();
     window.addEventListener('resize', applyScale);
@@ -45928,7 +45940,7 @@ addLog("Game Ready.");
     font-size: 72px; font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif; line-height: 1;
     border-radius: 50%; display: flex;
     align-items: center; justify-content: center;
-    pointer-events: none;
+    pointer-events: none; position: relative;
     transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 #tc-block-btn.tc-active #tc-block-visual {
@@ -45944,6 +45956,12 @@ addLog("Game Ready.");
 }
 #tc-block-visual.tc-hurt { animation: tc-hurt-bounce 0.52s ease-out forwards; }
 #tc-block-icon { transition: transform 0.05s ease-out, color 0.4s ease-out; }
+#tc-guard-label {
+    position: absolute; bottom: 10px; left: 0; right: 0;
+    text-align: center; font-size: 9px; letter-spacing: 1px;
+    color: #ffd700; opacity: 0; transition: opacity 0.1s;
+    pointer-events: none; font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+}
 #tc-actions { display: flex; flex-direction: column; gap: 6px; }
 .tc-act {
     width: 60px; height: 60px;
@@ -45973,7 +45991,7 @@ addLog("Game Ready.");
             <button class="tc-btn" id="tc-down">↓</button>
             <div></div>
         </div>
-        <button id="tc-block-btn"><span id="tc-block-visual"><span id="tc-block-icon" style="display:inline-block;transition:transform 0.05s ease-out;">＠</span></span></button>
+        <button id="tc-block-btn"><span id="tc-block-visual"><span id="tc-block-icon" style="display:inline-block;transition:transform 0.05s ease-out;">＠</span><span id="tc-guard-label"></span></span></button>
     `;
     document.body.appendChild(_tcWrap);
 
@@ -46133,6 +46151,16 @@ addLog("Game Ready.");
                         _bVis.classList.remove('tc-hurt');
                         _bIcon.style.color = '';
                     }, 620);
+                }
+            }
+            // Guard ラベル
+            const _gLabel = document.getElementById('tc-guard-label');
+            if (_gLabel) {
+                if (player.isDefending) {
+                    _gLabel.textContent = 'Guard';
+                    _gLabel.style.opacity = '1';
+                } else {
+                    _gLabel.style.opacity = '0';
                 }
             }
         }
