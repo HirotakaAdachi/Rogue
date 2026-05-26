@@ -46105,6 +46105,9 @@ addLog("Game Ready.");
         _zoomCanvas.style.transform = `scale(${_ZOOM_SCALE}) translate(${-tx}px, ${-ty}px)`;
     }
 
+    // ボタン＠ 連動用（_zoomLoop より前に宣言が必要）
+    let _tcLastFlashUntil = 0, _tcHurtTimer = null;
+
     // ズームrAFループ（毎フレームcanvas transformを更新 + ボタン＠連動）
     (function _zoomLoop() {
         _applyZoom();
@@ -46140,8 +46143,6 @@ addLog("Game Ready.");
     let _zoomTapX = 0, _zoomTapY = 0;
     let _zoomLastX = 0, _zoomLastY = 0;
     let _zoomIsPanning = false;
-    // ボタン＠ 連動用
-    let _tcLastFlashUntil = 0, _tcHurtTimer = null;
 
     _zoomVP.addEventListener('touchstart', e => {
         if (e.touches.length !== 1) return;
