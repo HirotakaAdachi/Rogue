@@ -46108,11 +46108,16 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
             tx = Math.max(0, Math.min(focusX - vpW / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
             ty = Math.max(0, Math.min(focusY - vpH / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
         } else {
-            // プレイヤー追従モード：常に主人公をビューポート中心に置く（黒エリア表示を許容）
+            // プレイヤー追従モード：HUD下端とコントローラー上端の中間を構図中心にする
             const px = (player.x + 0.5) * TILE_SIZE;
             const py = (player.y + 0.5) * TILE_SIZE;
+            const _hudRect  = document.getElementById('mobile-hud')?.getBoundingClientRect();
+            const _tcRect   = document.getElementById('tc-wrap')?.getBoundingClientRect();
+            const _hudBottom = _hudRect ? _hudRect.bottom : 0;
+            const _tcTop     = _tcRect  ? _tcRect.top    : vpH;
+            const _camCY = (_hudBottom + _tcTop) / 2; // 使用可能エリアの中心（画面px）
             tx = px - vpW / (_ZOOM_SCALE * 2);
-            ty = py - vpH / (_ZOOM_SCALE * 2);
+            ty = py - _camCY / _ZOOM_SCALE;
         }
         _lastTx = tx;
         _lastTy = ty;
