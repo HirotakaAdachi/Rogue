@@ -45873,7 +45873,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 }
 /* ── ズームモード ミニマップ オーバーレイ（右上） ── */
 #zoom-minimap {
-    position: fixed; top: 6px; right: 8px; z-index: 400;
+    position: fixed; top: 6px; right: 8px; z-index: 600;
     display: none;
     background: rgba(0,0,0,0.5); padding: 4px 6px; border-radius: 4px;
     pointer-events: none; opacity: 0.75;
@@ -45917,10 +45917,11 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 }
 #tc-dpad {
     display: grid;
-    grid-template-columns: repeat(3, 52px);
-    grid-template-rows: repeat(3, 52px);
+    grid-template-columns: repeat(3, 64px);
+    grid-template-rows: repeat(3, 64px);
     gap: 3px;
-    padding: 18px 0; margin: -18px 0; /* 上下のみ拡張（左右拡張は隣接ボタンを覆うため無効） */
+    padding: 18px 20px; margin: -18px -20px; /* 上下・左右に拡張、z-indexで隣接ボタンより前面 */
+    position: relative; z-index: 10;
 }
 .tc-btn {
     background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
@@ -46119,6 +46120,12 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
             tx = Math.max(0, Math.min(tx, Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
             // 縦：上端クランプのみ（下端は黒エリア表示を許可）
             ty = Math.max(0, _ctrlShift > 0 ? ty : Math.min(ty, Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
+            // 上部HUD重なり補正：プレイヤーがHUDに隠れる場合はtyを下げて黒エリアを出す
+            const _HUD_SAFE_PX = 65; // HUD高さ＋マージン（画面px）
+            const _playerScreenY = (py - ty) * _ZOOM_SCALE;
+            if (_playerScreenY < _HUD_SAFE_PX) {
+                ty -= (_HUD_SAFE_PX - _playerScreenY) / _ZOOM_SCALE;
+            }
         }
         _lastTx = tx;
         _lastTy = ty;
@@ -46293,8 +46300,8 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 
     // Dパッド（コンテナタッチ方式：ボタン外18px以内も反応）
     const _dpadEl = document.getElementById('tc-dpad');
-    const _DPAD_VIS = 3 * 52 + 2 * 3; // 162px（視覚上のサイズ）
-    const _DPAD_PAD_X = 0;             // 水平方向拡張なし（隣接ボタン干渉防止）
+    const _DPAD_VIS = 3 * 64 + 2 * 3; // 198px（視覚上のサイズ）
+    const _DPAD_PAD_X = 20;            // 水平方向20px拡張
     const _DPAD_PAD_Y = 18;            // 上下方向18px拡張
 
     function _dpadCalcDir(clientX, clientY) {
