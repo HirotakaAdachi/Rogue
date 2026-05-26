@@ -46242,8 +46242,10 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
             if (!_isFalling && _tcLastFalling) {
                 const _bIconF = document.getElementById('tc-block-icon');
                 if (_bIconF) {
+                    _bIconF.style.opacity = '0';  // クラス除去前に非表示にして瞬間表示を防ぐ
                     _bIconF.classList.remove('tc-icon-fall-out', 'tc-icon-fall-in');
                     void _bIconF.offsetWidth;
+                    _bIconF.style.opacity = '';
                     _bIconF.classList.add('tc-icon-fall-in');
                     setTimeout(() => {
                         _bIconF.classList.remove('tc-icon-fall-in');
