@@ -45995,16 +45995,6 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 #tc-block-icon.tc-icon-fall-out {
     animation: tc-icon-fall-out 0.65s ease-in forwards !important;
 }
-@keyframes tc-icon-drop-in {
-    0%   { transform: translateY(-50px); opacity: 0; }
-    45%  { transform: translateY(-22px); opacity: 0; }
-    65%  { transform: translateY(-5px);  opacity: 1; }
-    80%  { transform: translateY(3px); }
-    100% { transform: translateY(0);   opacity: 1; }
-}
-#tc-block-icon.tc-icon-drop-in {
-    animation: tc-icon-drop-in 0.42s linear forwards !important;
-}
 @keyframes tc-tome-glow {
     0%   { background: rgba(26,26,26,0.7); border-color: #2e2e2e; box-shadow: none; }
     20%  { background: rgba(168,85,247,0.35); border-color: #c084fc; box-shadow: 0 0 18px #a855f7, 0 0 6px #c084fc inset; }
@@ -46207,7 +46197,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     }
 
     // ボタン＠ 連動用（_zoomLoop より前に宣言が必要）
-    let _tcLastFlashUntil = 0, _tcHurtTimer = null, _tcLastFalling = false, _tcFallAnimating = false, _tcTomeLast = false;
+    let _tcLastFlashUntil = 0, _tcHurtTimer = null, _tcLastFalling = false, _tcFallAnimating = false, _tcTomeLast = false, _tcDropStarted = false;
 
     // ズームrAFループ（毎フレームcanvas transformを更新 + ボタン＠連動）
     (function _zoomLoop() {
@@ -46245,6 +46235,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
                 const _bIconF = document.getElementById('tc-block-icon');
                 if (_bIconF) {
                     _tcFallAnimating = true;
+                    _tcDropStarted = false;
                     _bIconF.classList.remove('tc-icon-fall-out', 'tc-icon-fall-in');
                     void _bIconF.offsetWidth;
                     _bIconF.classList.add('tc-icon-fall-out');
@@ -46258,17 +46249,17 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
                     _bIcon.classList.remove('tc-icon-fall-out', 'tc-icon-fall-in');
                 }
             }
-            // animateLanding開始検知: opacity制御のdrop-in animationを再生（Safari overflow:hiddenバグ回避）
-            if (_tcFallAnimating && !_isFalling && !_tcLastFalling && player.offsetY < -80) {
-                if (_bIcon && !_bIcon.classList.contains('tc-icon-drop-in')) {
-                    _bIcon.classList.remove('tc-icon-fall-out');
-                    void _bIcon.offsetWidth;
-                    _bIcon.style.opacity = '';
-                    _bIcon.classList.add('tc-icon-drop-in');
-                    setTimeout(() => {
-                        if (_bIcon) _bIcon.classList.remove('tc-icon-drop-in');
-                        _tcFallAnimating = false;
-                    }, 450);
+            // animateLanding検知: player.offsetYが丸の内側に入った瞬間だけ@を表示（Safari clip依存なし）
+            if (_tcFallAnimating && !_isFalling && !_tcLastFalling) {
+                if (player.offsetY < -100 && !_tcDropStarted) _tcDropStarted = true;
+                if (_tcDropStarted && player.offsetY >= -10) {
+                    if (_bIcon) {
+                        const _scaleX = player.facing === 'RIGHT' ? -1 : 1;
+                        _bIcon.style.transform = `translate(${(player.offsetX*0.55).toFixed(1)}px,${(player.offsetY*0.55).toFixed(1)}px) scaleX(${_scaleX})`;
+                        _bIcon.style.opacity = '';
+                    }
+                    _tcFallAnimating = false;
+                    _tcDropStarted = false;
                 }
             }
             _tcLastFalling = _isFalling;
