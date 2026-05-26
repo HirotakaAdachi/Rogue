@@ -21519,6 +21519,33 @@ function initMap() {
                 }
             }
         }
+        // フロア26: 穴・スタート地点周囲の壁を除去（スタック防止）
+        {
+            const _d26 = [[0,-1],[1,0],[0,1],[-1,0]];
+            for (let _y26 = 1; _y26 < ROWS - 1; _y26++) {
+                for (let _x26 = 1; _x26 < COLS - 1; _x26++) {
+                    const _t26 = map[_y26][_x26];
+                    if (_t26 !== SYMBOLS.DOOR && _t26 !== SYMBOLS.STAIRS) continue;
+                    for (const [_dx, _dy] of _d26) {
+                        const _nx = _x26 + _dx, _ny = _y26 + _dy;
+                        if (_nx >= 1 && _nx < COLS-1 && _ny >= 1 && _ny < ROWS-1 && map[_ny][_nx] === SYMBOLS.WALL)
+                            map[_ny][_nx] = SYMBOLS.FLOOR;
+                    }
+                }
+            }
+            const _hasMove26 = _d26.some(([_dx,_dy]) => {
+                const _nx = player.x+_dx, _ny = player.y+_dy;
+                const _t = map[_ny]?.[_nx];
+                return _t && _t !== SYMBOLS.WALL && _t !== SYMBOLS.BLOCK && _t !== SYMBOLS.BLOCK_CRACKED && _t !== SYMBOLS.DOOR;
+            });
+            if (!_hasMove26) {
+                for (const [_dx, _dy] of _d26) {
+                    const _nx = player.x+_dx, _ny = player.y+_dy;
+                    if (_nx >= 1 && _nx < COLS-1 && _ny >= 1 && _ny < ROWS-1)
+                        map[_ny][_nx] = SYMBOLS.FLOOR;
+                }
+            }
+        }
     }
 
     // ランダム友好エリア（F6-F49、確定フロア以外、5%確率）
@@ -45947,10 +45974,10 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 .tc-dsv { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
 .tc-dsv polygon { fill:rgba(26,26,26,0.7); stroke:#3a3a3a; stroke-width:1.5; }
 .tc-darrow { position:relative; z-index:1; }
-#tc-up    { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateY(14px);  padding-bottom:20px; }
-#tc-down  { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateY(-14px); padding-top:20px; }
-#tc-left  { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateX(14px);  padding-right:20px; }
-#tc-right { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateX(-14px); padding-left:20px; }
+#tc-up    { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateY(24px);  padding-bottom:20px; }
+#tc-down  { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateY(-24px); padding-top:20px; }
+#tc-left  { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateX(24px);  padding-right:20px; }
+#tc-right { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateX(-24px); padding-left:20px; }
 #tc-up:active .tc-dsv polygon, #tc-down:active .tc-dsv polygon,
 #tc-left:active .tc-dsv polygon, #tc-right:active .tc-dsv polygon { fill:#2e2e2e; }
 #tc-up:active, #tc-down:active, #tc-left:active, #tc-right:active { background:transparent!important; color:#fff; }
@@ -45960,14 +45987,20 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     border-radius: 50%; display: flex;
     align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
-    overflow: hidden;
 }
-@keyframes tc-descend-fall {
-    0%   { transform: translateY(0);   opacity: 1; }
+@keyframes tc-icon-fall-out {
+    0%   { transform: translateY(0);    opacity: 1; }
     100% { transform: translateY(56px); opacity: 0; }
 }
-#tc-block-visual.tc-descend-fall {
-    animation: tc-descend-fall 0.65s ease-in forwards !important;
+@keyframes tc-icon-fall-in {
+    0%   { transform: translateY(-56px); opacity: 0; }
+    100% { transform: translateY(0);     opacity: 1; }
+}
+#tc-block-icon.tc-icon-fall-out {
+    animation: tc-icon-fall-out 0.65s ease-in  forwards !important;
+}
+#tc-block-icon.tc-icon-fall-in {
+    animation: tc-icon-fall-in  0.5s  ease-out forwards !important;
 }
 #tc-block-visual {
     width: 88px; height: 88px;
@@ -45976,6 +46009,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     border-radius: 50%; display: flex;
     align-items: center; justify-content: center;
     pointer-events: none; position: relative;
+    overflow: hidden;
     transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 #tc-block-btn.tc-active #tc-block-visual {
@@ -46162,7 +46196,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     }
 
     // ボタン＠ 連動用（_zoomLoop より前に宣言が必要）
-    let _tcLastFlashUntil = 0, _tcHurtTimer = null, _tcLastFalling = false;
+    let _tcLastFlashUntil = 0, _tcHurtTimer = null, _tcLastFalling = false, _tcFallAnimating = false;
 
     // ズームrAFループ（毎フレームcanvas transformを更新 + ボタン＠連動）
     (function _zoomLoop() {
@@ -46171,7 +46205,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
         if (typeof player !== 'undefined') {
             const _bIcon = document.getElementById('tc-block-icon');
             // 向き＋攻撃/衝突のnudge：ブロック操作中は上書きしない
-            if (_bIcon && !_tcBlockActive) {
+            if (_bIcon && !_tcBlockActive && !_tcFallAnimating) {
                 const _scaleX = player.facing === 'RIGHT' ? -1 : 1;
                 const _nudgeX = (player.offsetX * 0.55).toFixed(1);
                 const _nudgeY = (player.offsetY * 0.55).toFixed(1);
@@ -46194,15 +46228,28 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
                     }, 620);
                 }
             }
-            // 階段落下演出: @が穴に落ちるアニメーション
+            // 階段落下演出: @アイコンのみ落下/出現アニメーション（○は固定）
             const _isFalling = typeof transition !== 'undefined' && transition.active && transition.mode === 'FALLING';
             if (_isFalling && !_tcLastFalling) {
-                const _bVis = document.getElementById('tc-block-visual');
-                if (_bVis) { _bVis.classList.remove('tc-descend-fall'); void _bVis.offsetWidth; _bVis.classList.add('tc-descend-fall'); }
+                const _bIconF = document.getElementById('tc-block-icon');
+                if (_bIconF) {
+                    _tcFallAnimating = true;
+                    _bIconF.classList.remove('tc-icon-fall-out', 'tc-icon-fall-in');
+                    void _bIconF.offsetWidth;
+                    _bIconF.classList.add('tc-icon-fall-out');
+                }
             }
             if (!_isFalling && _tcLastFalling) {
-                const _bVis = document.getElementById('tc-block-visual');
-                if (_bVis) _bVis.classList.remove('tc-descend-fall');
+                const _bIconF = document.getElementById('tc-block-icon');
+                if (_bIconF) {
+                    _bIconF.classList.remove('tc-icon-fall-out', 'tc-icon-fall-in');
+                    void _bIconF.offsetWidth;
+                    _bIconF.classList.add('tc-icon-fall-in');
+                    setTimeout(() => {
+                        _bIconF.classList.remove('tc-icon-fall-in');
+                        _tcFallAnimating = false;
+                    }, 550);
+                }
             }
             _tcLastFalling = _isFalling;
             // Guard ラベル
