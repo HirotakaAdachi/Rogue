@@ -45845,6 +45845,8 @@ addLog("Game Ready.");
 
 // 縦持ち画面のオフセット（スワイプで調整、localStorageに保存）
 let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40', 10);
+// 横持ち標準画面のオフセット（スワイプで上下調整、localStorageに保存）
+let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '0', 10);
 
 // ウィンドウサイズに合わせてゲーム全体をスケーリング（タッチコントロールはオーバーレイなので余白不要）
 (function initScale() {
@@ -45869,7 +45871,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
             document.body.style.paddingTop = (MARGIN_V + _portraitOffsetY) + 'px';
         } else {
             wrapper.style.transformOrigin = 'center center';
-            wrapper.style.transform = `scale(${s})`;
+            wrapper.style.transform = `translateY(${_landscapeOffsetY}px) scale(${s})`;
             document.body.style.alignItems = '';
             document.body.style.paddingTop = '';
         }
@@ -46159,7 +46161,9 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
                 focusY = 12 + 145 / 2;  // y=84
             } else if (gameState === 'INVENTORY') {
                 focusX = 154 + 250 / 2; // ITEM BAGパネル中心 x=279
-                focusY = CANVAS_H / 2;  // y=251
+                // カーソル追従：選択アイテム行を中心に（LIST_TOP=48, ROW_H=34）
+                const _invSel = typeof inventorySelection !== 'undefined' ? inventorySelection : 0;
+                focusY = 48 + _invSel * 34 + 17;
             } else if (gameState === 'RINGS') {
                 if (ringEquipPhase === 'RING') {
                     focusX = 12 + 310 / 2;  // SELECT RINGリスト中心 x=167
@@ -46307,12 +46311,19 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
         const totalDy = cy - _zoomTapY;
 
         if (!_tcZoomMode) {
-            // 非ズーム縦持ち：縦スワイプで画面位置を上下調整
-            if (window.innerHeight > window.innerWidth && totalDx * totalDx + totalDy * totalDy > 100) {
+            // 非ズーム：縦スワイプで画面位置を上下調整（縦持ち・横持ち共通）
+            if (totalDx * totalDx + totalDy * totalDy > 100) {
                 e.preventDefault();
                 _zoomIsPanning = true;
-                _portraitOffsetY = Math.max(-30, Math.min(window.innerHeight * 0.45,
-                    _portraitOffsetY + (cy - _zoomLastY)));
+                if (window.innerHeight > window.innerWidth) {
+                    // 縦持ち
+                    _portraitOffsetY = Math.max(-30, Math.min(window.innerHeight * 0.45,
+                        _portraitOffsetY + (cy - _zoomLastY)));
+                } else {
+                    // 横持ち
+                    _landscapeOffsetY = Math.max(-150, Math.min(150,
+                        _landscapeOffsetY + (cy - _zoomLastY)));
+                }
                 if (window._applyGameScale) window._applyGameScale();
             }
             _zoomLastX = cx; _zoomLastY = cy;
@@ -46340,9 +46351,13 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
         if (_zoomIsPanning) {
             e.stopPropagation(); // パン完了時は document.touchend に伝播させない（メッセージ誤送り防止）
             _zoomIsPanning = false;
-            // 縦持ち位置をlocalStorageに保存
-            if (!_tcZoomMode && window.innerHeight > window.innerWidth) {
-                localStorage.setItem('portrait_offset_y', String(Math.round(_portraitOffsetY)));
+            // 画面位置をlocalStorageに保存
+            if (!_tcZoomMode) {
+                if (window.innerHeight > window.innerWidth) {
+                    localStorage.setItem('portrait_offset_y', String(Math.round(_portraitOffsetY)));
+                } else {
+                    localStorage.setItem('landscape_offset_y', String(Math.round(_landscapeOffsetY)));
+                }
             }
             return;
         }
