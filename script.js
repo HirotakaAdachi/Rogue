@@ -45944,10 +45944,10 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 }
 .tc-btn:active { background: #2e2e2e; color: #fff; }
 /* 方向ボタン: 中心向き90°尖端の家型五角形・中心へ近接 */
-#tc-up    { clip-path: polygon(0% 0%, 100% 0%, 100% 50%, 50% 100%, 0% 50%); border:none; padding-bottom:20px; transform: translateY(14px); }
-#tc-down  { clip-path: polygon(50% 0%, 100% 50%, 100% 100%, 0% 100%, 0% 50%); border:none; padding-top:20px; transform: translateY(-14px); }
-#tc-left  { clip-path: polygon(0% 0%, 50% 0%, 100% 50%, 50% 100%, 0% 100%); border:none; padding-right:20px; transform: translateX(14px); }
-#tc-right { clip-path: polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%, 0% 50%); border:none; padding-left:20px; transform: translateX(-14px); }
+#tc-up    { -webkit-clip-path: polygon(0% 0%, 100% 0%, 100% 50%, 50% 100%, 0% 50%); clip-path: polygon(0% 0%, 100% 0%, 100% 50%, 50% 100%, 0% 50%); border:none; border-radius:0; padding-bottom:20px; transform: translateY(14px); }
+#tc-down  { -webkit-clip-path: polygon(50% 0%, 100% 50%, 100% 100%, 0% 100%, 0% 50%); clip-path: polygon(50% 0%, 100% 50%, 100% 100%, 0% 100%, 0% 50%); border:none; border-radius:0; padding-top:20px; transform: translateY(-14px); }
+#tc-left  { -webkit-clip-path: polygon(0% 0%, 50% 0%, 100% 50%, 50% 100%, 0% 100%); clip-path: polygon(0% 0%, 50% 0%, 100% 50%, 50% 100%, 0% 100%); border:none; border-radius:0; padding-right:20px; transform: translateX(14px); }
+#tc-right { -webkit-clip-path: polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%, 0% 50%); clip-path: polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%, 0% 50%); border:none; border-radius:0; padding-left:20px; transform: translateX(-14px); }
 #tc-block-btn {
     width: 120px; height: 120px;
     background: transparent; border: none; padding: 0;
