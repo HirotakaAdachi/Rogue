@@ -30011,6 +30011,7 @@ async function handleAction(dx, dy) {
     // ブロック設置モード（杖を持っている時のみ）
     if (player.hasWand && isSpacePressed && (dx !== 0 || dy !== 0)) {
         if (tryPlaceBlock(dx, dy)) {
+            player.isDefending = false; // ブロック設置ターンはGuard解除
             spaceUsedForBlock = true;
             isProcessing = true;
             turnCount++;
@@ -45896,7 +45897,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 }
 #tc-wrap > * { pointer-events: auto; }
 /* ── 横向き: 全画面overlay・Dパッド左下・その他ボタン右側 ── */
-@media (orientation: landscape) and (max-height: 500px) {
+@media (orientation: landscape) {
     #tc-wrap {
         top: 0; left: 0; right: 0; bottom: 0;
         background: transparent;
@@ -45920,8 +45921,10 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     grid-template-columns: repeat(3, 64px);
     grid-template-rows: repeat(3, 64px);
     gap: 3px;
-    padding: 18px 20px; margin: -18px -20px; /* 上下・左右に拡張、z-indexで隣接ボタンより前面 */
-    position: relative; z-index: 10;
+    padding: 18px 20px; margin: -18px -20px;
+}
+@media (orientation: portrait) {
+    #tc-dpad { position: relative; z-index: 10; } /* 縦持ち：横拡張領域が隣接ボタンより前面 */
 }
 .tc-btn {
     background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
