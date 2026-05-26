@@ -1616,7 +1616,7 @@ const FIXED_STAGES = [
     { floor: 18,  title: 'LABYRINTH ISLAND (FAIRY)' },
     { floor: 20,  title: 'DARKNESS BELOW',                 suppressWind: true },
     { floor: 23,  title: 'CAVE AMBUSH' },
-    { floor: 25,  title: 'FROZEN CAVERN',                  suppressWind: true },
+    { floor: 25,  title: 'FROZEN GALE' },
     { floor: 26,  title: 'PEACEFUL VILLAGE',                   suppressWind: true },
     { floor: 27,  title: 'SMALL ROOM LABYRINTH' },
     { floor: 29,  title: 'SEALED CHAMBER II' },
@@ -19949,6 +19949,11 @@ function initMap() {
     // 風フロアのランダム発生 (36階以降、3%の確率。固定ステージには発生しない)
     const fixedStages = FIXED_WIND_SUPPRESS_FLOORS;
     // floorLevel === 33 の風は廃止
+    if (floorLevel === 25 && !isWindFloor) {
+        isWindFloor = true;
+        windTimer = 4;
+        addKeyLog("💨 FLOOR 25: Frozen gales howl through the cavern!");
+    }
     if (floorLevel === 45 && !isWindFloor) {
         isWindFloor = false; // wind disabled
         windTimer = 4; // 1ターン目で即発動
@@ -45938,17 +45943,25 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     -webkit-tap-highlight-color: transparent; touch-action: none;
 }
 .tc-btn:active { background: #2e2e2e; color: #fff; }
-/* 方向ボタン: 中心側に尖端を向けた家型五角形・中心へ近接 */
-#tc-up    { clip-path: polygon(0% 0%, 100% 0%, 100% 76%, 50% 100%, 0% 76%); border:none; padding-bottom:20px; transform: translateY(14px); }
-#tc-down  { clip-path: polygon(50% 0%, 100% 24%, 100% 100%, 0% 100%, 0% 24%); border:none; padding-top:20px; transform: translateY(-14px); }
-#tc-left  { clip-path: polygon(0% 0%, 76% 0%, 100% 50%, 76% 100%, 0% 100%); border:none; padding-right:20px; transform: translateX(14px); }
-#tc-right { clip-path: polygon(24% 0%, 100% 0%, 100% 100%, 24% 100%, 0% 50%); border:none; padding-left:20px; transform: translateX(-14px); }
+/* 方向ボタン: 中心向き90°尖端の家型五角形・中心へ近接 */
+#tc-up    { clip-path: polygon(0% 0%, 100% 0%, 100% 50%, 50% 100%, 0% 50%); border:none; padding-bottom:20px; transform: translateY(14px); }
+#tc-down  { clip-path: polygon(50% 0%, 100% 50%, 100% 100%, 0% 100%, 0% 50%); border:none; padding-top:20px; transform: translateY(-14px); }
+#tc-left  { clip-path: polygon(0% 0%, 50% 0%, 100% 50%, 50% 100%, 0% 100%); border:none; padding-right:20px; transform: translateX(14px); }
+#tc-right { clip-path: polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%, 0% 50%); border:none; padding-left:20px; transform: translateX(-14px); }
 #tc-block-btn {
     width: 120px; height: 120px;
     background: transparent; border: none; padding: 0;
     border-radius: 50%; display: flex;
     align-items: center; justify-content: center;
     -webkit-tap-highlight-color: transparent; touch-action: none;
+    overflow: hidden;
+}
+@keyframes tc-descend-fall {
+    0%   { transform: translateY(0);   opacity: 1; }
+    100% { transform: translateY(56px); opacity: 0; }
+}
+#tc-block-visual.tc-descend-fall {
+    animation: tc-descend-fall 0.65s ease-in forwards !important;
 }
 #tc-block-visual {
     width: 88px; height: 88px;
@@ -46143,7 +46156,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     }
 
     // ボタン＠ 連動用（_zoomLoop より前に宣言が必要）
-    let _tcLastFlashUntil = 0, _tcHurtTimer = null;
+    let _tcLastFlashUntil = 0, _tcHurtTimer = null, _tcLastFalling = false;
 
     // ズームrAFループ（毎フレームcanvas transformを更新 + ボタン＠連動）
     (function _zoomLoop() {
@@ -46175,6 +46188,17 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
                     }, 620);
                 }
             }
+            // 階段落下演出: @が穴に落ちるアニメーション
+            const _isFalling = typeof transition !== 'undefined' && transition.active && transition.mode === 'FALLING';
+            if (_isFalling && !_tcLastFalling) {
+                const _bVis = document.getElementById('tc-block-visual');
+                if (_bVis) { _bVis.classList.remove('tc-descend-fall'); void _bVis.offsetWidth; _bVis.classList.add('tc-descend-fall'); }
+            }
+            if (!_isFalling && _tcLastFalling) {
+                const _bVis = document.getElementById('tc-block-visual');
+                if (_bVis) _bVis.classList.remove('tc-descend-fall');
+            }
+            _tcLastFalling = _isFalling;
             // Guard ラベル
             const _gLabel = document.getElementById('tc-guard-label');
             if (_gLabel) {
