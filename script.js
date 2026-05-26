@@ -46078,10 +46078,9 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
         const vpH = window.innerHeight;
         let tx, ty;
         if (_zoomFreePan) {
-            // 自由パンモード：_manualTx/tyをそのまま使用（マップ外も表示可）
-            const maxOverflow = 200 / _ZOOM_SCALE; // 端から200px以上は出ない
-            tx = Math.max(-maxOverflow, Math.min(_manualTx, CANVAS_W - vpW / _ZOOM_SCALE + maxOverflow));
-            ty = Math.max(-maxOverflow, Math.min(_manualTy, CANVAS_H - vpH / _ZOOM_SCALE + maxOverflow));
+            // 自由パンモード：クランプなし（プレイヤー中心構図からジャンプなしで移行）
+            tx = _manualTx;
+            ty = _manualTy;
         } else if (gameState !== 'PLAYING') {
             // メニュー中心モード：最前面ウィンドウのキャンバス座標を中心に
             let focusX, focusY;
