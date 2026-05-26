@@ -45924,8 +45924,11 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     padding: 18px 20px; margin: -18px -20px;
 }
 @media (orientation: portrait) {
-    #tc-dpad {
-        position: relative; z-index: 10;
+    #tc-wrap { justify-content: center; }
+    #tc-dpad { position: relative; z-index: 10; }
+    #tc-block-btn {
+        position: absolute; right: 16px;
+        top: 50%; transform: translateY(-50%);
     }
 }
 .tc-btn {
@@ -46259,7 +46262,8 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
             const r = _blk.getBoundingClientRect();
             _act.style.position = 'fixed';
             _act.style.right = '12px';
-            _act.style.top  = Math.max(4, r.top - 4) + 'px';
+            // MENUをGuardボタン上端より60px+12px上に配置
+            _act.style.top  = Math.max(4, r.top - 72) + 'px';
             _act.style.transform = '';
         } else {
             _act.style.position = '';
