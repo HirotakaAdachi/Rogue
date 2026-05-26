@@ -45992,15 +45992,8 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     0%   { transform: translateY(0);    opacity: 1; }
     100% { transform: translateY(56px); opacity: 0; }
 }
-@keyframes tc-icon-fall-in {
-    0%   { transform: translateY(-56px); opacity: 0; }
-    100% { transform: translateY(0);     opacity: 1; }
-}
 #tc-block-icon.tc-icon-fall-out {
-    animation: tc-icon-fall-out 0.65s ease-in  forwards !important;
-}
-#tc-block-icon.tc-icon-fall-in {
-    animation: tc-icon-fall-in  0.5s  ease-out forwards !important;
+    animation: tc-icon-fall-out 0.65s ease-in forwards !important;
 }
 #tc-block-visual {
     width: 88px; height: 88px;
@@ -46240,18 +46233,17 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
                 }
             }
             if (!_isFalling && _tcLastFalling) {
-                const _bIconF = document.getElementById('tc-block-icon');
-                if (_bIconF) {
-                    _bIconF.style.opacity = '0';  // クラス除去前に非表示にして瞬間表示を防ぐ
-                    _bIconF.classList.remove('tc-icon-fall-out', 'tc-icon-fall-in');
-                    void _bIconF.offsetWidth;
-                    _bIconF.style.opacity = '';
-                    _bIconF.classList.add('tc-icon-fall-in');
-                    setTimeout(() => {
-                        _bIconF.classList.remove('tc-icon-fall-in');
-                        _tcFallAnimating = false;
-                    }, 550);
+                // FALLING終了: @アイコンを非表示のまま維持（nudge抑制継続）
+                // 表示解除はanimateLanding検知（player.offsetY < -80）で行う
+                if (_bIcon) {
+                    _bIcon.style.opacity = '0';
+                    _bIcon.classList.remove('tc-icon-fall-out', 'tc-icon-fall-in');
                 }
+            }
+            // animateLanding開始検知: player.offsetYが大きく負 → nudge解放しoverflow:hiddenに任せる
+            if (_tcFallAnimating && !_isFalling && !_tcLastFalling && player.offsetY < -80) {
+                if (_bIcon) _bIcon.style.opacity = '';
+                _tcFallAnimating = false;
             }
             _tcLastFalling = _isFalling;
             // Guard ラベル
