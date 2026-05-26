@@ -45882,7 +45882,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     display: flex; justify-content: flex-start;
 }
 #zoom-minimap .minimap-row span {
-    width: 14px; height: 8px; line-height: 8px; font-size: 7px;
+    width: 28px; height: 16px; line-height: 16px; font-size: 14px;
 }
 /* ── 縦向き: 半透明オーバーレイ（下部） ── */
 #tc-wrap {
@@ -45960,8 +45960,8 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 #tc-block-visual.tc-hurt { animation: tc-hurt-bounce 0.52s ease-out forwards; }
 #tc-block-icon { transition: transform 0.05s ease-out, color 0.4s ease-out; }
 #tc-guard-label {
-    position: absolute; bottom: 10px; left: 0; right: 0;
-    text-align: center; font-size: 9px; letter-spacing: 1px;
+    position: absolute; top: 6px; left: 0; right: 0;
+    text-align: center; font-size: 11px; letter-spacing: 1px;
     color: #ffd700; opacity: 0; transition: opacity 0.1s;
     pointer-events: none; font-family: -apple-system, 'Hiragino Sans', 'Yu Gothic', sans-serif;
 }
