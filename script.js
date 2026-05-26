@@ -45925,7 +45925,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 }
 @media (orientation: portrait) {
     #tc-wrap { justify-content: center; }
-    #tc-dpad { position: relative; z-index: 10; }
+    #tc-dpad { position: relative; z-index: 10; margin-right: 80px; }
     #tc-block-btn {
         position: absolute; right: 16px;
         top: 50%; transform: translateY(-50%);
@@ -46088,6 +46088,10 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
             // 自由パンモード：クランプなし（プレイヤー中心構図からジャンプなしで移行）
             tx = _manualTx;
             ty = _manualTy;
+        } else if (typeof transition !== 'undefined' && transition.active && transition.mode === 'FALLING') {
+            // 落下カットシーン中: キャンバス中央を構図中心に（フロア文字が見えるように）
+            tx = CANVAS_W / 2 - vpW / (_ZOOM_SCALE * 2);
+            ty = CANVAS_H / 2 - vpH / (_ZOOM_SCALE * 2);
         } else if (gameState !== 'PLAYING') {
             // メニュー中心モード：最前面ウィンドウのキャンバス座標を中心に
             let focusX, focusY;
