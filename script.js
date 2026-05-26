@@ -45925,7 +45925,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 }
 @media (orientation: portrait) {
     #tc-wrap { justify-content: center; }
-    #tc-dpad { position: relative; z-index: 10; margin-right: 80px; }
+    #tc-dpad { position: relative; z-index: 10; margin-right: 16px; }
     #tc-block-btn {
         position: absolute; right: 16px;
         top: 50%; transform: translateY(-50%);
