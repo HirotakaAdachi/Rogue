@@ -45924,7 +45924,12 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     padding: 18px 20px; margin: -18px -20px;
 }
 @media (orientation: portrait) {
-    #tc-dpad { position: relative; z-index: 10; } /* 縦持ち：横拡張領域が隣接ボタンより前面 */
+    #tc-dpad {
+        position: relative; z-index: 10;
+        grid-template-columns: repeat(3, 80px);
+        grid-template-rows: repeat(3, 80px);
+    }
+    #tc-actions { position: absolute; right: 12px; top: 10px; }
 }
 .tc-btn {
     background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
@@ -46295,19 +46300,19 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 
     // Dパッド（コンテナタッチ方式：ボタン外18px以内も反応）
     const _dpadEl = document.getElementById('tc-dpad');
-    const _DPAD_VIS = 3 * 64 + 2 * 3; // 198px（視覚上のサイズ）
     const _DPAD_PAD_X = 20;            // 水平方向20px拡張
     const _DPAD_PAD_Y = 18;            // 上下方向18px拡張
 
     function _dpadCalcDir(clientX, clientY) {
         const r = _dpadEl.getBoundingClientRect();
-        // getBoundingClientRect はパディングを含む外形を返す
-        // 上下のみ18px拡張なので、y だけオフセットする
         const x = clientX - r.left - _DPAD_PAD_X;
         const y = clientY - r.top  - _DPAD_PAD_Y;
-        const cx = _DPAD_VIS / 2, cy = _DPAD_VIS / 2;
+        // 縦持ちはセル80px(246px)、横持ちは64px(198px)
+        const _cell = (window.innerHeight > window.innerWidth) ? 80 : 64;
+        const _VIS  = 3 * _cell + 2 * 3;
+        const cx = _VIS / 2, cy = _VIS / 2;
         const adx = Math.abs(x - cx), ady = Math.abs(y - cy);
-        if (adx < _DPAD_VIS * 0.15 && ady < _DPAD_VIS * 0.15) return [0, 0]; // 中心
+        if (adx < _VIS * 0.15 && ady < _VIS * 0.15) return [0, 0]; // 中心
         if (adx > ady) return [x > cx ? 1 : -1, 0];
         return [0, y > cy ? 1 : -1];
     }
