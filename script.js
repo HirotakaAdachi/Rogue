@@ -45938,11 +45938,11 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     -webkit-tap-highlight-color: transparent; touch-action: none;
 }
 .tc-btn:active { background: #2e2e2e; color: #fff; }
-/* 方向ボタン: 中心側に尖端を向けた家型五角形 */
-#tc-up    { clip-path: polygon(0% 0%, 100% 0%, 100% 62%, 50% 100%, 0% 62%); border:none; padding-bottom:16px; }
-#tc-down  { clip-path: polygon(50% 0%, 100% 38%, 100% 100%, 0% 100%, 0% 38%); border:none; padding-top:16px; }
-#tc-left  { clip-path: polygon(0% 0%, 62% 0%, 100% 50%, 62% 100%, 0% 100%); border:none; padding-right:16px; }
-#tc-right { clip-path: polygon(38% 0%, 100% 0%, 100% 100%, 38% 100%, 0% 50%); border:none; padding-left:16px; }
+/* 方向ボタン: 中心側に尖端を向けた家型五角形・中心へ近接 */
+#tc-up    { clip-path: polygon(0% 0%, 100% 0%, 100% 76%, 50% 100%, 0% 76%); border:none; padding-bottom:20px; transform: translateY(30px); }
+#tc-down  { clip-path: polygon(50% 0%, 100% 24%, 100% 100%, 0% 100%, 0% 24%); border:none; padding-top:20px; transform: translateY(-30px); }
+#tc-left  { clip-path: polygon(0% 0%, 76% 0%, 100% 50%, 76% 100%, 0% 100%); border:none; padding-right:20px; transform: translateX(30px); }
+#tc-right { clip-path: polygon(24% 0%, 100% 0%, 100% 100%, 24% 100%, 0% 50%); border:none; padding-left:20px; transform: translateX(-30px); }
 #tc-block-btn {
     width: 120px; height: 120px;
     background: transparent; border: none; padding: 0;
