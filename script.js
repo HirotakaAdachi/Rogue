@@ -2084,6 +2084,7 @@ let storyMessage = null; // { lines: [], alpha: 0, showNext: false }
 let isTutorialInputActive = false; // チュートリアル入力待ちフラグ
 let endingSkipLock = false; // エンディング中のスキップ防止フラグ
 let hasShownStage1Tut = false; // 1階スタミナチュートリアル済みフラグ
+let _f1SecretWallHits = 0;    // フロア1 秘密の壁ノック回数（3回で崩壊）
 let _crumbleOrigMap = null;   // AURA_MAZE: 全壁状態のスナップショット
 let _crumbleScreenKey = null; // AURA_MAZE: 現在のアクティブ画面キー ("sx,sy")
 let _crumblePrevX = -1, _crumblePrevY = -1; // AURA_MAZE: 前フレームのプレイヤー位置
@@ -12884,44 +12885,79 @@ function initMap() {
         addLog("TUTORIAL 1: Attack obstacles with [Arrows].");
         addLog("Break the blocks (□) surrounding you and head to the hole (◯).");
 
+        _f1SecretWallHits = 0;
+
+        // マルチスクリーン設定 (1列×2行: 上=チュートリアル, 下=隠し部屋)
+        multiScreenMode = true;
+        screenGridCols = 1; screenGridRows = 2;
+        visitedScreens = [[true], [false]];
+        screenGrid = {
+            maps:            Array.from({ length: 2 }, () => Array.from({ length: 1 }, () => null)),
+            enemies:         Array.from({ length: 2 }, () => Array.from({ length: 1 }, () => [])),
+            wisps:           Array.from({ length: 2 }, () => Array.from({ length: 1 }, () => [])),
+            tempWalls:       Array.from({ length: 2 }, () => Array.from({ length: 1 }, () => [])),
+            wind:            Array.from({ length: 2 }, () => Array.from({ length: 1 }, () => false)),
+            xWallScreens:    Array.from({ length: 2 }, () => Array.from({ length: 1 }, () => false)),
+            scrollWallState: Array.from({ length: 2 }, () => Array.from({ length: 1 }, () => null)),
+            ambushRooms:     Array.from({ length: 2 }, () => Array.from({ length: 1 }, () => [])),
+            types:           Array.from({ length: 2 }, () => Array.from({ length: 1 }, () => null)),
+        };
+        currentScreen = { x: 0, y: 0 };
+
         // 三つの小部屋 (左に2マスずらし、右端に壁を確保)
         const tr = [
             { x1: 3, y1: 9, x2: 13, y2: 15 }, // スタート地点
             { x1: 18, y1: 10, x2: 25, y2: 14 }, // 敵の部屋
             { x1: 30, y1: 9, x2: 37, y2: 15 }  // ゴールの部屋
         ];
-
         tr.forEach(r => {
-            for (let y = r.y1; y <= r.y2; y++) {
-                for (let x = r.x1; x <= r.x2; x++) { map[y][x] = SYMBOLS.FLOOR; }
-            }
+            for (let y = r.y1; y <= r.y2; y++)
+                for (let x = r.x1; x <= r.x2; x++) map[y][x] = SYMBOLS.FLOOR;
         });
 
         // 廊下でつなぐ
         for (let x = 13; x <= 18; x++) map[12][x] = SYMBOLS.FLOOR;
         for (let x = 25; x <= 30; x++) map[12][x] = SYMBOLS.FLOOR;
 
-        // 主人公の開始位置 (1部屋目の中央、左へ)
+        // 秘密の縦通路 (敵の部屋底 x=20 から画面下端近くまで)
+        // y=24 は WALL のまま（秘密の壁）
+        for (let y = 15; y <= 23; y++) map[y][20] = SYMBOLS.FLOOR;
+
+        // 主人公の開始位置
         player.x = 8; player.y = 12;
 
         // 主人公から2マス離れた位置を四角く囲む (耐久2の接地ブロック)
         const d = 2;
         for (let y = player.y - d; y <= player.y + d; y++) {
             for (let x = player.x - d; x <= player.x + d; x++) {
-                if (x === player.x - d || x === player.x + d || y === player.y - d || y === player.y + d) {
+                if (x === player.x - d || x === player.x + d || y === player.y - d || y === player.y + d)
                     tempWalls.push({ x: x, y: y, hp: 2, type: 'BLOCK' });
-                }
             }
         }
 
-        // 二番目の部屋に敵を配置 (通路付近)
-        enemies.push({
-            type: 'NORMAL', x: 25, y: 12, hp: 10, maxHp: 10,
-            flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 5, stunTurns: 0
-        });
+        // 二番目の部屋に敵を配置
+        enemies.push({ type: 'NORMAL', x: 25, y: 12, hp: 10, maxHp: 10, flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 5, stunTurns: 0 });
 
-        // ゴール (左へ。右端に壁を残す)
+        // ゴール
         map[12][34] = SYMBOLS.STAIRS;
+
+        // スクリーングリッドに上の画面を登録
+        screenGrid.maps[0][0]     = map;
+        screenGrid.enemies[0][0]  = enemies;
+        screenGrid.tempWalls[0][0]= tempWalls;
+
+        // 下の画面 [sy=1, sx=0]: 隠し部屋
+        {
+            const _hMap = Array.from({ length: ROWS }, () => Array(COLS).fill(SYMBOLS.WALL));
+            // 上端通路（上の画面の下端と対応: y=0, x=18..21）
+            for (let _px = 18; _px <= 21; _px++) _hMap[0][_px] = SYMBOLS.FLOOR;
+            // 部屋本体：画面全体を開放した広い空間
+            for (let _hy = 1; _hy < ROWS - 1; _hy++)
+                for (let _hx = 1; _hx < COLS - 1; _hx++)
+                    _hMap[_hy][_hx] = SYMBOLS.FLOOR;
+            screenGrid.maps[1][0] = _hMap;
+        }
+
         return;
     }
 
@@ -28977,10 +29013,10 @@ async function slidePlayer(dx, dy) {
         const hasEnemy = enemies.some(e => e.x === nx && e.y === ny && e.hp > 0);
         if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS || isWallAt(nx, ny) || hasEnemy) {
             if (!hasEnemy) {
-                const _isSecretWall = isInEscapeRoom && (
+                const _isSecretWall = (isInEscapeRoom && (
                     (_escapeRoomPage === 7 && ny === ROWS - 1 && nx >= 18 && nx <= 21) ||
                     (_escapeRoomPage === 5 && nx === 0 && ny >= 11 && ny <= 13)
-                );
+                )) || (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx === 20);
                 if (_isSecretWall) SOUNDS.SECRET_WALL_KNOCK();
                 else SOUNDS.WALL_BUMP();
             }
@@ -31342,12 +31378,25 @@ async function handleAction(dx, dy) {
                 _erLockedWallGlowUntil = performance.now() + 500;
                 _erLockedWallGlowTile = { x: nx, y: ny };
             } else {
-                const _isSecretWall = isInEscapeRoom && (
+                const _isSecretWall = (isInEscapeRoom && (
                     (_escapeRoomPage === 7 && ny === ROWS - 1 && nx >= 18 && nx <= 21) ||
                     (_escapeRoomPage === 5 && nx === 0 && ny >= 11 && ny <= 13)
-                );
-                if (_isSecretWall) SOUNDS.SECRET_WALL_KNOCK();
-                else {
+                )) || (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx === 20);
+                if (_isSecretWall) {
+                    SOUNDS.SECRET_WALL_KNOCK();
+                    // フロア1 秘密の壁: 3回ノックで崩壊
+                    if (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx === 20) {
+                        _f1SecretWallHits++;
+                        if (_f1SecretWallHits === 2) addKeyLog("The wall sounds hollow... something is beyond it.");
+                        if (_f1SecretWallHits >= 3) {
+                            map[ny][nx] = SYMBOLS.FLOOR;
+                            SOUNDS.WALL_BREAK();
+                            setScreenShake(8, 200);
+                            spawnFloatingText(nx, ny, "CRACK!", '#94a3b8');
+                            addKeyLog("The wall crumbles! A hidden passage opens below.");
+                        }
+                    }
+                } else {
                     SOUNDS.WALL_BUMP();
                     if (isBlockedByWall && !player.isInfiniteStamina) player.stamina = Math.max(0, player.stamina - 20);
                 }
