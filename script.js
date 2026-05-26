@@ -46109,23 +46109,11 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
             tx = Math.max(0, Math.min(focusX - vpW / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
             ty = Math.max(0, Math.min(focusY - vpH / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
         } else {
-            // プレイヤー追従モード
+            // プレイヤー追従モード：常に主人公をビューポート中心に置く（黒エリア表示を許容）
             const px = (player.x + 0.5) * TILE_SIZE;
             const py = (player.y + 0.5) * TILE_SIZE;
-            // 下端5マス以内はカメラを上にシフト（コントローラー重なり回避）
-            const _bottomTiles = Math.max(0, (ROWS - 1) - player.y);
-            const _ctrlShift = Math.max(0, (5 - _bottomTiles) / 5) * 90; // 最大90canvaspx上シフト
             tx = px - vpW / (_ZOOM_SCALE * 2);
-            ty = py - vpH / (_ZOOM_SCALE * 2) - _ctrlShift;
-            tx = Math.max(0, Math.min(tx, Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
-            // 縦：上端クランプのみ（下端は黒エリア表示を許可）
-            ty = Math.max(0, _ctrlShift > 0 ? ty : Math.min(ty, Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
-            // 上部HUD重なり補正：プレイヤーがHUDに隠れる場合はtyを下げて黒エリアを出す
-            const _HUD_SAFE_PX = 65; // HUD高さ＋マージン（画面px）
-            const _playerScreenY = (py - ty) * _ZOOM_SCALE;
-            if (_playerScreenY < _HUD_SAFE_PX) {
-                ty -= (_HUD_SAFE_PX - _playerScreenY) / _ZOOM_SCALE;
-            }
+            ty = py - vpH / (_ZOOM_SCALE * 2);
         }
         _lastTx = tx;
         _lastTy = ty;
