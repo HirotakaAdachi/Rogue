@@ -46167,7 +46167,10 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             } else if (gameState === 'RINGS') {
                 if (ringEquipPhase === 'RING') {
                     focusX = 12 + 310 / 2;  // SELECT RINGリスト中心 x=167
-                    focusY = 210 + (CANVAS_H - 210 - 12) / 2; // y=350
+                    // カーソル追従：選択指輪行を中心に（LIST_TOP=246, ROW_H=34）
+                    const _rSel = typeof ringEquipSelection !== 'undefined' ? ringEquipSelection : 0;
+                    const _rScr = typeof ringScrollOffset !== 'undefined' ? ringScrollOffset : 0;
+                    focusY = 246 + (_rSel - _rScr) * 34 + 17;
                 } else {
                     focusX = 154 + 150;  // SLOTSウィンドウ左寄り x=304
                     focusY = 12 + 190 / 2; // y=107
