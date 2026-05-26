@@ -45943,11 +45943,17 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     -webkit-tap-highlight-color: transparent; touch-action: none;
 }
 .tc-btn:active { background: #2e2e2e; color: #fff; }
-/* 方向ボタン: 中心向き90°尖端の家型五角形・中心へ近接 */
-#tc-up    { -webkit-clip-path: polygon(0% 0%, 100% 0%, 100% 50%, 50% 100%, 0% 50%); clip-path: polygon(0% 0%, 100% 0%, 100% 50%, 50% 100%, 0% 50%); border:none; border-radius:0; padding-bottom:20px; transform: translateY(14px); }
-#tc-down  { -webkit-clip-path: polygon(50% 0%, 100% 50%, 100% 100%, 0% 100%, 0% 50%); clip-path: polygon(50% 0%, 100% 50%, 100% 100%, 0% 100%, 0% 50%); border:none; border-radius:0; padding-top:20px; transform: translateY(-14px); }
-#tc-left  { -webkit-clip-path: polygon(0% 0%, 50% 0%, 100% 50%, 50% 100%, 0% 100%); clip-path: polygon(0% 0%, 50% 0%, 100% 50%, 50% 100%, 0% 100%); border:none; border-radius:0; padding-right:20px; transform: translateX(14px); }
-#tc-right { -webkit-clip-path: polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%, 0% 50%); clip-path: polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%, 0% 50%); border:none; border-radius:0; padding-left:20px; transform: translateX(-14px); }
+/* 方向ボタン: インラインSVG五角形（clip-pathのSafariバグ回避） */
+.tc-dsv { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+.tc-dsv polygon { fill:rgba(26,26,26,0.7); stroke:#3a3a3a; stroke-width:1.5; }
+.tc-darrow { position:relative; z-index:1; }
+#tc-up    { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateY(14px);  padding-bottom:20px; }
+#tc-down  { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateY(-14px); padding-top:20px; }
+#tc-left  { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateX(14px);  padding-right:20px; }
+#tc-right { background:transparent!important; border:none; border-radius:0; position:relative; transform:translateX(-14px); padding-left:20px; }
+#tc-up:active .tc-dsv polygon, #tc-down:active .tc-dsv polygon,
+#tc-left:active .tc-dsv polygon, #tc-right:active .tc-dsv polygon { fill:#2e2e2e; }
+#tc-up:active, #tc-down:active, #tc-left:active, #tc-right:active { background:transparent!important; color:#fff; }
 #tc-block-btn {
     width: 120px; height: 120px;
     background: transparent; border: none; padding: 0;
@@ -46011,13 +46017,13 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
         </div>
         <div id="tc-dpad">
             <div></div>
-            <button class="tc-btn" id="tc-up">↑</button>
+            <button class="tc-btn" id="tc-up"><svg class="tc-dsv" viewBox="0 0 64 64" preserveAspectRatio="none"><polygon points="0,0 64,0 64,32 32,64 0,32"/></svg><span class="tc-darrow">↑</span></button>
             <div></div>
-            <button class="tc-btn" id="tc-left">←</button>
+            <button class="tc-btn" id="tc-left"><svg class="tc-dsv" viewBox="0 0 64 64" preserveAspectRatio="none"><polygon points="0,0 32,0 64,32 32,64 0,64"/></svg><span class="tc-darrow">←</span></button>
             <div></div>
-            <button class="tc-btn" id="tc-right">→</button>
+            <button class="tc-btn" id="tc-right"><svg class="tc-dsv" viewBox="0 0 64 64" preserveAspectRatio="none"><polygon points="32,0 64,0 64,64 32,64 0,32"/></svg><span class="tc-darrow">→</span></button>
             <div></div>
-            <button class="tc-btn" id="tc-down">↓</button>
+            <button class="tc-btn" id="tc-down"><svg class="tc-dsv" viewBox="0 0 64 64" preserveAspectRatio="none"><polygon points="32,0 64,32 64,64 0,64 0,32"/></svg><span class="tc-darrow">↓</span></button>
             <div></div>
         </div>
         <button id="tc-block-btn"><span id="tc-block-visual"><span id="tc-block-icon" style="display:inline-block;transition:transform 0.05s ease-out;">＠</span><span id="tc-guard-label"></span></span></button>
