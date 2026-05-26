@@ -45995,6 +45995,24 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 #tc-block-icon.tc-icon-fall-out {
     animation: tc-icon-fall-out 0.65s ease-in forwards !important;
 }
+@keyframes tc-icon-drop-in {
+    0%   { transform: translateY(-50px); opacity: 0; }
+    45%  { transform: translateY(-22px); opacity: 0; }
+    65%  { transform: translateY(-5px);  opacity: 1; }
+    80%  { transform: translateY(3px); }
+    100% { transform: translateY(0);   opacity: 1; }
+}
+#tc-block-icon.tc-icon-drop-in {
+    animation: tc-icon-drop-in 0.42s linear forwards !important;
+}
+@keyframes tc-tome-glow {
+    0%   { background: rgba(26,26,26,0.7); border-color: #2e2e2e; box-shadow: none; }
+    20%  { background: rgba(168,85,247,0.35); border-color: #c084fc; box-shadow: 0 0 18px #a855f7, 0 0 6px #c084fc inset; }
+    100% { background: rgba(26,26,26,0.7); border-color: #2e2e2e; box-shadow: none; }
+}
+#tc-block-visual.tc-tome-glow {
+    animation: tc-tome-glow 0.7s ease-out forwards;
+}
 #tc-block-visual {
     width: 88px; height: 88px;
     background: rgba(26,26,26,0.7); border: 2px solid #2e2e2e; color: #ededed;
@@ -46189,7 +46207,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     }
 
     // ボタン＠ 連動用（_zoomLoop より前に宣言が必要）
-    let _tcLastFlashUntil = 0, _tcHurtTimer = null, _tcLastFalling = false, _tcFallAnimating = false;
+    let _tcLastFlashUntil = 0, _tcHurtTimer = null, _tcLastFalling = false, _tcFallAnimating = false, _tcTomeLast = false;
 
     // ズームrAFループ（毎フレームcanvas transformを更新 + ボタン＠連動）
     (function _zoomLoop() {
@@ -46240,16 +46258,28 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
                     _bIcon.classList.remove('tc-icon-fall-out', 'tc-icon-fall-in');
                 }
             }
-            // animateLanding開始検知: player.offsetYが大きく負 → transform先にセットしてからopacity解除
+            // animateLanding開始検知: opacity制御のdrop-in animationを再生（Safari overflow:hiddenバグ回避）
             if (_tcFallAnimating && !_isFalling && !_tcLastFalling && player.offsetY < -80) {
-                if (_bIcon) {
-                    const _scaleX = player.facing === 'RIGHT' ? -1 : 1;
-                    _bIcon.style.transform = `translate(${(player.offsetX*0.55).toFixed(1)}px,${(player.offsetY*0.55).toFixed(1)}px) scaleX(${_scaleX})`;
-                    _bIcon.style.opacity = '';  // transform適用後にopacity解除 → overflow:hiddenでクリップ済み
+                if (_bIcon && !_bIcon.classList.contains('tc-icon-drop-in')) {
+                    _bIcon.classList.remove('tc-icon-fall-out');
+                    void _bIcon.offsetWidth;
+                    _bIcon.style.opacity = '';
+                    _bIcon.classList.add('tc-icon-drop-in');
+                    setTimeout(() => {
+                        if (_bIcon) _bIcon.classList.remove('tc-icon-drop-in');
+                        _tcFallAnimating = false;
+                    }, 450);
                 }
-                _tcFallAnimating = false;
             }
             _tcLastFalling = _isFalling;
+            // 魔導書使用演出: tomeAuraParamsがアクティブになったら@ボタンを紫に光らせる
+            const _isTome = typeof tomeAuraParams !== 'undefined' && tomeAuraParams.active;
+            if (_isTome && !_tcTomeLast) {
+                const _bVis2 = document.getElementById('tc-block-visual');
+                if (_bVis2) { _bVis2.classList.remove('tc-tome-glow'); void _bVis2.offsetWidth; _bVis2.classList.add('tc-tome-glow'); }
+                if (_bIcon) { _bIcon.style.color = '#e9d5ff'; setTimeout(() => { const _bi = document.getElementById('tc-block-icon'); if (_bi) _bi.style.color = ''; }, 700); }
+            }
+            _tcTomeLast = _isTome;
             // Guard ラベル
             const _gLabel = document.getElementById('tc-guard-label');
             if (_gLabel) {
