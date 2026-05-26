@@ -45926,10 +45926,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
 @media (orientation: portrait) {
     #tc-dpad {
         position: relative; z-index: 10;
-        grid-template-columns: repeat(3, 80px);
-        grid-template-rows: repeat(3, 80px);
     }
-    #tc-actions { position: absolute; right: 12px; top: 10px; }
 }
 .tc-btn {
     background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
@@ -45938,7 +45935,6 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
     -webkit-tap-highlight-color: transparent; touch-action: none;
 }
 .tc-btn:active { background: #2e2e2e; color: #fff; }
-#tc-center-btn { color: #3a3a3a; font-size: 14px; }
 #tc-block-btn {
     width: 120px; height: 120px;
     background: transparent; border: none; padding: 0;
@@ -45997,7 +45993,7 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
             <button class="tc-btn" id="tc-up">↑</button>
             <div></div>
             <button class="tc-btn" id="tc-left">←</button>
-            <button class="tc-btn" id="tc-center-btn">·</button>
+            <div></div>
             <button class="tc-btn" id="tc-right">→</button>
             <div></div>
             <button class="tc-btn" id="tc-down">↓</button>
@@ -46123,7 +46119,8 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
             const _tcRect   = document.getElementById('tc-wrap')?.getBoundingClientRect();
             const _hudBottom = _hudRect ? _hudRect.bottom : 0;
             const _tcTop     = _tcRect  ? _tcRect.top    : vpH;
-            const _camCY = (_hudBottom + _tcTop) / 2; // 使用可能エリアの中心（画面px）
+            // 横持ちはtc-wrapが全画面（tcTop≈0）のためvpH/2を使用
+            const _camCY = (_tcTop > vpH * 0.3) ? (_hudBottom + _tcTop) / 2 : vpH / 2;
             tx = px - vpW / (_ZOOM_SCALE * 2);
             ty = py - _camCY / _ZOOM_SCALE;
         }
@@ -46253,6 +46250,27 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
         if (isTutorialInputActive) isTutorialInputActive = false;
     });
 
+    // 縦持ち時にMENUをGuardボタン右上に配置
+    function _applyPortraitMenu() {
+        const _act = document.getElementById('tc-actions');
+        const _blk = document.getElementById('tc-block-btn');
+        if (!_act || !_blk) return;
+        if (window.innerHeight > window.innerWidth) {
+            const r = _blk.getBoundingClientRect();
+            _act.style.position = 'fixed';
+            _act.style.right = '12px';
+            _act.style.top  = Math.max(4, r.top - 4) + 'px';
+            _act.style.transform = '';
+        } else {
+            _act.style.position = '';
+            _act.style.right = '';
+            _act.style.top = '';
+            _act.style.transform = '';
+        }
+    }
+    requestAnimationFrame(_applyPortraitMenu);
+    window.addEventListener('resize', _applyPortraitMenu);
+
     // レイアウト確定後にスケーリングを更新（縦/横両対応）
     requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
     window.addEventListener('orientationchange', () =>
@@ -46307,13 +46325,10 @@ let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40
         const r = _dpadEl.getBoundingClientRect();
         const x = clientX - r.left - _DPAD_PAD_X;
         const y = clientY - r.top  - _DPAD_PAD_Y;
-        // 縦持ちはセル80px(246px)、横持ちは64px(198px)
-        const _cell = (window.innerHeight > window.innerWidth) ? 80 : 64;
-        const _VIS  = 3 * _cell + 2 * 3;
+        const _VIS = 3 * 64 + 2 * 3; // 198px
         const cx = _VIS / 2, cy = _VIS / 2;
         const adx = Math.abs(x - cx), ady = Math.abs(y - cy);
-        if (adx < _VIS * 0.15 && ady < _VIS * 0.15) return [0, 0]; // 中心
-        if (adx > ady) return [x > cx ? 1 : -1, 0];
+        if (adx >= ady) return [x >= cx ? 1 : -1, 0];
         return [0, y > cy ? 1 : -1];
     }
 
