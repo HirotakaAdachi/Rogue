@@ -45810,6 +45810,9 @@ updateUI();
 requestAnimationFrame(gameLoop);
 addLog("Game Ready.");
 
+// 縦持ち画面のオフセット（スワイプで調整、localStorageに保存）
+let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40', 10);
+
 // ウィンドウサイズに合わせてゲーム全体をスケーリング（タッチコントロールはオーバーレイなので余白不要）
 (function initScale() {
     const wrapper = document.querySelector('.game-wrapper');
@@ -45827,11 +45830,10 @@ addLog("Game Ready.");
         );
         const s = Math.max(0.1, scale);
         if (isPortrait) {
-            // 縦持ち：上寄せ（コントローラーとの重なりを減らす）
             wrapper.style.transformOrigin = 'center top';
             wrapper.style.transform = `scale(${s})`;
             document.body.style.alignItems = 'flex-start';
-            document.body.style.paddingTop = MARGIN_V + 'px';
+            document.body.style.paddingTop = (MARGIN_V + _portraitOffsetY) + 'px';
         } else {
             wrapper.style.transformOrigin = 'center center';
             wrapper.style.transform = `scale(${s})`;
@@ -45840,6 +45842,7 @@ addLog("Game Ready.");
         }
     }
     applyScale();
+    window._applyGameScale = applyScale;
     window.addEventListener('resize', applyScale);
 })();
 
@@ -46182,12 +46185,26 @@ addLog("Game Ready.");
     }, { passive: true });
 
     _zoomVP.addEventListener('touchmove', e => {
-        if (!_tcZoomMode || e.touches.length !== 1) return;
-        e.preventDefault();
+        if (e.touches.length !== 1) return;
         const cx = e.touches[0].clientX;
         const cy = e.touches[0].clientY;
         const totalDx = cx - _zoomTapX;
         const totalDy = cy - _zoomTapY;
+
+        if (!_tcZoomMode) {
+            // 非ズーム縦持ち：縦スワイプで画面位置を上下調整
+            if (window.innerHeight > window.innerWidth && totalDx * totalDx + totalDy * totalDy > 100) {
+                e.preventDefault();
+                _zoomIsPanning = true;
+                _portraitOffsetY = Math.max(-30, Math.min(window.innerHeight * 0.45,
+                    _portraitOffsetY + (cy - _zoomLastY)));
+                if (window._applyGameScale) window._applyGameScale();
+            }
+            _zoomLastX = cx; _zoomLastY = cy;
+            return;
+        }
+
+        e.preventDefault();
         if (totalDx * totalDx + totalDy * totalDy > 100) {
             if (!_zoomFreePan) {
                 // 自由パン開始：現在実際に表示されているカメラ位置をそのまま引き継ぐ
@@ -46205,17 +46222,22 @@ addLog("Game Ready.");
 
     _zoomVP.addEventListener('touchend', e => {
         if (e.changedTouches.length !== 1) return;
-        if (!_zoomIsPanning) {
-            // ストーリーメッセージ待機中：タップでページ送り
-            if (isTutorialInputActive) {
-                isTutorialInputActive = false;
-                _zoomIsPanning = false;
-                return;
+        if (_zoomIsPanning) {
+            e.stopPropagation(); // パン完了時は document.touchend に伝播させない（メッセージ誤送り防止）
+            _zoomIsPanning = false;
+            // 縦持ち位置をlocalStorageに保存
+            if (!_tcZoomMode && window.innerHeight > window.innerWidth) {
+                localStorage.setItem('portrait_offset_y', String(Math.round(_portraitOffsetY)));
             }
-            // タップ：ズームOFF（自由パンも解除）
-            _tcZoomMode = !_tcZoomMode;
-            if (!_tcZoomMode) _zoomFreePan = false;
+            return;
         }
+        // タップ（スライドなし）
+        if (isTutorialInputActive) {
+            isTutorialInputActive = false;
+            return;
+        }
+        _tcZoomMode = !_tcZoomMode;
+        if (!_tcZoomMode) _zoomFreePan = false;
         _zoomIsPanning = false;
     }, { passive: true });
 
