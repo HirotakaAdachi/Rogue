@@ -1921,7 +1921,6 @@ const ROOM_TEST_TYPES = [
     { id: 'WARP_CELLS_H', name: 'WARP CELLS H', nameJa: 'ワープ独房・横通路', prob: '奇妙部屋（マルチ専用）', desc: '上下の出口は独立した小部屋＋WARP_PAD。左右は中央ホール経由の通常通路で繋がる。' },
     { id: 'ROULETTE_GUARD', name: 'ROULETTE GUARD', nameJa: 'ルーレット巡回部屋', prob: '奇妙部屋（マルチ専用）', desc: '薄暗い巡回部屋。Rの視野に入ると上からGが大量降下。背後から攻撃すると仲間に。' },
     { id: 'bizarre_all',        name: 'BIZARRE GALLERY',   nameJa: '奇妙ギャラリー',        prob: 'テスト専用', desc: '全20種の奇妙な部屋を5×5フロアで一覧。' },
-    { id: 'NOVEL_CORRIDOR',     name: 'NOVEL CORRIDOR',    nameJa: '小説の回廊',            prob: 'テスト専用', desc: '暗闇の横一列100部屋。文字列の敵が小説のように並ぶ。最終部屋の穴で真のエンディングへ。' },
     { id: 'latin_test',         name: 'LATIN CAVE',        nameJa: 'LATIN検証洞窟',         prob: 'テスト専用', desc: '全26種の小文字ラテン文字敵が棲む洞窟。各敵の挙動を観察・検証できる。' },
     { id: 'catacombs',          name: 'CATACOMBS',         nameJa: '地下墓地',              prob: 'テスト専用', desc: '壁に無数の小孔が穿たれた奇妙な固定レイアウト。ステージ1の隠し部屋と同一の構造。' },
 ];
