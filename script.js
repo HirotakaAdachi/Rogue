@@ -47035,21 +47035,39 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             tx = Math.max(0, Math.min(focusX - vpW / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
             ty = Math.max(0, Math.min(focusY - vpH / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
         } else if (storyMessage && storyMessage.alpha > 0.05) {
-            // チュートリアル/ストーリーメッセージ表示中：ダイアログ領域を構図中心に
-            const _smFocusX = CANVAS_W / 2;
-            let _smFocusY;
+            // ダイアログ表示中: プレイヤー追従を基本にしつつ、コントローラー/HUDに隠れないよう ty をずらす
+            const _smPx = (player.x + 0.5) * TILE_SIZE;
+            const _smPy = (player.y + 0.5) * TILE_SIZE;
+            const _hudRectSM = document.getElementById('mobile-hud')?.getBoundingClientRect();
+            const _tcRectSM  = document.getElementById('tc-wrap')?.getBoundingClientRect();
+            const _hudBotSM  = _hudRectSM ? _hudRectSM.bottom : 0;
+            const _tcTopSM   = _tcRectSM  ? _tcRectSM.top    : vpH;
+            const _camCYSM   = (_tcTopSM > vpH * 0.3) ? (_hudBotSM + _tcTopSM) / 2 : vpH / 2;
+            // プレイヤー追従の通常 ty（＠を画面中央に置く位置）を起点にする
+            const _tyBase = _smPy - _camCYSM / _ZOOM_SCALE;
+            tx = Math.max(0, Math.min(_smPx - vpW / (_ZOOM_SCALE * 2), CANVAS_W - vpW / _ZOOM_SCALE));
             if (storyMessage.useMiddlePos || storyMessage.splitBlocks) {
-                // 中央表示 or 上下2段表示（商人など）→ キャンバス中央
-                _smFocusY = CANVAS_H / 2;
+                // 中央/2段ダイアログ: プレイヤー追従そのまま
+                ty = _tyBase;
             } else {
-                // 通常: プレイヤー位置によって上端/下端に表示されるダイアログの中心を計算
-                const _smPy = (player.y + 0.5) * TILE_SIZE;
                 const _smDlgH = 170;
                 const _smAtTop = storyMessage.useTopPos || (_smPy > CANVAS_H - _smDlgH - 30);
-                _smFocusY = _smAtTop ? (15 + _smDlgH / 2) : (CANVAS_H - _smDlgH - 15 + _smDlgH / 2);
+                // 縦持ち（コントローラーが下部）のみずらす。横持ち（tc全画面）は追従維持
+                if (_tcTopSM > vpH * 0.3) {
+                    if (_smAtTop) {
+                        // 上端ダイアログ: HUD直下にダイアログ上端が来るよう ty を小さくする（カメラを上へ）
+                        const _tyMaxForDlg = 15 - (_hudBotSM + 8) / _ZOOM_SCALE;
+                        ty = Math.min(_tyBase, _tyMaxForDlg);
+                    } else {
+                        // 下端ダイアログ: コントローラー直上にダイアログ下端が来るよう ty を大きくする（カメラを下へ）
+                        const _tyMinForDlg = (CANVAS_H - 15) - (_tcTopSM - 8) / _ZOOM_SCALE;
+                        ty = Math.max(_tyBase, _tyMinForDlg);
+                    }
+                } else {
+                    ty = _tyBase;
+                }
             }
-            tx = Math.max(0, Math.min(_smFocusX - vpW / (_ZOOM_SCALE * 2), CANVAS_W - vpW / _ZOOM_SCALE));
-            ty = Math.max(0, Math.min(_smFocusY - vpH / (_ZOOM_SCALE * 2), CANVAS_H - vpH / _ZOOM_SCALE));
+            // Y方向は標準クランプなし（ダイアログ優先、黒帯許容）
         } else {
             // プレイヤー追従モード：HUD下端とコントローラー上端の中間を構図中心にする
             const px = (player.x + 0.5) * TILE_SIZE;
