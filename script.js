@@ -24149,7 +24149,7 @@ function drawRoomTypeSelect() {
         ctx.textAlign = 'left';
         ctx.font = (isSel ? 'bold ' : '') + "16px 'Courier New', Courier, monospace";
         ctx.fillStyle = isSel ? '#ededed' : '#666';
-        ctx.fillText((isSel ? '>' : ' ') + ' [' + t.prob + ']  ' + t.name + '  ' + t.nameJa, startX, y);
+        ctx.fillText((isSel ? '>' : ' ') + ' ' + t.name + '  ' + t.nameJa, startX, y);
     }
     ctx.textAlign = 'center';
     ctx.fillStyle = '#555';
