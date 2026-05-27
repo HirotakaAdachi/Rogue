@@ -1602,6 +1602,7 @@ function getFactionColor(faction) {
 let gameState = 'TITLE';
 let titleSelection = 0;
 let newGameConfirmSelection = 0; // 0=NO, 1=YES (for new game confirmation)
+let langSelection = 0; // 0=EN, 1=JA (for language select screen)
 let menuSelection = 0; // 0: STATUS, 1: ITEMS
 let inventorySelection = 0; // アイテム選択用
 let statusPage = 0;
@@ -23889,23 +23890,27 @@ function drawOpening(now) {
         const bottomY = CANVAS_H - 100;
         const alpha = openingData.alpha || 0;
 
-        // 英語テキスト (データ/ログ風のグレー)
-        ctx.fillStyle = `rgba(200, 200, 200, ${alpha})`;
-        ctx.font = '16px "Courier New"';
+        if (_gameLang !== 'ja') {
+            // 英語テキスト
+            ctx.fillStyle = `rgba(200, 200, 200, ${alpha})`;
+            ctx.font = '16px "Courier New"';
+            const enLines = openingData.currentLine.en.split('\n');
+            enLines.forEach((l, i) => {
+                ctx.fillText(l, CANVAS_W / 2, bottomY + (i * 20));
+            });
+        }
 
-        // 改行対応
-        const enLines = openingData.currentLine.en.split('\n');
-        enLines.forEach((l, i) => {
-            ctx.fillText(l, CANVAS_W / 2, bottomY + (i * 20));
-        });
-
-        // 日本語テキスト
-        ctx.fillStyle = `rgba(136, 136, 136, ${alpha})`;
-        ctx.font = '14px "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "HGS Mincho", serif';
-        const jpLines = openingData.currentLine.jp.split('\n');
-        jpLines.forEach((l, i) => {
-            ctx.fillText(l, CANVAS_W / 2, bottomY + 30 + (enLines.length > 1 ? 15 : 0) + (i * 20));
-        });
+        if (_gameLang !== 'en') {
+            // 日本語テキスト
+            const enLines = openingData.currentLine.en.split('\n');
+            ctx.fillStyle = `rgba(180, 180, 180, ${alpha})`;
+            ctx.font = '16px "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "HGS Mincho", serif';
+            const jpLines = openingData.currentLine.jp.split('\n');
+            const jpOffsetY = _gameLang === 'ja' ? 0 : 30 + (enLines.length > 1 ? 15 : 0);
+            jpLines.forEach((l, i) => {
+                ctx.fillText(l, CANVAS_W / 2, bottomY + jpOffsetY + (i * 20));
+            });
+        }
     }
 
     if (transition.active) {
@@ -23916,7 +23921,7 @@ function drawOpening(now) {
 
 // ===== SECTION: GAME LOOP =====
 function gameLoop(now) {
-    const hideStates = ['TITLE', 'FIXED_STAGE_SELECT', 'ROOM_TYPE_SELECT', 'OPENING', 'GAMEOVER', 'GAMEOVER_SEQ', 'ENDING', 'ENDING_SEQ'];
+    const hideStates = ['TITLE', 'LANG_SELECT', 'FIXED_STAGE_SELECT', 'ROOM_TYPE_SELECT', 'OPENING', 'GAMEOVER', 'GAMEOVER_SEQ', 'ENDING', 'ENDING_SEQ'];
     const _hideHUD = hideStates.includes(gameState) || floorLevel === -1;
     statsBar.style.display = _hideHUD ? 'none' : '';
     logRow.style.display = _hideHUD ? 'none' : '';
@@ -23926,6 +23931,8 @@ function gameLoop(now) {
 
     if (gameState === 'TITLE') {
         drawTitle();
+    } else if (gameState === 'LANG_SELECT') {
+        drawLangSelect();
     } else if (gameState === 'FIXED_STAGE_SELECT') {
         drawFixedStageSelect();
     } else if (gameState === 'ROOM_TYPE_SELECT') {
@@ -24080,6 +24087,40 @@ function drawTitle() {
     ctx.font = '14px Courier New';
     ctx.fillStyle = '#444';
     ctx.fillText('[Arrows] to Select  [Enter] to Decide', CANVAS_W / 2, CANVAS_H - 40);
+}
+
+function drawLangSelect() {
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.textAlign = 'center';
+
+    ctx.fillStyle = '#ededed';
+    ctx.font = "bold 36px 'Courier New', Courier, monospace";
+    ctx.fillText('MINIMAL ROGUE', CANVAS_W / 2, CANVAS_H / 2 - 110);
+
+    ctx.fillStyle = '#444';
+    ctx.font = "13px 'Courier New'";
+    ctx.fillText('Select Language  /  言語を選んでください', CANVAS_W / 2, CANVAS_H / 2 - 68);
+
+    const en0 = langSelection === 0;
+    const en1 = langSelection === 1;
+
+    // English option
+    ctx.fillStyle = en0 ? '#ededed' : '#555';
+    ctx.font = "bold 28px 'Courier New', Courier, monospace";
+    ctx.fillText(en0 ? '▶  English  ◀' : '   English   ', CANVAS_W / 2, CANVAS_H / 2 - 10);
+
+    // 日本語 option
+    ctx.fillStyle = en1 ? '#ededed' : '#555';
+    ctx.font = en1
+        ? 'bold 28px "Hiragino Mincho ProN","Yu Mincho",serif'
+        : '28px "Hiragino Mincho ProN","Yu Mincho",serif';
+    ctx.fillText(en1 ? '▶　日本語　◀' : '　　日本語　　', CANVAS_W / 2, CANVAS_H / 2 + 50);
+
+    ctx.fillStyle = '#333';
+    ctx.font = "12px 'Courier New'";
+    ctx.fillText('[↑↓] Select  [Enter] Confirm  [X] Back', CANVAS_W / 2, CANVAS_H / 2 + 110);
 }
 
 function drawFixedStageSelect() {
@@ -45692,6 +45733,7 @@ window.addEventListener('keydown', async e => {
             { const _duU = localStorage.getItem('deep_unlocked') === '1'; const _baseU = _duU ? 3 : 2; const count = testModeVisible ? _baseU + 4 : _baseU; titleSelection = (titleSelection + count - 1) % count; }
             SOUNDS.SELECT(); return;
         }
+        if (gameState === 'LANG_SELECT') { langSelection = langSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
         if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 3) % 4; SOUNDS.SELECT(); return; }
         if (gameState === 'MENU') { menuSelection = (menuSelection + 2) % 3; SOUNDS.SELECT(); return; }
         if (gameState === 'FIXED_STAGE_SELECT') {
@@ -45743,6 +45785,7 @@ window.addEventListener('keydown', async e => {
             { const _duD2 = localStorage.getItem('deep_unlocked') === '1'; const _baseD2 = _duD2 ? 3 : 2; const count = testModeVisible ? _baseD2 + 4 : _baseD2; titleSelection = (titleSelection + 1) % count; }
             SOUNDS.SELECT(); return;
         }
+        if (gameState === 'LANG_SELECT') { langSelection = langSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
         if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 1) % 4; SOUNDS.SELECT(); return; }
         if (gameState === 'MENU') { menuSelection = (menuSelection + 1) % 3; SOUNDS.SELECT(); return; }
         if (gameState === 'FIXED_STAGE_SELECT') {
@@ -45827,6 +45870,13 @@ window.addEventListener('keydown', async e => {
         }
     }
 
+    if (gameState === 'LANG_SELECT') {
+        if (e.key === 'Escape' || e.key.toLowerCase() === 'x') {
+            gameState = 'TITLE'; SOUNDS.SELECT(); e.preventDefault();
+        }
+        return;
+    }
+
     if (gameState === 'CONFIRM_NEWGAME') {
         if (e.key === 'ArrowLeft' || e.key === 'a') {
             newGameConfirmSelection = 0; SOUNDS.SELECT(); e.preventDefault();
@@ -45840,7 +45890,8 @@ window.addEventListener('keydown', async e => {
         if (e.key === 'Enter') {
             if (newGameConfirmSelection === 1) {
                 resetNewGamePersistentData();
-                startGame();
+                langSelection = 0;
+                gameState = 'LANG_SELECT';
             } else {
                 gameState = 'TITLE';
             }
@@ -45994,6 +46045,12 @@ window.addEventListener('keydown', async e => {
 
     if (e.key === 'Enter') {
         e.preventDefault();
+        if (gameState === 'LANG_SELECT') {
+            _gameLang = langSelection === 0 ? 'en' : 'ja';
+            SOUNDS.SELECT();
+            startGame();
+            return;
+        }
         if (gameState === 'STATUS' && statusPage === 2) {
             if (settingsRow === 0) toggleBGM();
             if (settingsRow === 3) { _gameLang = _gameLang === 'en' ? 'ja' : 'en'; SOUNDS.SELECT(); }
@@ -46012,7 +46069,8 @@ window.addEventListener('keydown', async e => {
                 SOUNDS.SELECT();
             } else if (titleSelection === 0) {
                 resetNewGamePersistentData();
-                startGame();
+                langSelection = 0;
+                gameState = 'LANG_SELECT';
                 SOUNDS.SELECT();
             } else if (titleSelection === 1 && hasSave) {
                 continueGame();
@@ -47033,7 +47091,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     const _ZOOM_SCALE = 1.5;
 
     function _applyZoom() {
-        const shouldZoom = _tcZoomMode && ['PLAYING','MENU','STATUS','INVENTORY','SHOP','CONFIRM_BUY','RINGS','CONFIRM_ESCAPE','TITLE','OPENING'].includes(gameState);
+        const shouldZoom = _tcZoomMode && ['PLAYING','MENU','STATUS','INVENTORY','SHOP','CONFIRM_BUY','RINGS','CONFIRM_ESCAPE','TITLE','LANG_SELECT','OPENING'].includes(gameState);
 
         // 状態変化時のみDOM操作
         if (shouldZoom !== _zoomModeActive) {
@@ -47043,7 +47101,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
                 document.body.insertBefore(_zoomVP, _mHud);
                 _zoomVP.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;overflow:hidden;background:#000;`;
                 // TITLE/OPENING はゲームプレイHUDを非表示（HPや階層を表示しない）
-                const _isGameplayState = !['TITLE','OPENING'].includes(gameState);
+                const _isGameplayState = !['TITLE','LANG_SELECT','OPENING'].includes(gameState);
                 _mHud.style.display = _isGameplayState ? 'flex' : 'none';
                 _zoomMinimap.style.display = _zoomMinimap.innerHTML ? 'block' : 'none';
             } else {
@@ -47062,7 +47120,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
         if (!shouldZoom) return;
 
         // HUD更新（TITLE/OPENINGはHUD非表示のためスキップ）
-        if (!['TITLE','OPENING'].includes(gameState)) {
+        if (!['TITLE','LANG_SELECT','OPENING'].includes(gameState)) {
             const _hpEl = document.getElementById('hp');
             const _flEl = document.getElementById('floor');
             if (_hpEl) document.getElementById('mhud-hp').textContent = 'HP ' + _hpEl.textContent;
