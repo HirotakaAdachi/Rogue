@@ -47034,6 +47034,22 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             }
             tx = Math.max(0, Math.min(focusX - vpW / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
             ty = Math.max(0, Math.min(focusY - vpH / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
+        } else if (storyMessage && storyMessage.alpha > 0.05) {
+            // チュートリアル/ストーリーメッセージ表示中：ダイアログ領域を構図中心に
+            const _smFocusX = CANVAS_W / 2;
+            let _smFocusY;
+            if (storyMessage.useMiddlePos || storyMessage.splitBlocks) {
+                // 中央表示 or 上下2段表示（商人など）→ キャンバス中央
+                _smFocusY = CANVAS_H / 2;
+            } else {
+                // 通常: プレイヤー位置によって上端/下端に表示されるダイアログの中心を計算
+                const _smPy = (player.y + 0.5) * TILE_SIZE;
+                const _smDlgH = 170;
+                const _smAtTop = storyMessage.useTopPos || (_smPy > CANVAS_H - _smDlgH - 30);
+                _smFocusY = _smAtTop ? (15 + _smDlgH / 2) : (CANVAS_H - _smDlgH - 15 + _smDlgH / 2);
+            }
+            tx = Math.max(0, Math.min(_smFocusX - vpW / (_ZOOM_SCALE * 2), CANVAS_W - vpW / _ZOOM_SCALE));
+            ty = Math.max(0, Math.min(_smFocusY - vpH / (_ZOOM_SCALE * 2), CANVAS_H - vpH / _ZOOM_SCALE));
         } else {
             // プレイヤー追従モード：HUD下端とコントローラー上端の中間を構図中心にする
             const px = (player.x + 0.5) * TILE_SIZE;
