@@ -186,7 +186,9 @@ const SYMBOLS = {
     WARP_PAD: '⊕',   // ワープ床: 踏むと同フロアのランダムな場所に飛ばされる
     LEECH_WEED: 'ⅲ', // 寄生草: 歩き抜けると虫が付いてくる地形
     DISPEL_FLOOR: '⊘', // ディスペル床: 踏むと魔導書バフを全消去（深層専用）
-    HEAL_FLOOR:   '⊞'  // 回復床: 乗っている間、毎ターン少量HP回復
+    HEAL_FLOOR:   '⊞', // 回復床: 乗っている間、毎ターン少量HP回復
+    BLUE_KEY:     'K',  // 青い鍵: 青いブロックを一撃で破壊できる
+    BLUE_BLOCK:   '▦'  // 青いブロック: 青い鍵で一撃破壊可能な障害物
 };
 
 // ===== SECTION: ENEMY TYPE SETS =====
@@ -1850,6 +1852,7 @@ const ROOM_TEST_TYPES = [
     { id: 'bizarre_all',        name: 'BIZARRE GALLERY',   nameJa: '奇妙ギャラリー',        prob: 'テスト専用', desc: '全20種の奇妙な部屋を5×5フロアで一覧。' },
     { id: 'NOVEL_CORRIDOR',     name: 'NOVEL CORRIDOR',    nameJa: '小説の回廊',            prob: 'テスト専用', desc: '暗闇の横一列100部屋。文字列の敵が小説のように並ぶ。最終部屋の穴で真のエンディングへ。' },
     { id: 'latin_test',         name: 'LATIN CAVE',        nameJa: 'LATIN検証洞窟',         prob: 'テスト専用', desc: '全26種の小文字ラテン文字敵が棲む洞窟。各敵の挙動を観察・検証できる。' },
+    { id: 'catacombs',          name: 'CATACOMBS',         nameJa: '地下墓地',              prob: 'テスト専用', desc: '壁に無数の小孔が穿たれた奇妙な固定レイアウト。ステージ1の隠し部屋と同一の構造。' },
 ];
 // マルチスクリーン専用タイプ（ROOM_TEST_TYPESに含まれないもの）の表示名マップ
 const SCREEN_TYPE_EXTRA = {
@@ -2084,6 +2087,7 @@ let storyMessage = null; // { lines: [], alpha: 0, showNext: false }
 let isTutorialInputActive = false; // チュートリアル入力待ちフラグ
 let endingSkipLock = false; // エンディング中のスキップ防止フラグ
 let hasShownStage1Tut = false; // 1階スタミナチュートリアル済みフラグ
+let _warpedFromEscapeRoom = false; // リミナルスペースからワープした場合のチュートリアル抑制フラグ
 let _f1SecretWallHits = 0;    // フロア1 秘密の壁ノック回数（3回で崩壊）
 let _crumbleOrigMap = null;   // AURA_MAZE: 全壁状態のスナップショット
 let _crumbleScreenKey = null; // AURA_MAZE: 現在のアクティブ画面キー ("sx,sy")
@@ -2287,6 +2291,7 @@ function loadGame() {
     player.nextExp = data.nextExp || (player.level <= 5 ? player.level * 7 : player.level * 10);
     player.stamina = data.stamina !== undefined ? data.stamina : 100;
     player.hasKey = data.hasKey || false;
+    player.hasBlueKey = data.hasBlueKey || false;
     player.hasSword = data.hasSword || false;
     player.swordCount = data.swordCount || 0;
     player.armorCount = data.armorCount || 0;
@@ -3335,6 +3340,7 @@ function saveGame(notify = false) {
 
         // 所持品（フロア開始時点）
         hasSword: player.hasSword,
+        hasBlueKey: player.hasBlueKey,
         swordCount: player.swordCount,
         armorCount: player.armorCount,
         hasteTomes: player.hasteTomes,
@@ -3703,7 +3709,7 @@ function updateMinimap() {
         if (_zmEl) { _zmEl.innerHTML = html; _zmEl.style.display = 'block'; }
         return;
     }
-    if (!multiScreenMode || !visitedScreens) {
+    if (floorLevel === 1 || !multiScreenMode || !visitedScreens) {
         el.style.display = 'none';
         el.innerHTML = '';
         if (_zmEl) { _zmEl.innerHTML = ''; _zmEl.style.display = 'none'; }
@@ -4572,6 +4578,160 @@ function _initLatinTestCave() {
     addLog("🔤 [→ right room] t(fire) u(copy@) v(fire) w(dig) x(bomb) y(diagonal) z(Z-drop)");
 }
 
+function _initCatacombsTest() {
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) map[y][x] = SYMBOLS.WALL;
+
+    const cf = (x1, y1, x2, y2) => {
+        for (let _y = Math.max(1, y1); _y <= Math.min(ROWS-2, y2); _y++)
+            for (let _x = Math.max(1, x1); _x <= Math.min(COLS-2, x2); _x++)
+                map[_y][_x] = SYMBOLS.FLOOR;
+    };
+
+    // スタートと穴の位置
+    const startX = 13 + Math.floor(Math.random() * 14); // 13-26
+    const startY = 2;
+    const stairsX = Math.max(4, Math.min(COLS-5, 8 + Math.floor(Math.random() * 24)));
+    const stairsY = ROWS - 3; // 22
+
+    // スタートと穴の周囲を必ず開放
+    cf(startX - 2, 1, startX + 2, 3);
+    cf(stairsX - 2, stairsY - 1, stairsX + 2, stairsY + 1);
+
+    // 不定形な小空間を全域に散布（1×1〜3×2の混在）
+    const nPockets = 160 + Math.floor(Math.random() * 40);
+    for (let i = 0; i < nPockets; i++) {
+        const px = 1 + Math.floor(Math.random() * (COLS - 3));
+        const py = 1 + Math.floor(Math.random() * (ROWS - 3));
+        const r = Math.random();
+        const w = r < 0.45 ? 0 : r < 0.72 ? 1 : r < 0.90 ? 2 : 3;
+        const h = r < 0.60 ? 0 : r < 0.88 ? 1 : 2;
+        cf(px, py, px + w, py + h);
+    }
+
+    // BFSでスタートから穴への到達確認
+    const vis = Array.from({ length: ROWS }, () => new Uint8Array(COLS));
+    const bfsQ = [[startX, startY]]; vis[startY][startX] = 1;
+    for (let hi = 0; hi < bfsQ.length; hi++) {
+        const [cx, cy] = bfsQ[hi];
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = cx+dx, ny = cy+dy;
+            if (nx>0 && nx<COLS-1 && ny>0 && ny<ROWS-1 && !vis[ny][nx] && map[ny][nx]===SYMBOLS.FLOOR) {
+                vis[ny][nx] = 1; bfsQ.push([nx, ny]);
+            }
+        }
+    }
+
+    // 到達不能なら蛇行路を掘って接続
+    if (!vis[stairsY][stairsX]) {
+        let cx = startX, cy = startY;
+        for (let iter = 0; iter < 3000; iter++) {
+            map[cy][cx] = SYMBOLS.FLOOR;
+            if (cx === stairsX && cy === stairsY) break;
+            if (Math.random() < 0.7) {
+                const adx = Math.abs(stairsX-cx), ady = Math.abs(stairsY-cy);
+                if (ady >= adx && cy !== stairsY) cy += Math.sign(stairsY-cy);
+                else if (cx !== stairsX) cx += Math.sign(stairsX-cx);
+                else cy += Math.sign(stairsY-cy);
+            } else {
+                const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+                const [rdx, rdy] = dirs[Math.floor(Math.random() * 4)];
+                cx = Math.max(1, Math.min(COLS-2, cx+rdx));
+                cy = Math.max(1, Math.min(ROWS-2, cy+rdy));
+            }
+        }
+        map[stairsY][stairsX] = SYMBOLS.FLOOR;
+    }
+
+    // プレイヤーと階段を設置
+    map[startY][startX] = SYMBOLS.FLOOR;
+    map[stairsY][stairsX] = SYMBOLS.STAIRS;
+    player.x = startX; player.y = startY;
+    player.offsetX = 0; player.offsetY = 0;
+
+    // 敵配置: 経路掘削後に再BFSして到達可能なFLOORマスのみに配置
+    const _eVis = Array.from({ length: ROWS }, () => new Uint8Array(COLS));
+    const _eQ = [[startX, startY]]; _eVis[startY][startX] = 1;
+    for (let _hi = 0; _hi < _eQ.length; _hi++) {
+        const [_cx, _cy] = _eQ[_hi];
+        for (const [_dx, _dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const _nx = _cx+_dx, _ny = _cy+_dy;
+            if (_nx>0 && _nx<COLS-1 && _ny>0 && _ny<ROWS-1 && !_eVis[_ny][_nx] && map[_ny][_nx]===SYMBOLS.FLOOR) {
+                _eVis[_ny][_nx] = 1; _eQ.push([_nx, _ny]);
+            }
+        }
+    }
+    // 到達不能FLOORを連結領域ごとにまとめて溶岩か毒に変換
+    const _hFilled = Array.from({ length: ROWS }, () => new Uint8Array(COLS));
+    for (let _ry = 1; _ry < ROWS-1; _ry++) {
+        for (let _rx = 1; _rx < COLS-1; _rx++) {
+            if (!_eVis[_ry][_rx] && map[_ry][_rx] === SYMBOLS.FLOOR && !_hFilled[_ry][_rx]) {
+                const _region = [], _rQ = [[_rx, _ry]]; _hFilled[_ry][_rx] = 1;
+                for (let _rhi = 0; _rhi < _rQ.length; _rhi++) {
+                    const [_rcx, _rcy] = _rQ[_rhi]; _region.push([_rcx, _rcy]);
+                    for (const [_rdx, _rdy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+                        const _rnx = _rcx+_rdx, _rny = _rcy+_rdy;
+                        if (_rnx>0&&_rnx<COLS-1&&_rny>0&&_rny<ROWS-1&&!_hFilled[_rny][_rnx]&&!_eVis[_rny][_rnx]&&map[_rny][_rnx]===SYMBOLS.FLOOR) {
+                            _hFilled[_rny][_rnx] = 1; _rQ.push([_rnx, _rny]);
+                        }
+                    }
+                }
+                if (Math.random() < 0.5) {
+                    for (const [_hx, _hy] of _region) map[_hy][_hx] = SYMBOLS.LAVA;
+                } else {
+                    for (const [_hx, _hy] of _region)
+                        tempWalls.push({ x: _hx, y: _hy, hp: 2, type: 'CORPSE', _flip: (_hx+_hy)%2===0 });
+                }
+            }
+        }
+    }
+
+    // 到達可能FLOORをシャッフルして配置候補リストを作成
+    const _eCands = [];
+    for (let _ry = 1; _ry < ROWS-1; _ry++)
+        for (let _rx = 1; _rx < COLS-1; _rx++)
+            if (_eVis[_ry][_rx] && map[_ry][_rx] === SYMBOLS.FLOOR && (_rx !== startX || _ry !== startY))
+                _eCands.push([_rx, _ry]);
+    for (let _i = _eCands.length-1; _i > 0; _i--) {
+        const _j = Math.floor(Math.random()*(_i+1));
+        [_eCands[_i], _eCands[_j]] = [_eCands[_j], _eCands[_i]];
+    }
+
+    // 敵配置（スタートから5マス以上離れた位置、5〜8体）
+    let _candIdx = 0;
+    const _pickFloor = (minDist = 0) => {
+        for (let _i = _candIdx; _i < _eCands.length; _i++) {
+            const [_px, _py] = _eCands[_i];
+            if (map[_py][_px] === SYMBOLS.FLOOR && Math.abs(_px-startX)+Math.abs(_py-startY) >= minDist) {
+                _eCands.splice(_i, 1); return [_px, _py];
+            }
+        }
+        return null;
+    };
+    const _nE = 5 + Math.floor(Math.random() * 4);
+    for (let _i = 0; _i < _nE; _i++) {
+        const _pos = _pickFloor(5); if (!_pos) break;
+        const [_ex, _ey] = _pos, _roll = Math.random();
+        if (_roll < 0.12) {
+            enemies.push({ type:'TURRET', x:_ex, y:_ey, dir:Math.floor(Math.random()*4), hp:100+floorLevel*5, maxHp:100+floorLevel*5, flashUntil:0, offsetX:0, offsetY:0, expValue:30, stunTurns:0 });
+        } else if (_roll < 0.25) {
+            enemies.push({ type:'ORC', x:_ex, y:_ey, hp:40+floorLevel*5, maxHp:40+floorLevel*5, flashUntil:0, offsetX:0, offsetY:0, expValue:40, stunTurns:0 });
+        } else if (_roll < 0.49) {
+            enemies.push({ type:'BREAKER', x:_ex, y:_ey, hp:50+floorLevel*4, maxHp:50+floorLevel*4, flashUntil:0, offsetX:0, offsetY:0, expValue:45, stunTurns:0 });
+        } else {
+            enemies.push({ type:'NORMAL', x:_ex, y:_ey, hp:3+floorLevel, maxHp:3+floorLevel, flashUntil:0, offsetX:0, offsetY:0, expValue:5, stunTurns:0 });
+        }
+    }
+
+    // アイテム配置（到達可能FLOORに通常フロアと同等の確率でランダム配置）
+    const _placeItem = (sym) => { const _p = _pickFloor(0); if (_p) map[_p[1]][_p[0]] = sym; };
+    if (Math.random() < 0.5) _placeItem(Math.random() < 0.5 ? SYMBOLS.SWORD : SYMBOLS.ARMOR);
+    const _tomePool = [SYMBOLS.HEAL_TOME, SYMBOLS.SPEED, SYMBOLS.CHARM, SYMBOLS.STEALTH, SYMBOLS.EXPLOSION, SYMBOLS.ESCAPE, SYMBOLS.BREAKER_TOME, SYMBOLS.GUARDIAN];
+    for (const _t of _tomePool) if (Math.random() < 0.15) _placeItem(_t);
+
+    addLog("地下墓地 — CATACOMBS");
+    addLog("The air is cold and still. Something ancient rests here.");
+}
+
 function initMap() {
     // 単画面用タレット設置ヘルパー: 周囲1マスの壁を除去し最長射線方向を返す（グローバルmap使用）
     function prepareTurretSpotSingle(x, y) {
@@ -4623,6 +4783,7 @@ function initMap() {
     travelingAllies = []; // 仲間をリセット
     _pushRingMoves = []; _pushRingRoomIdx = -1; _floorRooms = []; // PUSH_RING状態リセット
     player.hasKey = false;
+    player.hasBlueKey = false;
     wallDropCount = 0; // 壁破壊ドロップカウンターリセット
     _queenSpawnedThisFloor = false;
     _iceCrossMadmanSpawned = false;
@@ -4655,6 +4816,8 @@ function initMap() {
 
     // ===== テストモード: LATIN洞窟はあらゆる固定フロアより先に判定（floor 1 チュートリアルに飲まれないよう）=====
     if (isRoomTestMode && forcedLayoutType === 'latin_test') { _initLatinTestCave(); return; }
+    // ===== テストモード: 地下墓地（単画面固定レイアウト）=====
+    if (isRoomTestMode && forcedLayoutType === 'catacombs') { _initCatacombsTest(); return; }
 
     // フロア20は固定マルチスクリーン（ランダム生成より先に実行して確実に固定レイアウトを使用）
     if (floorLevel === 20) { _initFloor20(); return; }
@@ -7061,6 +7224,121 @@ function initMap() {
                     }
                 }
 
+            } else if (screenType === 'catacombs') {
+                // === CATACOMBS型: 不定形な小空間が散らばる地下墓地 ===
+                const _ccF = (x1,y1,x2,y2) => {
+                    for (let _y=Math.max(1,y1); _y<=Math.min(ROWS-2,y2); _y++)
+                        for (let _x=Math.max(1,x1); _x<=Math.min(COLS-2,x2); _x++)
+                            sMap[_y][_x] = SYMBOLS.FLOOR;
+                };
+                // 隣接スクリーンへの接続エントリーポイント
+                const _ccEps = [];
+                if (_hasUpScreen(sx,sy))    { _ccF(18,1,21,3);           _ccEps.push([19,2]); }
+                if (_hasDownScreen(sx,sy))  { _ccF(18,ROWS-4,21,ROWS-2); _ccEps.push([19,ROWS-3]); }
+                if (_hasLeftScreen(sx,sy))  { _ccF(1,11,3,13);            _ccEps.push([2,12]); }
+                if (_hasRightScreen(sx,sy)) { _ccF(COLS-4,11,COLS-2,13); _ccEps.push([COLS-3,12]); }
+                if (_ccEps.length===0)      { _ccF(18,1,21,3); _ccEps.push([19,2]); }
+                const [_ccSX,_ccSY] = _ccEps[0];
+                // 小空間を全域に散布
+                const _ccPN = 160 + Math.floor(Math.random()*40);
+                for (let _i=0; _i<_ccPN; _i++) {
+                    const px=1+Math.floor(Math.random()*(COLS-3)), py=1+Math.floor(Math.random()*(ROWS-3));
+                    const r=Math.random();
+                    const w=r<0.45?0:r<0.72?1:r<0.90?2:3, h=r<0.60?0:r<0.88?1:2;
+                    _ccF(px,py,px+w,py+h);
+                }
+                for (const [ex,ey] of _ccEps) _ccF(ex-1,ey-1,ex+1,ey+1); // エントリー再確保
+                // BFSで到達可能判定
+                const _ccVis = Array.from({length:ROWS},()=>new Uint8Array(COLS));
+                const _ccQ = [];
+                for (const [ex,ey] of _ccEps) if (!_ccVis[ey][ex]) { _ccVis[ey][ex]=1; _ccQ.push([ex,ey]); }
+                for (let _hi=0; _hi<_ccQ.length; _hi++) {
+                    const [cx,cy]=_ccQ[_hi];
+                    for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+                        const nx=cx+dx,ny=cy+dy;
+                        if (nx>0&&nx<COLS-1&&ny>0&&ny<ROWS-1&&!_ccVis[ny][nx]&&sMap[ny][nx]===SYMBOLS.FLOOR) {
+                            _ccVis[ny][nx]=1; _ccQ.push([nx,ny]);
+                        }
+                    }
+                }
+                // 到達不能FLOORを連結領域ごとに溶岩か死体に変換
+                const _ccHF = Array.from({length:ROWS},()=>new Uint8Array(COLS));
+                for (let _ry=1; _ry<ROWS-1; _ry++) {
+                    for (let _rx=1; _rx<COLS-1; _rx++) {
+                        if (!_ccVis[_ry][_rx]&&sMap[_ry][_rx]===SYMBOLS.FLOOR&&!_ccHF[_ry][_rx]) {
+                            const _rgn=[],_rQ=[[_rx,_ry]]; _ccHF[_ry][_rx]=1;
+                            for (let _rhi=0; _rhi<_rQ.length; _rhi++) {
+                                const [_rcx,_rcy]=_rQ[_rhi]; _rgn.push([_rcx,_rcy]);
+                                for (const [_rdx,_rdy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+                                    const _rnx=_rcx+_rdx,_rny=_rcy+_rdy;
+                                    if (_rnx>0&&_rnx<COLS-1&&_rny>0&&_rny<ROWS-1&&!_ccHF[_rny][_rnx]&&!_ccVis[_rny][_rnx]&&sMap[_rny][_rnx]===SYMBOLS.FLOOR) {
+                                        _ccHF[_rny][_rnx]=1; _rQ.push([_rnx,_rny]);
+                                    }
+                                }
+                            }
+                            if (Math.random()<0.5) {
+                                for (const [hx,hy] of _rgn) sMap[hy][hx]=SYMBOLS.LAVA;
+                            } else {
+                                for (const [hx,hy] of _rgn) sTempWalls.push({x:hx,y:hy,hp:2,type:'CORPSE',_flip:(hx+hy)%2===0});
+                            }
+                        }
+                    }
+                }
+                // 到達可能FLOORをシャッフルして配置候補に
+                const _ccCands=[];
+                for (let _ry=1; _ry<ROWS-1; _ry++)
+                    for (let _rx=1; _rx<COLS-1; _rx++)
+                        if (_ccVis[_ry][_rx]&&sMap[_ry][_rx]===SYMBOLS.FLOOR) _ccCands.push([_rx,_ry]);
+                for (let _i=_ccCands.length-1; _i>0; _i--) {
+                    const _j=Math.floor(Math.random()*(_i+1));
+                    [_ccCands[_i],_ccCands[_j]]=[_ccCands[_j],_ccCands[_i]];
+                }
+                for (const [ex,ey] of _ccEps) rooms.push({x:Math.max(1,ex-1),y:Math.max(1,ey-1),w:3,h:3,cx:ex,cy:ey});
+                // 敵・アイテム配置ヘルパー
+                const _ccPick=(minDist=0)=>{
+                    for (let _i=0; _i<_ccCands.length; _i++) {
+                        const [px,py]=_ccCands[_i];
+                        if (sMap[py][px]===SYMBOLS.FLOOR&&Math.abs(px-_ccSX)+Math.abs(py-_ccSY)>=minDist) {
+                            return _ccCands.splice(_i,1)[0];
+                        }
+                    }
+                    return null;
+                };
+                // 敵配置（floorLevel対応・通常フロアと同等タイプ分布）
+                const _ccNE=4+Math.floor(Math.random()*5); let _ccBoar=0;
+                for (let _i=0; _i<_ccNE; _i++) {
+                    const pos=_ccPick(3); if (!pos) break;
+                    const [ex,ey]=pos, roll=Math.random();
+                    const _dt1=screenTheme?screenTheme.eT1:0.12;
+                    const _dt2=screenTheme?screenTheme.eT2:0.25;
+                    const _dt3=(screenTheme&&screenTheme.eT3)||(floorLevel<=49?0.24:0.20);
+                    if (roll<_dt1) {
+                        sEnemies.push({type:'TURRET',x:ex,y:ey,dir:Math.floor(Math.random()*4),hp:100+floorLevel*5,maxHp:100+floorLevel*5,flashUntil:0,offsetX:0,offsetY:0,expValue:40,stunTurns:0,hopTimer:1});
+                    } else if (roll<_dt2) {
+                        sEnemies.push({type:'ORC',x:ex,y:ey,hp:40+floorLevel*5,maxHp:40+floorLevel*5,flashUntil:0,offsetX:0,offsetY:0,expValue:40,stunTurns:0});
+                    } else if (floorLevel>=4&&roll<_dt2+_dt3) {
+                        sEnemies.push({type:'BREAKER',x:ex,y:ey,hp:50+floorLevel*4,maxHp:50+floorLevel*4,flashUntil:0,offsetX:0,offsetY:0,expValue:45,stunTurns:0});
+                    } else if (floorLevel>=40&&floorLevel<=49&&roll<0.37) {
+                        sEnemies.push({type:'LAYER',x:ex,y:ey,hp:20+floorLevel*2,maxHp:20+floorLevel*2,flashUntil:0,offsetX:0,offsetY:0,expValue:25,stunTurns:0});
+                    } else if ((floorLevel>=82||floorLevel>=101)&&Math.random()<0.03) {
+                        sEnemies.push({type:'WEAVER',x:ex,y:ey,hp:20+floorLevel*2,maxHp:20+floorLevel*2,flashUntil:0,offsetX:0,offsetY:0,expValue:25,stunTurns:0,trail:[],weaverDir:Math.floor(Math.random()*4),immuneToWind:true});
+                    } else if (floorLevel>=15&&Math.random()<0.30&&_ccBoar<1) {
+                        sEnemies.push({type:'BOAR',x:ex,y:ey,hp:15+floorLevel*2,maxHp:15+floorLevel*2,flashUntil:0,offsetX:0,offsetY:0,expValue:25,stunTurns:0});
+                        _ccBoar++;
+                    } else if (floorLevel>=10&&Math.random()<0.04) {
+                        sEnemies.push({type:'HEALER',x:ex,y:ey,hp:20+floorLevel*2,maxHp:20+floorLevel*2,flashUntil:0,offsetX:0,offsetY:0,expValue:30,stunTurns:0});
+                    } else if (floorLevel>=10&&Math.random()<0.07) {
+                        sEnemies.push({type:'AMBULATOR',x:ex,y:ey,hp:50+floorLevel*5,maxHp:50+floorLevel*5,flashUntil:0,offsetX:0,offsetY:0,expValue:18,stunTurns:0,_dir:Math.random()<0.5?1:-1});
+                    } else {
+                        sEnemies.push({type:'NORMAL',x:ex,y:ey,hp:3+floorLevel,maxHp:3+floorLevel,flashUntil:0,offsetX:0,offsetY:0,expValue:5,stunTurns:0});
+                    }
+                }
+                // アイテム配置
+                const _ccPut=(sym)=>{const p=_ccPick(0);if(p)sMap[p[1]][p[0]]=sym;};
+                if (Math.random()<0.3) _ccPut(Math.random()<0.5?SYMBOLS.SWORD:SYMBOLS.ARMOR);
+                for (const _t of [SYMBOLS.HEAL_TOME,SYMBOLS.SPEED,SYMBOLS.CHARM,SYMBOLS.STEALTH,SYMBOLS.EXPLOSION,SYMBOLS.ESCAPE,SYMBOLS.BREAKER_TOME,SYMBOLS.GUARDIAN])
+                    if (Math.random()<0.12) _ccPut(_t);
+
             } else {
                 // === 通常ダンジョン型（部屋+通路） ===
                 const _dRCMin = screenTheme ? screenTheme.roomCountMin : 8;
@@ -7118,8 +7396,8 @@ function initMap() {
             }
 
             // --- 地形の生成（毒沼・氷・溶岩） ---
-            // spiral/spider_caveはハザード地形をスキップ（独自で配置済み）
-            if (screenType !== 'spiral' && screenType !== 'spider_cave') {
+            // spiral/spider_cave/catacombsはハザード地形をスキップ（独自で配置済み）
+            if (screenType !== 'spiral' && screenType !== 'spider_cave' && screenType !== 'catacombs') {
             // 毒沼 (15%)
             if (Math.random() < 0.15) {
                 const startRoom = rooms[Math.floor(Math.random() * rooms.length)];
@@ -11117,7 +11395,7 @@ function initMap() {
                     const _t1 = _w.maze, _t2 = _t1 + _w.dungeon, _t3 = _t2 + _w.castle, _t4 = _t3 + (_w.small_labyrinth || 0.03);
                     const _base = _r < _t1 ? 'maze' : _r < _t2 ? 'dungeon' : _r < _t3 ? 'castle' : _r < _t4 ? 'small_labyrinth' : 'breaker';
                     // 35%の確率でシングルスクリーン系タイプをミックス（孤立島型を優遇）
-                    const _newPool = ['islands', 'islands', 'islands', 'cave', 'cross', 'cavern', 'monster_town', 'hybrid_split', 'hybrid_vsplit', 'hybrid_rooms', 'river', 'spiral', 'great_hall', 'spider_cave', 'spider_cave', 'hybrid_rsplit', 'hybrid_vsplit_inv', 'hybrid_diag', 'hybrid_diag_inv', 'cluster_bridge', 'cluster_bridge'];
+                    const _newPool = ['islands', 'islands', 'islands', 'cave', 'cross', 'cavern', 'monster_town', 'hybrid_split', 'hybrid_vsplit', 'hybrid_rooms', 'river', 'spiral', 'great_hall', 'spider_cave', 'spider_cave', 'hybrid_rsplit', 'hybrid_vsplit_inv', 'hybrid_diag', 'hybrid_diag_inv', 'cluster_bridge', 'cluster_bridge', 'catacombs'];
                     screenType = Math.random() < 0.35 ? _newPool[Math.floor(Math.random() * _newPool.length)] : _base;
                 } else if (floorLevel >= 90 && !isSpecial && Math.random() < 0.035) {
                     screenType = 'breaker'; // 3.5%の確率で壁掘り型（35%→3.5%に削減）
@@ -11140,8 +11418,9 @@ function initMap() {
                                : r < 0.90 ? 'hybrid_diag'      // 4%
                                : r < 0.94 ? 'hybrid_diag_inv'  // 4%
                                : r < 0.96 ? 'river'            // 2%
-                               : r < 0.98 ? 'cluster_bridge'   // 2%
-                               : 'spider_cave';                 // 2%
+                               : r < 0.97 ? 'cluster_bridge'   // 1%
+                               : r < 0.99 ? 'spider_cave'      // 2%
+                               : 'catacombs';                   // 1%
                 }
                 // monster_town は floor 50 未満では出さない
                 if (screenType === 'monster_town' && floorLevel < 50) screenType = 'dungeon';
@@ -11155,7 +11434,7 @@ function initMap() {
                         spiral: 'spiral', great_hall: 'great_hall',
                         hybrid_rsplit: 'hybrid_rsplit', hybrid_vsplit_inv: 'hybrid_vsplit_inv',
                         hybrid_diag: 'hybrid_diag', hybrid_diag_inv: 'hybrid_diag_inv',
-                        spider_cave: 'spider_cave',
+                        spider_cave: 'spider_cave', catacombs: 'catacombs',
                         breaker: 'breaker', sealed_vaults: 'sealed_vaults', small_labyrinth: 'small_labyrinth',
                     };
                     if (_ftMap[forcedLayoutType]) screenType = _ftMap[forcedLayoutType];
@@ -12882,8 +13161,10 @@ function initMap() {
     // ----- FLOOR 1: TUTORIAL 1 -----
 
     if (floorLevel === 1) {
-        addLog("TUTORIAL 1: Attack obstacles with [Arrows].");
-        addLog("Break the blocks (□) surrounding you and head to the hole (◯).");
+        if (!_warpedFromEscapeRoom && !isRoomTestMode) {
+            addLog("TUTORIAL 1: Attack obstacles with [Arrows].");
+            addLog("Break the blocks (□) surrounding you and head to the hole (◯).");
+        }
 
         _f1SecretWallHits = 0;
 
@@ -12919,10 +13200,6 @@ function initMap() {
         for (let x = 13; x <= 18; x++) map[12][x] = SYMBOLS.FLOOR;
         for (let x = 25; x <= 30; x++) map[12][x] = SYMBOLS.FLOOR;
 
-        // 秘密の縦通路 (敵の部屋底 x=20 から画面下端近くまで)
-        // y=24 は WALL のまま（秘密の壁）
-        for (let y = 15; y <= 23; y++) map[y][20] = SYMBOLS.FLOOR;
-
         // 主人公の開始位置
         player.x = 8; player.y = 12;
 
@@ -12946,16 +13223,112 @@ function initMap() {
         screenGrid.enemies[0][0]  = enemies;
         screenGrid.tempWalls[0][0]= tempWalls;
 
-        // 下の画面 [sy=1, sx=0]: 隠し部屋
+        // 下の画面 [sy=1, sx=0]: 奇妙な隠し部屋（壁に無数の小孔が穿たれた空間）
         {
             const _hMap = Array.from({ length: ROWS }, () => Array(COLS).fill(SYMBOLS.WALL));
-            // 上端通路（上の画面の下端と対応: y=0, x=18..21）
             for (let _px = 18; _px <= 21; _px++) _hMap[0][_px] = SYMBOLS.FLOOR;
-            // 部屋本体：画面全体を開放した広い空間
-            for (let _hy = 1; _hy < ROWS - 1; _hy++)
-                for (let _hx = 1; _hx < COLS - 1; _hx++)
-                    _hMap[_hy][_hx] = SYMBOLS.FLOOR;
+
+            const _hF = (x1, y1, x2, y2) => {
+                for (let _y = y1; _y <= y2; _y++)
+                    for (let _x = x1; _x <= x2; _x++)
+                        if (_x >= 1 && _x <= 38 && _y >= 1 && _y <= 23) _hMap[_y][_x] = SYMBOLS.FLOOR;
+            };
+
+            // ─── メイン経路（入口から繋がる探索可能な空間）
+            _hF(15,1,24,3);   // 前室
+            _hF(18,4,20,8);   // 前室からの縦通路
+            _hF(10,9,25,13);  // 中央の広間（不規則）
+            _hF(9,10,9,12);   _hF(26,10,27,12); // 左右の張り出し
+            _hF(13,8,15,8);   _hF(19,8,19,8);   // 上への突起
+            _hF(17,14,18,16); _hF(21,14,22,16); // 下への通路2本
+            _hF(12,17,24,21); // 中央下の広間
+            _hF(11,18,11,20); _hF(25,18,26,20); // 左右の突起
+            _hF(14,22,16,22); _hF(20,22,22,22); // 最底部への枝
+
+            // ─── 左上の散らばった小空間（孤立）
+            _hF(1,1,3,2);   _hF(5,1,6,1);   _hF(8,1,9,2);   _hF(11,1,11,1); _hF(13,2,14,2);
+            _hF(1,3,2,4);   _hF(4,4,5,4);   _hF(7,3,8,4);   _hF(10,3,10,4); _hF(12,4,13,4);
+            _hF(1,6,2,6);   _hF(4,6,4,7);   _hF(6,5,7,6);   _hF(9,5,10,6);  _hF(12,6,13,7);
+            _hF(1,8,2,8);   _hF(4,8,5,9);   _hF(7,8,8,9);   _hF(1,10,2,11); _hF(4,11,5,11);
+            _hF(6,10,7,11); _hF(3,13,4,13); _hF(6,13,7,14); _hF(1,13,1,14); _hF(5,14,5,15);
+            _hF(7,14,8,15); _hF(2,15,3,16); _hF(1,16,1,17);
+
+            // ─── 右上の散らばった小空間（孤立）
+            _hF(27,1,28,2); _hF(30,1,30,2); _hF(32,1,33,1); _hF(35,1,36,2); _hF(38,1,38,2);
+            _hF(26,3,27,4); _hF(29,3,30,3); _hF(32,3,33,4); _hF(35,3,36,3); _hF(38,3,38,4);
+            _hF(25,5,26,6); _hF(28,5,29,5); _hF(31,5,32,6); _hF(34,5,34,6); _hF(36,5,37,6);
+            _hF(28,7,29,8); _hF(31,7,31,8); _hF(33,7,34,8); _hF(36,7,37,8); _hF(38,6,38,8);
+            _hF(28,9,29,10); _hF(31,9,32,10); _hF(34,9,35,11); _hF(36,9,37,11); _hF(38,10,38,12);
+            _hF(28,12,29,13); _hF(31,12,32,13); _hF(34,13,35,14); _hF(37,13,38,14);
+
+            // ─── 左下の散らばった小空間（孤立）
+            _hF(1,18,2,19); _hF(4,18,5,18); _hF(7,18,8,19); _hF(3,20,4,21);
+            _hF(6,20,7,21); _hF(1,21,2,21); _hF(9,20,10,21); _hF(5,22,6,22);
+            _hF(1,22,2,22); _hF(8,22,9,22); _hF(11,22,12,22);
+
+            // ─── 右下の散らばった小空間（孤立）
+            _hF(27,17,28,17); _hF(30,17,31,18); _hF(33,17,34,18); _hF(36,17,37,18);
+            _hF(27,19,28,20); _hF(30,19,31,20); _hF(33,20,34,21); _hF(36,20,37,21); _hF(38,19,38,21);
+            _hF(26,22,27,22); _hF(29,22,30,22); _hF(32,22,33,22); _hF(35,22,36,22); _hF(38,22,38,22);
+
+            // ─── 広い空間を崩す非対称な壁島（床を後から壁で上書き）
+            const _hW = (x1, y1, x2, y2) => {
+                for (let _y = y1; _y <= y2; _y++)
+                    for (let _x = x1; _x <= x2; _x++)
+                        _hMap[_y][_x] = SYMBOLS.WALL;
+            };
+            // 前室
+            _hW(17,2,17,2); _hW(21,1,21,1); _hW(23,2,23,3);
+            // 縦通路
+            _hW(20,5,20,5); _hW(18,7,18,7);
+            // 中央広間（入口y=8〜出口y=13）
+            _hW(14,9,15,9);  _hW(20,9,20,10); _hW(22,10,23,10);
+            _hW(12,10,12,11); _hW(16,10,16,10); _hW(24,11,24,12);
+            _hW(17,11,17,12); _hW(10,11,10,12); _hW(26,10,26,11);
+            _hW(11,12,12,13); _hW(19,12,20,12); _hW(23,12,23,13);
+            // 下広間（入口y=17〜出口y=21）
+            _hW(14,17,14,18); _hW(19,17,19,17); _hW(22,17,22,17);
+            _hW(16,18,16,18); _hW(18,18,18,18); _hW(24,18,24,18);
+            _hW(17,19,17,20); _hW(21,19,22,20); _hW(13,20,14,21);
+            _hW(23,20,23,21); _hW(20,21,21,21);
+
+            // ─── 全域に散らばる1マスの孤立点（奈落の穴）
+            const _hDots = [
+                [3,1],[7,1],[10,1],[14,1],[26,1],[31,1],[34,1],[37,1],
+                [2,3],[6,3],[9,3],[11,3],[25,3],[28,3],[31,3],[34,3],[37,3],
+                [2,6],[5,6],[8,6],[11,6],[14,6],[25,6],[27,6],[30,6],[33,6],[36,6],
+                [1,7],[3,7],[5,8],[11,7],[14,7],[24,7],[27,7],[30,7],[33,7],[37,7],
+                [2,9],[6,9],[28,9],[33,9],[36,9],[38,9],
+                [3,12],[6,12],[8,12],[28,11],[30,11],[33,11],[36,11],[38,11],
+                [2,14],[4,14],[8,14],[9,15],[28,14],[30,14],[33,14],[37,14],
+                [4,16],[6,16],[8,16],[10,16],[27,16],[29,16],[32,16],[35,16],[38,16],
+                [2,17],[5,17],[9,17],[10,18],[11,17],[26,17],[29,17],[32,17],[35,17],[38,17],
+                [1,20],[5,20],[8,20],[11,20],[28,21],[31,21],[35,21],[37,21],
+                [1,23],[3,23],[5,23],[7,23],[9,23],[11,23],[13,23],[16,23],
+                [19,23],[22,23],[24,23],[26,23],[28,23],[30,23],[32,23],[34,23],[36,23],[38,23],
+            ];
+            for (const [_dx,_dy] of _hDots) _hMap[_dy][_dx] = SYMBOLS.FLOOR;
+
             screenGrid.maps[1][0] = _hMap;
+
+            // 中央から右6・下から5マス付近にランダムな指輪を配置
+            const _hRingX = 26, _hRingY = 19;
+            const _hRingPick = RINGS[Math.floor(Math.random() * RINGS.length)];
+            _hMap[_hRingY][_hRingX] = SYMBOLS.RING;
+            ringDrops.push({ x: _hRingX, y: _hRingY, ringId: _hRingPick.id });
+
+            // 壁以外のすべてのマスに死体を配置（向きランダム、一部はhp=1の傷ついた薄い死体）
+            // 出入り口（上端y=0-3、x=14-25）は死体を置かず、入場直後の空間を確保する
+            // FLOOR以外のタイル（指輪など）も死体を置かない
+            const _hCorpses = screenGrid.tempWalls[1][0];
+            for (let _cy = 0; _cy < ROWS; _cy++) {
+                for (let _cx = 0; _cx < COLS; _cx++) {
+                    if (_hMap[_cy][_cx] !== SYMBOLS.FLOOR) continue;
+                    if (_cy <= 3 && _cx >= 14 && _cx <= 25) continue; // 入口前室エリアはクリア
+                    const _hp = Math.random() < 0.35 ? 1 : 2; // 35%が傷ついて薄い死体
+                    _hCorpses.push({ x: _cx, y: _cy, hp: _hp, type: 'CORPSE', _flip: Math.random() < 0.5 });
+                }
+            }
         }
 
         return;
@@ -18357,6 +18730,82 @@ function initMap() {
         return;
     }
 
+    // ===== テストモード: 地下墓地（固定レイアウト） =====
+    if (isRoomTestMode && forcedLayoutType === 'catacombs') {
+        addLog("地下墓地 — CATACOMBS");
+        for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) map[y][x] = SYMBOLS.WALL;
+
+        const _cF = (x1, y1, x2, y2) => {
+            for (let _y = y1; _y <= y2; _y++)
+                for (let _x = x1; _x <= x2; _x++)
+                    if (_x >= 1 && _x <= 38 && _y >= 1 && _y <= 23) map[_y][_x] = SYMBOLS.FLOOR;
+        };
+        const _cW = (x1, y1, x2, y2) => {
+            for (let _y = y1; _y <= y2; _y++)
+                for (let _x = x1; _x <= x2; _x++)
+                    map[_y][_x] = SYMBOLS.WALL;
+        };
+
+        // メイン経路
+        _cF(15,1,24,3); _cF(18,4,20,8); _cF(10,9,25,13);
+        _cF(9,10,9,12); _cF(26,10,27,12); _cF(13,8,15,8); _cF(19,8,19,8);
+        _cF(17,14,18,16); _cF(21,14,22,16); _cF(12,17,24,21);
+        _cF(11,18,11,20); _cF(25,18,26,20); _cF(14,22,16,22); _cF(20,22,22,22);
+        // 左上の散らばった小空間
+        _cF(1,1,3,2);   _cF(5,1,6,1);   _cF(8,1,9,2);   _cF(11,1,11,1); _cF(13,2,14,2);
+        _cF(1,3,2,4);   _cF(4,4,5,4);   _cF(7,3,8,4);   _cF(10,3,10,4); _cF(12,4,13,4);
+        _cF(1,6,2,6);   _cF(4,6,4,7);   _cF(6,5,7,6);   _cF(9,5,10,6);  _cF(12,6,13,7);
+        _cF(1,8,2,8);   _cF(4,8,5,9);   _cF(7,8,8,9);   _cF(1,10,2,11); _cF(4,11,5,11);
+        _cF(6,10,7,11); _cF(3,13,4,13); _cF(6,13,7,14); _cF(1,13,1,14); _cF(5,14,5,15);
+        _cF(7,14,8,15); _cF(2,15,3,16); _cF(1,16,1,17);
+        // 右上の散らばった小空間
+        _cF(27,1,28,2); _cF(30,1,30,2); _cF(32,1,33,1); _cF(35,1,36,2); _cF(38,1,38,2);
+        _cF(26,3,27,4); _cF(29,3,30,3); _cF(32,3,33,4); _cF(35,3,36,3); _cF(38,3,38,4);
+        _cF(25,5,26,6); _cF(28,5,29,5); _cF(31,5,32,6); _cF(34,5,34,6); _cF(36,5,37,6);
+        _cF(28,7,29,8); _cF(31,7,31,8); _cF(33,7,34,8); _cF(36,7,37,8); _cF(38,6,38,8);
+        _cF(28,9,29,10); _cF(31,9,32,10); _cF(34,9,35,11); _cF(36,9,37,11); _cF(38,10,38,12);
+        _cF(28,12,29,13); _cF(31,12,32,13); _cF(34,13,35,14); _cF(37,13,38,14);
+        // 左下の散らばった小空間
+        _cF(1,18,2,19); _cF(4,18,5,18); _cF(7,18,8,19); _cF(3,20,4,21);
+        _cF(6,20,7,21); _cF(1,21,2,21); _cF(9,20,10,21); _cF(5,22,6,22);
+        _cF(1,22,2,22); _cF(8,22,9,22); _cF(11,22,12,22);
+        // 右下の散らばった小空間
+        _cF(27,17,28,17); _cF(30,17,31,18); _cF(33,17,34,18); _cF(36,17,37,18);
+        _cF(27,19,28,20); _cF(30,19,31,20); _cF(33,20,34,21); _cF(36,20,37,21); _cF(38,19,38,21);
+        _cF(26,22,27,22); _cF(29,22,30,22); _cF(32,22,33,22); _cF(35,22,36,22); _cF(38,22,38,22);
+        // 全域の1マス孤立点
+        for (const [_dx,_dy] of [
+            [3,1],[7,1],[10,1],[14,1],[26,1],[31,1],[34,1],[37,1],
+            [2,3],[6,3],[9,3],[11,3],[25,3],[28,3],[31,3],[34,3],[37,3],
+            [2,6],[5,6],[8,6],[11,6],[14,6],[25,6],[27,6],[30,6],[33,6],[36,6],
+            [1,7],[3,7],[5,8],[11,7],[14,7],[24,7],[27,7],[30,7],[33,7],[37,7],
+            [2,9],[6,9],[28,9],[33,9],[36,9],[38,9],
+            [3,12],[6,12],[8,12],[28,11],[30,11],[33,11],[36,11],[38,11],
+            [2,14],[4,14],[8,14],[9,15],[28,14],[30,14],[33,14],[37,14],
+            [4,16],[6,16],[8,16],[10,16],[27,16],[29,16],[32,16],[35,16],[38,16],
+            [2,17],[5,17],[9,17],[10,18],[11,17],[26,17],[29,17],[32,17],[35,17],[38,17],
+            [1,20],[5,20],[8,20],[11,20],[28,21],[31,21],[35,21],[37,21],
+            [1,23],[3,23],[5,23],[7,23],[9,23],[11,23],[13,23],[16,23],
+            [19,23],[22,23],[24,23],[26,23],[28,23],[30,23],[32,23],[34,23],[36,23],[38,23],
+        ]) { if (_dx>=1&&_dx<=38&&_dy>=1&&_dy<=23) map[_dy][_dx] = SYMBOLS.FLOOR; }
+        // 広い空間の壁島（非対称）
+        _cW(17,2,17,2); _cW(21,1,21,1); _cW(23,2,23,3);
+        _cW(20,5,20,5); _cW(18,7,18,7);
+        _cW(14,9,15,9);  _cW(20,9,20,10); _cW(22,10,23,10);
+        _cW(12,10,12,11); _cW(16,10,16,10); _cW(24,11,24,12);
+        _cW(17,11,17,12); _cW(10,11,10,12); _cW(26,10,26,11);
+        _cW(11,12,12,13); _cW(19,12,20,12); _cW(23,12,23,13);
+        _cW(14,17,14,18); _cW(19,17,19,17); _cW(22,17,22,17);
+        _cW(16,18,16,18); _cW(18,18,18,18); _cW(24,18,24,18);
+        _cW(17,19,17,20); _cW(21,19,22,20); _cW(13,20,14,21);
+        _cW(23,20,23,21); _cW(20,21,21,21);
+
+        player.x = 19; player.y = 2; map[player.y][player.x] = SYMBOLS.FLOOR;
+        map[22][15] = SYMBOLS.STAIRS;
+        addLog("The air is cold and still. Something ancient rests here.");
+        return;
+    }
+
     // 通常ダンジョン型（部屋+廊下）: 0.80〜1.00 = 20%
     // 大広間フロアのモディファイア（ICE / WIND / WISP）は無効化
     let greatHallModifier = null;
@@ -22398,6 +22847,7 @@ function isWallAt(x, y) {
     const tile = map[y][x];
     if (tile === SYMBOLS.WALL || tile === SYMBOLS.DOOR || tile === SYMBOLS.CORE || tile === SYMBOLS.BLOCK || tile === SYMBOLS.BLOCK_CRACKED || tile === SYMBOLS.MERCHANT) return true;
     if (tile === SYMBOLS.FIRE_BLOCK) return true;
+    if (tile === SYMBOLS.BLUE_BLOCK) return true;
     if (tempWalls.some(w => w.x === x && w.y === y)) return true;
     if (bombs.some(b => b.x === x && b.y === y)) return true;
     if (miasmaCorpses.some(c => c.x === x && c.y === y)) return true; // 瘴気死体は通行不可
@@ -25142,6 +25592,32 @@ function draw(now) {
                     if (x === 0 || map[y][x - 1] !== SYMBOLS.WALL) { ctx.moveTo(px + 1, py); ctx.lineTo(px + 1, py + TILE_SIZE); }
                     if (x === COLS - 1 || map[y][x + 1] !== SYMBOLS.WALL) { ctx.moveTo(px + TILE_SIZE - 1, py); ctx.lineTo(px + TILE_SIZE - 1, py + TILE_SIZE); }
                     ctx.stroke();
+                    // 秘密の壁: ひび割れ描画（フロア1 + リミナルスペース page5/7）
+                    const _isCrackWall = (floorLevel === 1 && currentScreen && currentScreen.y === 0 && y === ROWS - 1 && x >= 18 && x <= 21)
+                        || (isInEscapeRoom && _escapeRoomPage === 7 && y === ROWS - 1 && x >= 18 && x <= 21)
+                        || (isInEscapeRoom && _escapeRoomPage === 5 && x === 0 && y >= 11 && y <= 13);
+                    if (_isCrackWall) {
+                        ctx.save();
+                        ctx.strokeStyle = '#3a3a3a'; ctx.lineWidth = 1; ctx.globalAlpha = 0.45;
+                        ctx.beginPath();
+                        if (isInEscapeRoom && _escapeRoomPage === 5 && x === 0) {
+                            // 左外壁: 横方向のひび
+                            ctx.moveTo(px + 2,                    py + TILE_SIZE * 0.50);
+                            ctx.lineTo(px + TILE_SIZE * 0.42,     py + TILE_SIZE * 0.55);
+                            ctx.lineTo(px + TILE_SIZE * 0.70,     py + TILE_SIZE * 0.72);
+                            ctx.moveTo(px + TILE_SIZE * 0.42,     py + TILE_SIZE * 0.55);
+                            ctx.lineTo(px + TILE_SIZE * 0.82,     py + TILE_SIZE * 0.28);
+                        } else {
+                            // 下外壁: 縦方向のひび
+                            ctx.moveTo(px + TILE_SIZE * 0.50, py + 2);
+                            ctx.lineTo(px + TILE_SIZE * 0.55, py + TILE_SIZE * 0.42);
+                            ctx.lineTo(px + TILE_SIZE * 0.72, py + TILE_SIZE * 0.70);
+                            ctx.moveTo(px + TILE_SIZE * 0.55, py + TILE_SIZE * 0.42);
+                            ctx.lineTo(px + TILE_SIZE * 0.28, py + TILE_SIZE * 0.82);
+                        }
+                        ctx.stroke();
+                        ctx.restore();
+                    }
                     }
                 } else if (char === SYMBOLS.CORE) {
                     ctx.save();
@@ -25322,6 +25798,24 @@ function draw(now) {
                         ctx.fill();
                         ctx.restore();
                     }
+                } else if (char === SYMBOLS.BLUE_KEY) {
+                    if (!enemies.some(e => e.hp > 0 && e.x === x && e.y === y)) {
+                        ctx.save();
+                        const _bkp = (Math.sin(now / 700) + 1) / 2;
+                        ctx.fillStyle = `rgb(${Math.round(30 + _bkp * 20)},${Math.round(130 + _bkp * 70)},${Math.round(220 + _bkp * 35)})`;
+                        ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 6 + _bkp * 10;
+                        ctx.fillText(SYMBOLS.BLUE_KEY, px + TILE_SIZE / 2, py + TILE_SIZE / 2);
+                        ctx.restore();
+                    }
+                } else if (char === SYMBOLS.BLUE_BLOCK) {
+                    ctx.save();
+                    ctx.fillStyle = '#1e3a5f';
+                    ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+                    ctx.fillStyle = '#38bdf8';
+                    ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 4;
+                    ctx.fillText(SYMBOLS.BLUE_BLOCK, px + TILE_SIZE / 2, py + TILE_SIZE / 2);
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
                 } else if ([SYMBOLS.WAND, SYMBOLS.KEY, SYMBOLS.SWORD, SYMBOLS.ARMOR, SYMBOLS.SPEED, SYMBOLS.CHARM, SYMBOLS.STEALTH, SYMBOLS.HEAL_TOME, SYMBOLS.EXPLOSION, SYMBOLS.ESCAPE, SYMBOLS.BREAKER_TOME, SYMBOLS.GUARDIAN, SYMBOLS.TOME].includes(char)) {
                     // 敵が乗っている場合はアイテムを描画しない（KEYは後段で敵の上に重ねて描画）
                     if (!enemies.some(e => e.hp > 0 && e.x === x && e.y === y)) {
@@ -27119,6 +27613,7 @@ function detonateBomb(bomb) {
         if (twIdx !== -1) tempWalls.splice(twIdx, 1);
     }
     // 周囲の壁を破壊（マップの壁）
+    let _bombF1Opened = false;
     for (const tile of blastTiles) {
         const _bombInner = tile.x >= 1 && tile.x < COLS - 1 && tile.y >= 1 && tile.y < ROWS - 1;
         // page 7 隠し通路壁: 外周壁も爆弾で破壊可能
@@ -27127,10 +27622,20 @@ function detonateBomb(bomb) {
         // page 5 左外周壁: 外周壁も爆弾で破壊可能
         const _bombHiddenWall11 = isInEscapeRoom && _escapeRoomPage === 5
             && tile.x === 0 && tile.y >= 10 && tile.y <= 13;
-        if ((_bombInner || _bombHiddenWall || _bombHiddenWall11) && map[tile.y] && map[tile.y][tile.x] === SYMBOLS.WALL) {
+        // フロア1 秘密の壁（ひび割れ）: 外周壁も爆弾で破壊可能
+        const _bombF1Wall = !isInEscapeRoom && floorLevel === 1 && currentScreen && currentScreen.y === 0
+            && tile.y === ROWS - 1 && tile.x >= 18 && tile.x <= 21;
+        if ((_bombInner || _bombHiddenWall || _bombHiddenWall11 || _bombF1Wall) && map[tile.y] && map[tile.y][tile.x] === SYMBOLS.WALL) {
             map[tile.y][tile.x] = SYMBOLS.FLOOR;
-            if (_bombHiddenWall || _bombHiddenWall11) { SOUNDS.CRUMBLE_WALL(); spawnFloatingText(tile.x, tile.y, 'CRACK!', '#94a3b8'); }
+            if (_bombHiddenWall || _bombHiddenWall11 || _bombF1Wall) { SOUNDS.CRUMBLE_WALL(); spawnFloatingText(tile.x, tile.y, 'CRACK!', '#94a3b8'); }
+            if (_bombF1Wall) _bombF1Opened = true;
         }
+    }
+    // フロア1 秘密の壁が爆破されたら外周壁タイルを確実に開放（通路はプレイヤーが踏んだ時に開通）
+    if (_bombF1Opened) {
+        for (let _wx = 18; _wx <= 21; _wx++) map[ROWS - 1][_wx] = SYMBOLS.FLOOR;
+        if (screenGrid && screenGrid.maps) screenGrid.maps[0][0] = map;
+        addKeyLog("The cracked wall is blown open! A hidden passage awaits...");
     }
     // 遭難冒険者へのダメージ
     if (merchantState) {
@@ -27224,6 +27729,13 @@ function detonateLeech(leech) {
         map[_lw.y][_lw.x] = SYMBOLS.FLOOR;
         SOUNDS.CRUMBLE_WALL();
         spawnFloatingText(_lw.x, _lw.y, 'CRACK!', '#94a3b8');
+        // フロア1 秘密の壁が破壊された場合: 外周壁タイルを開放（通路はプレイヤーが踏んだ時に開通）
+        if (!isInEscapeRoom && floorLevel === 1 && currentScreen && currentScreen.y === 0
+                && _lw.y === ROWS - 1 && _lw.x >= 18 && _lw.x <= 21) {
+            for (let _wx = 18; _wx <= 21; _wx++) map[ROWS - 1][_wx] = SYMBOLS.FLOOR;
+            if (screenGrid && screenGrid.maps) screenGrid.maps[0][0] = map;
+            addKeyLog("The cracked wall is blown open! A hidden passage awaits...");
+        }
     }
     // LEECH を除去・討伐記録
     const _lIdx = enemies.indexOf(leech);
@@ -29016,7 +29528,7 @@ async function slidePlayer(dx, dy) {
                 const _isSecretWall = (isInEscapeRoom && (
                     (_escapeRoomPage === 7 && ny === ROWS - 1 && nx >= 18 && nx <= 21) ||
                     (_escapeRoomPage === 5 && nx === 0 && ny >= 11 && ny <= 13)
-                )) || (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx === 20);
+                )) || (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx >= 18 && nx <= 21);
                 if (_isSecretWall) SOUNDS.SECRET_WALL_KNOCK();
                 else SOUNDS.WALL_BUMP();
             }
@@ -30591,24 +31103,24 @@ async function handleAction(dx, dy) {
                 // 赤ん坊の死体専用メッセージ
                 if (block.hp <= 0) {
                     tempWalls.splice(blockIdx, 1);
-                    addLog("The tiny remains fall to dust. You feel an unbearable sorrow.");
+                    addKeyLog("The tiny remains fall to dust. You feel an unbearable sorrow.");
                     SOUNDS.DEFEAT();
                 } else {
-                    addLog("Tiny bones... the remains of an infant. Someone buried this child here.");
+                    addKeyLog("Tiny bones... the remains of an infant. Someone buried this child here.");
                 }
             } else if (block.hp <= 0) {
                 tempWalls.splice(blockIdx, 1);
-                addLog("The human remains crumble to dust.");
+                addKeyLog("The human remains crumble to dust.");
                 SOUNDS.DEFEAT();
             } else {
-                addLog("A human corpse. The bones give way under your blow.");
+                addKeyLog("A human corpse. The bones give way under your blow.");
             }
         } else if (block.hp <= 0) {
             tempWalls.splice(blockIdx, 1);
-            addLog("The block was broken!");
+            addKeyLog("The block was broken!");
             SOUNDS.DEFEAT(); // 破壊音代わり
         } else {
-            addLog("The block is cracked!");
+            addKeyLog("The block is cracked!");
         }
 
         if (!player.isInfiniteStamina) player.stamina = Math.max(0, player.stamina - 20);
@@ -30795,6 +31307,10 @@ async function handleAction(dx, dy) {
             if (_crumbleOrigMap) _crumbleOrigMap[ny][nx] = SYMBOLS.FLOOR;
             await animateItemGet(SYMBOLS.KEY, SOUNDS.GET_KEY); SOUNDS.GET_ITEM();
             player.hasKey = true; addKeyLog("You picked up the Key."); spawnFloatingText(nx, ny, "GOT KEY", "#fbbf24");
+        } else if (nextTile === SYMBOLS.BLUE_KEY) {
+            map[ny][nx] = SYMBOLS.FLOOR;
+            SOUNDS.GET_KEY(); SOUNDS.GET_ITEM();
+            player.hasBlueKey = true; addKeyLog("You got the Blue Key! Blue blocks can now be destroyed."); spawnFloatingText(nx, ny, "BLUE KEY!", '#38bdf8');
         } else if (nextTile === SYMBOLS.WAND) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.WAND); SOUNDS.GET_ITEM();
             player.hasWand = true; addKeyLog("You picked up the Magic Wand.");
@@ -31010,6 +31526,26 @@ async function handleAction(dx, dy) {
             return;
         }
 
+        // BLUE_BLOCK: 青い鍵で一撃破壊して侵入、なければ壁バンプ
+        if (map[ny][nx] === SYMBOLS.BLUE_BLOCK) {
+            player.offsetX = dx * 5; player.offsetY = dy * 5;
+            await new Promise(r => setTimeout(r, 50));
+            player.offsetX = 0; player.offsetY = 0;
+            if (player.hasBlueKey) {
+                map[ny][nx] = SYMBOLS.FLOOR;
+                SOUNDS.WALL_BREAK();
+                setScreenShake(4, 150);
+                spawnFloatingText(nx, ny, "BREAK!", '#38bdf8');
+                addKeyLog("The Blue Key shatters the blue block!");
+                player.x = nx; player.y = ny;
+            } else {
+                SOUNDS.WALL_BUMP();
+                if (!player.isInfiniteStamina) player.stamina = Math.max(0, player.stamina - 20);
+            }
+            if (!transition.active) { turnCount++; updateUI(); try { await windGustSlide(); await enemyTurn(); } catch(err) { console.error('[turn ERROR]', err); } finally { try { await moveWisps(); } catch(we) { console.error('[wisp ERROR]', we); } moveFairies(); moveMadmen(); isProcessing = false; } if (bufferedInput) { const b = bufferedInput; bufferedInput = null; handleAction(b.dx, b.dy); } }
+            return;
+        }
+
         const isBlockedByWall = map[ny][nx] === SYMBOLS.WALL;
         const isBlockedByTempWall = tempWalls.some(w => w.x === nx && w.y === ny);
 
@@ -31037,11 +31573,13 @@ async function handleAction(dx, dy) {
             return;
         }
 
-        if (isBlockedByWall && !player.isBreaker && hasRing('BREAKER_RING') && player.stamina >= 100
+        if (isBlockedByWall && hasRing('BREAKER_RING') && (player.isBreaker || player.stamina >= 100)
             && ((ny >= 1 && ny < ROWS - 1 && nx >= 1 && nx < COLS - 1)
                 || (isInEscapeRoom && _escapeRoomPage === 7 && ny === ROWS - 1 && nx >= 18 && nx <= 21)
-                || (isInEscapeRoom && _escapeRoomPage === 5 && nx === 0 && ny >= 11 && ny <= 13))) {
+                || (isInEscapeRoom && _escapeRoomPage === 5 && nx === 0 && ny >= 11 && ny <= 13)
+                || (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx >= 18 && nx <= 21))) {
             // 壁壊しの指輪: スタミナ満タン時に壁を壊して進む（スタミナ全消費）
+            // 破壊の魔導書発動中は条件なしで発動し、スタミナ消費なし
             // スクロール壁を破壊した場合、そのエントリを除去（除去しないと次ターンに押し出し連鎖死が起きる）
             { const _si = scrollWalls.findIndex(w => w.x === nx && w.y === ny); if (_si !== -1) scrollWalls.splice(_si, 1); }
             // 縦スクロール壁（58F）: エントリとパターンを除去して壁が復活しないようにする
@@ -31144,7 +31682,7 @@ async function handleAction(dx, dy) {
             setScreenShake(8, 200);
             if (!hasRingDoubled('BREAKER_RING')) addKeyLog("The Breaker Ring shattered the wall!");
             spawnFloatingText(nx, ny, "BREAK!", '#f59e0b');
-            if (!player.isInfiniteStamina) player.stamina = 0;
+            if (!player.isBreaker && !player.isInfiniteStamina) player.stamina = 0; // 魔導書中はスタミナ消費なし
             // Xステージ: 高確率でBOMBERが出現
             if (isXWallStage && Math.random() < 0.75) {
                 spawnXFromWall(nx, ny);
@@ -31179,12 +31717,28 @@ async function handleAction(dx, dy) {
                 _applyHiddenRoomDispel();
                 saveEscapeRoomData(); saveGame(); updateMinimap(); draw(); isProcessing = false; return;
             }
+            // フロア1 秘密の壁 (BREAKER_RING) → 隠し部屋へ遷移
+            if (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx >= 18 && nx <= 21) {
+                for (let _wx = 18; _wx <= 21; _wx++) map[ROWS - 1][_wx] = SYMBOLS.FLOOR;
+                for (let _fy = 15; _fy <= ROWS - 2; _fy++) map[_fy][20] = SYMBOLS.FLOOR;
+                addKeyLog("The wall crumbles! A hidden space opens below...");
+                screenGrid.maps[0][0] = map; screenGrid.enemies[0][0] = enemies;
+                if (screenGrid.tempWalls) screenGrid.tempWalls[0][0] = [...tempWalls];
+                currentScreen.x = 0; currentScreen.y = 1;
+                map = screenGrid.maps[1][0]; enemies = screenGrid.enemies[1][0] || [];
+                tempWalls = screenGrid.tempWalls ? [...(screenGrid.tempWalls[1][0] || [])] : [];
+                wisps = screenGrid.wisps ? (screenGrid.wisps[1][0] || []) : [];
+                player.x = 20; player.y = 1; player.offsetX = 0; player.offsetY = 0;
+                visitedScreens[1][0] = true;
+                updateMinimap(); draw(); isProcessing = false; return;
+            }
             if (!transition.active) { turnCount++; updateUI(); try { await windGustSlide(); await enemyTurn(); } catch(err) { console.error('[turn ERROR]', err); } finally { try { await moveWisps(); } catch(we) { console.error('[wisp ERROR]', we); } moveFairies(); moveMadmen(); isProcessing = false; } if (bufferedInput) { const b = bufferedInput; bufferedInput = null; handleAction(b.dx, b.dy); } }
             return;
-        } else if (isBlockedByWall && player.isBreaker && !hasRing('PUSH_RING')
+        } else if (isBlockedByWall && player.isBreaker && !hasRing('BREAKER_RING') && !hasRing('PUSH_RING')
             && ((ny >= 1 && ny < ROWS - 1 && nx >= 1 && nx < COLS - 1)
                 || (isInEscapeRoom && _escapeRoomPage === 7 && ny === ROWS - 1 && nx >= 18 && nx <= 21)
-                || (isInEscapeRoom && _escapeRoomPage === 5 && nx === 0 && ny >= 11 && ny <= 13))) {
+                || (isInEscapeRoom && _escapeRoomPage === 5 && nx === 0 && ny >= 11 && ny <= 13)
+                || (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx >= 18 && nx <= 21))) {
             // 壁破壊の魔導書効果: 壁を壊して進む
             // スクロール壁を破壊した場合、そのエントリを除去（除去しないと次ターンに押し出し連鎖死が起きる）
             { const _si = scrollWalls.findIndex(w => w.x === nx && w.y === ny); if (_si !== -1) scrollWalls.splice(_si, 1); }
@@ -31242,6 +31796,21 @@ async function handleAction(dx, dy) {
                 player.x = COLS - 2; player.offsetX = 0; player.offsetY = 0;
                 _applyHiddenRoomDispel();
                 saveEscapeRoomData(); saveGame(); updateMinimap(); draw(); isProcessing = false; return;
+            }
+            // フロア1 秘密の壁 (BREAKER_TOME/isBreaker) → 隠し部屋へ遷移
+            if (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx >= 18 && nx <= 21) {
+                for (let _wx = 18; _wx <= 21; _wx++) map[ROWS - 1][_wx] = SYMBOLS.FLOOR;
+                for (let _fy = 15; _fy <= ROWS - 2; _fy++) map[_fy][20] = SYMBOLS.FLOOR;
+                addKeyLog("The wall crumbles! A hidden space opens below...");
+                screenGrid.maps[0][0] = map; screenGrid.enemies[0][0] = enemies;
+                if (screenGrid.tempWalls) screenGrid.tempWalls[0][0] = [...tempWalls];
+                currentScreen.x = 0; currentScreen.y = 1;
+                map = screenGrid.maps[1][0]; enemies = screenGrid.enemies[1][0] || [];
+                tempWalls = screenGrid.tempWalls ? [...(screenGrid.tempWalls[1][0] || [])] : [];
+                wisps = screenGrid.wisps ? (screenGrid.wisps[1][0] || []) : [];
+                player.x = 20; player.y = 1; player.offsetX = 0; player.offsetY = 0;
+                visitedScreens[1][0] = true;
+                updateMinimap(); draw(); isProcessing = false; return;
             }
             if (!transition.active) { turnCount++; updateUI(); try { await windGustSlide(); await enemyTurn(); } catch(err) { console.error('[turn ERROR]', err); } finally { try { await moveWisps(); } catch(we) { console.error('[wisp ERROR]', we); } moveFairies(); moveMadmen(); isProcessing = false; } if (bufferedInput) { const b = bufferedInput; bufferedInput = null; handleAction(b.dx, b.dy); } }
             return;
@@ -31381,20 +31950,12 @@ async function handleAction(dx, dy) {
                 const _isSecretWall = (isInEscapeRoom && (
                     (_escapeRoomPage === 7 && ny === ROWS - 1 && nx >= 18 && nx <= 21) ||
                     (_escapeRoomPage === 5 && nx === 0 && ny >= 11 && ny <= 13)
-                )) || (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx === 20);
+                )) || (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx >= 18 && nx <= 21);
                 if (_isSecretWall) {
                     SOUNDS.SECRET_WALL_KNOCK();
-                    // フロア1 秘密の壁: 3回ノックで崩壊
-                    if (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx === 20) {
-                        _f1SecretWallHits++;
-                        if (_f1SecretWallHits === 2) addKeyLog("The wall sounds hollow... something is beyond it.");
-                        if (_f1SecretWallHits >= 3) {
-                            map[ny][nx] = SYMBOLS.FLOOR;
-                            SOUNDS.WALL_BREAK();
-                            setScreenShake(8, 200);
-                            spawnFloatingText(nx, ny, "CRACK!", '#94a3b8');
-                            addKeyLog("The wall crumbles! A hidden passage opens below.");
-                        }
+                    // フロア1 秘密の壁: バンプでは開かない。壁破壊の魔導書か指輪が必要
+                    if (floorLevel === 1 && currentScreen.y === 0 && ny === ROWS - 1 && nx >= 18 && nx <= 21) {
+                        addKeyLog("This wall feels different... a special tool might be needed.");
                     }
                 } else {
                     SOUNDS.WALL_BUMP();
@@ -31405,6 +31966,22 @@ async function handleAction(dx, dy) {
             await new Promise(r => setTimeout(r, 50));
             player.offsetX = 0; player.offsetY = 0;
         } else {
+            // フロア1 秘密の壁が爆弾等で既にFLOOR化済みの場合、踏んだ瞬間に隠し部屋へ遷移
+            if (!isInEscapeRoom && floorLevel === 1 && currentScreen && currentScreen.y === 0
+                    && ny === ROWS - 1 && nx >= 18 && nx <= 21 && map[ny][nx] === SYMBOLS.FLOOR) {
+                for (let _wx = 18; _wx <= 21; _wx++) map[ROWS - 1][_wx] = SYMBOLS.FLOOR;
+                for (let _fy = 15; _fy <= ROWS - 2; _fy++) map[_fy][20] = SYMBOLS.FLOOR;
+                addKeyLog("You slip through the broken wall into a hidden space below...");
+                screenGrid.maps[0][0] = map; screenGrid.enemies[0][0] = enemies;
+                if (screenGrid.tempWalls) screenGrid.tempWalls[0][0] = [...tempWalls];
+                currentScreen.x = 0; currentScreen.y = 1;
+                map = screenGrid.maps[1][0]; enemies = screenGrid.enemies[1][0] || [];
+                tempWalls = screenGrid.tempWalls ? [...(screenGrid.tempWalls[1][0] || [])] : [];
+                wisps = screenGrid.wisps ? (screenGrid.wisps[1][0] || []) : [];
+                player.x = 20; player.y = 1; player.offsetX = 0; player.offsetY = 0;
+                visitedScreens[1][0] = true;
+                updateMinimap(); draw(); isProcessing = false; return;
+            }
             const nextTile = map[ny][nx];
             if (nextTile === SYMBOLS.DOOR) {
                 if (player.hasKey) {
@@ -31493,6 +32070,13 @@ async function handleAction(dx, dy) {
                         addKeyLog("You picked up the Key.");
                         spawnFloatingText(nx, ny, "GOT KEY", "#fbbf24");
                     }
+                } else if (nextTile === SYMBOLS.BLUE_KEY) {
+                    map[ny][nx] = SYMBOLS.FLOOR;
+                    player.x = nx; player.y = ny;
+                    SOUNDS.GET_KEY(); SOUNDS.GET_ITEM();
+                    player.hasBlueKey = true;
+                    addKeyLog("You got the Blue Key! Blue blocks can now be destroyed.");
+                    spawnFloatingText(nx, ny, "BLUE KEY!", '#38bdf8');
                 } else if (nextTile === SYMBOLS.SPEED) {
                     map[ny][nx] = SYMBOLS.FLOOR;
                     player.x = nx; player.y = ny;
@@ -31927,7 +32511,9 @@ async function handleAction(dx, dy) {
                             // isInEscapeRoom = false は startFloorTransition 内の暗転完了後にセットする
                             player.offsetX = 0; player.offsetY = 0;
                             updateUI();
+                            _warpedFromEscapeRoom = true;
                             await startFloorTransition();
+                            _warpedFromEscapeRoom = false;
                         }
                     }
                 } else {
@@ -32034,7 +32620,7 @@ async function handleAction(dx, dy) {
     }
 
     // ステージ1の中央部屋進入チェック
-    if (floorLevel === 1 && !hasShownStage1Tut && player.x >= 18 && player.x <= 25 && player.y >= 10 && player.y <= 14) {
+    if (floorLevel === 1 && !hasShownStage1Tut && !_warpedFromEscapeRoom && !isRoomTestMode && player.x >= 18 && player.x <= 25 && player.y >= 10 && player.y <= 14) {
         await triggerStage1StaminaTutorial();
     }
 
@@ -43511,6 +44097,7 @@ async function enemyTurn() {
 // マルチスクリーン通路封鎖救済: 20ターン塞がれたらBREAKERを出現させる
 function _checkRescueBreaker() {
     if (!multiScreenMode || !screenGrid || gameState !== 'PLAYING') return;
+    if (floorLevel === 1) return; // フロア1は秘密の壁があるため救済BREAKERは不要
     const _allWall = (xs, ys) => xs.every(x => ys.every(y => map[y] && map[y][x] === SYMBOLS.WALL));
     // cx/cy: 出入り口のすぐ内側の中心点（BREAKERはここ付近に出現して通路に向かう）
     const DIRS = [
@@ -44695,6 +45282,7 @@ async function startDeepRun() {
         turnCount = 0;
         tempWalls = []; wisps = []; bombs = [];
         player.hasKey = false;       // 鍵はフロアリセット
+    player.hasBlueKey = false;
         resetTomeEffects();           // バフ（加速・護衛等）はリセット
         transition.active = true;
         transition.alpha = 1;
@@ -45190,8 +45778,8 @@ window.addEventListener('keydown', async e => {
             if (t) {
                 isRoomTestMode = true;
                 forcedLayoutType = t.id;
-                // latin_test は関数内で multiScreenMode を直接設定するため floor 1 で起動
-                const _rtFloor = t.id === 'latin_test' ? 1
+                // latin_test / catacombs は単画面固定レイアウトのため floor 1 で起動
+                const _rtFloor = (t.id === 'latin_test' || t.id === 'catacombs') ? 1
                     : (t.prob === 'テスト専用' || t.prob === '深層のみ' || t.prob === 'マルチ専用') ? 101
                     : 49;
                 startGame(_rtFloor, true);
@@ -45735,6 +46323,32 @@ async function tryExplode() {
         if (dist <= range) {
             tempWalls.splice(i, 1);
         }
+    }
+
+    // 秘密の壁（ひび割れ）を爆発範囲内で破壊
+    let _expF1Opened = false;
+    for (let _edy = -range; _edy <= range; _edy++) {
+        for (let _edx = -range; _edx <= range; _edx++) {
+            if (Math.abs(_edx) + Math.abs(_edy) > range) continue;
+            const _etx = player.x + _edx, _ety = player.y + _edy;
+            if (_etx < 0 || _etx >= COLS || _ety < 0 || _ety >= ROWS) continue;
+            if (!map[_ety] || map[_ety][_etx] !== SYMBOLS.WALL) continue;
+            const _isF1 = !isInEscapeRoom && floorLevel === 1 && currentScreen && currentScreen.y === 0
+                && _ety === ROWS - 1 && _etx >= 18 && _etx <= 21;
+            const _isP7 = isInEscapeRoom && _escapeRoomPage === 7 && _ety === ROWS - 1 && _etx >= 18 && _etx <= 21;
+            const _isP5 = isInEscapeRoom && _escapeRoomPage === 5 && _etx === 0 && _ety >= 11 && _ety <= 13;
+            if (_isF1 || _isP7 || _isP5) {
+                map[_ety][_etx] = SYMBOLS.FLOOR;
+                SOUNDS.CRUMBLE_WALL();
+                spawnFloatingText(_etx, _ety, 'CRACK!', '#94a3b8');
+                if (_isF1) _expF1Opened = true;
+            }
+        }
+    }
+    if (_expF1Opened) {
+        for (let _wx = 18; _wx <= 21; _wx++) map[ROWS - 1][_wx] = SYMBOLS.FLOOR;
+        if (screenGrid && screenGrid.maps) screenGrid.maps[0][0] = map;
+        addKeyLog("The cracked wall is blown open! A hidden passage awaits...");
     }
 
     draw(); // 爆発結果（敵の消滅やブロック破壊）を即座に反映
