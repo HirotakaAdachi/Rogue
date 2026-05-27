@@ -46949,7 +46949,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     const _ZOOM_SCALE = 1.5;
 
     function _applyZoom() {
-        const shouldZoom = _tcZoomMode && ['PLAYING','MENU','STATUS','INVENTORY','SHOP','CONFIRM_BUY','RINGS','CONFIRM_ESCAPE'].includes(gameState);
+        const shouldZoom = _tcZoomMode && ['PLAYING','MENU','STATUS','INVENTORY','SHOP','CONFIRM_BUY','RINGS','CONFIRM_ESCAPE','TITLE','OPENING'].includes(gameState);
 
         // 状態変化時のみDOM操作
         if (shouldZoom !== _zoomModeActive) {
@@ -46958,7 +46958,9 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
                 // canvas-viewport を body直下に移動（game-wrapperのtransformの影響を受けないように）
                 document.body.insertBefore(_zoomVP, _mHud);
                 _zoomVP.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;overflow:hidden;background:#000;`;
-                _mHud.style.display = 'flex';
+                // TITLE/OPENING はゲームプレイHUDを非表示（HPや階層を表示しない）
+                const _isGameplayState = !['TITLE','OPENING'].includes(gameState);
+                _mHud.style.display = _isGameplayState ? 'flex' : 'none';
                 _zoomMinimap.style.display = _zoomMinimap.innerHTML ? 'block' : 'none';
             } else {
                 // canvas-viewport を元の位置（log-rowの前）に戻す
@@ -46975,19 +46977,21 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
         }
         if (!shouldZoom) return;
 
-        // HUD更新
-        const _hpEl = document.getElementById('hp');
-        const _flEl = document.getElementById('floor');
-        if (_hpEl) document.getElementById('mhud-hp').textContent = 'HP ' + _hpEl.textContent;
-        if (_flEl) document.getElementById('mhud-floor').textContent = 'F' + _flEl.textContent;
-        const _stBar = document.getElementById('mhud-st-bar');
-        if (_stBar) {
-            if (player.isInfiniteStamina) {
-                _stBar.style.width = '100%';
-                _stBar.style.background = '#fbbf24';
-            } else {
-                _stBar.style.width = player.stamina + '%';
-                _stBar.style.background = player.stamina < 30 ? '#f87171' : '#38bdf8';
+        // HUD更新（TITLE/OPENINGはHUD非表示のためスキップ）
+        if (!['TITLE','OPENING'].includes(gameState)) {
+            const _hpEl = document.getElementById('hp');
+            const _flEl = document.getElementById('floor');
+            if (_hpEl) document.getElementById('mhud-hp').textContent = 'HP ' + _hpEl.textContent;
+            if (_flEl) document.getElementById('mhud-floor').textContent = 'F' + _flEl.textContent;
+            const _stBar = document.getElementById('mhud-st-bar');
+            if (_stBar) {
+                if (player.isInfiniteStamina) {
+                    _stBar.style.width = '100%';
+                    _stBar.style.background = '#fbbf24';
+                } else {
+                    _stBar.style.width = player.stamina + '%';
+                    _stBar.style.background = player.stamina < 30 ? '#f87171' : '#38bdf8';
+                }
             }
         }
 
