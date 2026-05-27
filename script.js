@@ -2,6 +2,77 @@
 // Copyright (c) 2025 Hirotaka Adachi — https://github.com/[your-repo]
 // Feel free to fork, modify, and build upon this project.
 
+// =============================================================================
+// TABLE OF CONTENTS  (line numbers are approximate — use Ctrl+G to jump)
+// =============================================================================
+// [DEFINITIONS & DATA]
+//   line     6: SAFE STORAGE HELPERS
+//   line   112: CONSTANTS & CANVAS SETUP  (ROWS=25, COLS=40, TILE_SIZE=20)
+//   line   194: ENEMY TYPE SETS
+//   line   210: RINGS DATA  (19 rings)
+//   line   349: GAME OBJECT VARIABLES
+//   line   384: AUDIO SYSTEM
+//   line   421: SOUND EFFECTS  (SOUNDS object)
+//   line  1354: BGM SYSTEM
+//   line  1506: PLAYER COLORS & FACTION
+//   line  1529: GAME STATE FLAGS & UI STATE
+//   line  1668: ENEMY_DEFS
+//   line  1901: CORE GAME DATA  (map, player, enemies, tempWalls…)
+//   line  2263: SCREEN SHAKE
+// [PERSISTENCE]
+//   line  2282: SAVE / LOAD  → loadGame() l.2283 / saveGame() l.3329
+//   line  2442: ESCAPE ROOM (Liminal Space)  → buildEscapeRoomMap() l.2461
+//                                             → enterEscapeRoom() l.3185
+// [UI & RENDERING]
+//   line  3579: UI UPDATES  → updateUI() l.3580
+//   line 23742: OPENING ANIMATION
+//   line 23778: GAME LOOP
+//   line 23834: TITLE / GAMEOVER RENDERING
+//   line 24052: MENU / SHOP / STATUS RENDERING
+//   line 25492: MAIN DRAW FUNCTION  → draw() l.25514
+// [MAP GENERATION]  ★ floor index embedded in initMap()
+//   line  3766: MAP GENERATION  (≈19,000 lines)
+//     line  4735: initMap()  ← all fixed floor logic (see floor index inside)
+//     line  5385: generateOneScreen()  ← multi-screen floor builder
+//   line 22782: POST-MAP UTILITIES  → breakStealth() l.22783
+// [LOGGING & EFFECTS]
+//   line 27494: LOGGING & BOMB SYSTEM  → addLog() l.27495 (suppressed)
+//                                       → addKeyLog() l.27496 (use this)
+//                                       → detonateBomb() l.27515
+//   line 25435: spawnFloatingText() / spawnSlash()
+// [ACTION & COMBAT]
+//   line 27746: BLOCK PLACEMENT
+//   line 28623: SCROLL WALL SYSTEM
+//   line 29424: windGustSlide() / slidePlayer()
+//   line 29671: triggerEnding()
+//   line 30056: triggerEnding2()
+//   line 30369: PLAYER ACTION HANDLER  → handleAction() l.30375
+//     line 30893: ダンジョンコアへの攻撃チェック
+//     line 30955: tempWallへの攻撃チェック (CORPSE, BLOCK, BOMB…)
+//     line 31366: 敵への攻撃  → attackEnemy() l.34002
+//     line 31529: BLUE_BLOCK
+//     line 31581: BREAKER_RING 壁破壊
+//     line 31742: Breaker Tome 壁破壊
+//     line 32560: 毒沼 / 溶岩 踏み込みダメージ
+// [ENEMY AI]  ★ AI index embedded in enemyTurn()
+//   line 32711: WISP MOVEMENT
+//   line 32840: PATHFINDING
+//   line 33017: FAIRY SYSTEM
+//   line 33452: MADMEN SYSTEM
+//   line 33513: ENEMY FALL & DEATH
+//   line 35187: ENEMY TURN  → enemyTurn() l.35253 (see AI index inside)
+// [SYSTEMS]
+//   line 44215: applyLaserDamage()
+//   line 44306: PROJECTILE SYSTEM
+//   line 44571: SCREEN ADJACENCY HELPERS  → _hasDownScreen() / _hasUpScreen()
+//   line 44747: MOVEMENT HELPERS
+//   line 44830: EXP & LEVELING
+//   line 44848: triggerGameOver()
+//   line 44908: LASER SYSTEM
+//   line 45299: INPUT HANDLING
+//   line 46360: SHIELD SYSTEM
+// =============================================================================
+
 
 // ===== SECTION: SAFE STORAGE HELPERS =====
 // localStorageやJSONが壊れても、ゲーム本体の起動を止めないための共通処理。
@@ -2280,6 +2351,8 @@ function setScreenShake(intensity, duration) {
 }
 
 // ===== SECTION: SAVE / LOAD =====
+// Deserializes save data from localStorage and restores player state.
+// Returns true on success, false if no valid save data exists.
 function loadGame() {
     const data = safeStorageGetJSON('minimal_rogue_save', null);
     if (!data || typeof data !== 'object') return false;
@@ -2458,6 +2531,8 @@ function _applyHiddenRoomDispel() {
     updateUI();
 }
 
+// Constructs the Liminal Space (脱出部屋) grid: a 2×5 page layout with puzzle
+// rooms, hidden passages, and the final escape staircase.
 function buildEscapeRoomMap() {
     const _ER_ROWS  = 2;                    // グリッド行数
     const _ER_COLS  = 5;                    // グリッド列数
@@ -3182,6 +3257,8 @@ function buildEscapeRoomMap() {
     map = _escapeRoomPageMaps[0];
 }
 
+// Transitions the player into the Liminal Space. Requires at least one cleared floor.
+// Saves current floor state so it can be restored on exit.
 async function enterEscapeRoom() {
     // クリア済みフロアがなければ入室しない
     if (maxReachedFloor <= 1) {
@@ -3326,6 +3403,8 @@ async function enterEscapeRoom() {
     isProcessing = false;
 }
 
+// Serializes player state and progress to localStorage. Map/enemies are NOT saved
+// (they are re-generated from seed on continue). Pass notify=true to show a save icon.
 function saveGame(notify = false) {
     // オートセーブ：フロア開始時のプレイヤー状態のみ保存。
     // マップ・敵はコンティニュー時に再生成するので保存不要。
@@ -3577,6 +3656,7 @@ function resetNewGamePersistentData() {
 
 
 // ===== SECTION: UI UPDATES =====
+// Refreshes all HUD elements: HP, stamina bar, floor, equipment icons, minimap, log.
 function updateUI() {
     // LIFE_RING: HP上限50%増加（getPlayerMaxHp()で反映）
     // 爆弾のターン経過処理
@@ -4732,7 +4812,60 @@ function _initCatacombsTest() {
     addLog("The air is cold and still. Something ancient rests here.");
 }
 
+// Builds and initializes the map for the current floor. Contains all hand-crafted
+// floor layouts, enemy placements, and special room logic for floors 1–100.
 function initMap() {
+    // -------------------------------------------------------------------------
+    // FLOOR INDEX  (search for "Floor NN —" to jump to a specific floor)
+    // -------------------------------------------------------------------------
+    // line 12748: Floor 100 — THE BOTTOM OF THE WORLD
+    // line 12752: Floor  85 — THE WRECKING STORM
+    // line 12938: Floor  91 — THE STONE TEMPEST
+    // line 13157: Floor  88 — THE SUMMONER'S HALL
+    // line 13161: Floor   1 — TUTORIAL 1  (multi-screen; hidden room page[1][0])
+    // line 13337: Floor   2 — TUTORIAL 2
+    // line 13367: Floor   3 — TUTORIAL 3
+    // line 13412: Floor   4 — SEALED CHAMBER (BREAKER)
+    // line 13490: Floor   6 — ICE RIVER CROSSING
+    // line 13566: Floor   9 — LAVA SWAMP
+    // line 13715: Floor   8 — THE LEECH BOG
+    // line 13839: Floor  10 — THE VOICES IN THE WALL
+    // line 13983: Floor  11 — BOAR ENCOUNTER
+    // line 14292: Floor  13 — THE GRINDER
+    // line 14394: Floor  15 — THE FROZEN HALL
+    // line 14555: Floor  16 — SPIDER'S NEST
+    // line 14711: Floor  18 — THE LABYRINTH ISLAND
+    // line 14853: Floor  23 — CAVE AMBUSH
+    // line 14945: Floor  27 — SMALL ROOM LABYRINTH
+    // line 15188: Floor  29 — THE SEALED CHAMBER
+    // line 15306: Floor  30 — THE GRAND FORGERY
+    // line 15494: Floor  25 — WIND HALL
+    // line 15648: Floor  41 — THE GALE GRINDER
+    // line 15751: Floor  34 — CAVE AMBUSH II
+    // line 15853: Floor  35 — FALLING WALLS
+    // line 15919: Floor  38 — THE TEMPEST CROSSING
+    // line 16115: Floor  39 — FLEEING HORDE
+    // line 16179: Floor  40 — THE LAYER'S HALL
+    // line 16277: Floor  43 — THE POISON MARSH
+    // line 16457: Floor  50 — THE TURRET'S CORRIDOR
+    // line 16460: Floor  53 — THE LAVA SHRINE
+    // line 16571: Floor  55 — THE MULTI-GRINDER
+    // line 16709: Floor  57 — THE GLACIAL BATTERY
+    // line 16830: Floor  65 — THE REVERSE GRINDER
+    // line 16963: Floor  64 — SPIDER'S DEN
+    // line 17175: Floor  86 — THE POISON WASTES
+    // line 17376: Floor  70 — THE HOPPER'S GAUNTLET
+    // line 17512: Floor  66 — THE WALL BREAKER'S DEN
+    // line 17657: Floor  46 — SHADOW SYNCHRONY
+    // line 17808: Floor  47 — THE TURRET VAULT
+    // line 17929: Floor  48 — THE MIMIC'S GALLERY
+    // line 18121: Floor  73 — THE ROCKFALL
+    // line 18197: Floor  75 — THE VOID ARENA
+    // line 18361: Floor  78 — FACTION WAR — THE KILLING FIELDS
+    // line 18813: Floor  80 — THE FROZEN FURNACE
+    // line 22357: Floor  99 — THE FINAL CAVERN
+    // -------------------------------------------------------------------------
+
     // 単画面用タレット設置ヘルパー: 周囲1マスの壁を除去し最長射線方向を返す（グローバルmap使用）
     function prepareTurretSpotSingle(x, y) {
         for (let dy = -1; dy <= 1; dy++) {
@@ -5381,7 +5514,8 @@ function initMap() {
             return bestDir;
         }
 
-        // ヘルパー: 1画面分のダンジョンを生成（screenType: 'maze'=迷路型, 'dungeon'=通常ダンジョン型, 'breaker'=壁掘り型）
+        // Generates a single screen of a multi-screen floor (maze / dungeon / breaker layout).
+        // sx,sy = screen grid coordinates; results stored in screenGrid.maps[sy][sx].
         function generateOneScreen(sx, sy, screenType, screenTheme, opts = {}) {
             const sMap = Array.from({ length: ROWS }, () => Array(COLS).fill(SYMBOLS.WALL));
             const sEnemies = [];
@@ -25511,6 +25645,8 @@ function _applyCrumbleAura(px, py, ox, oy) {
     }
 }
 
+// Main canvas render loop. Draws tiles, enemies, player, effects, and overlays
+// for the current screen. Called from the game loop on every animation frame.
 function draw(now) {
     if (!now) now = performance.now();
     // AURA_MAZE: プレイヤー周囲の壁を動的に崩す/復元する
@@ -29667,6 +29803,7 @@ async function slidePlayer(dx, dy) {
     if (pickedDuringSlide.length > 0) await processPickedItems(pickedDuringSlide);
 }
 
+// Plays the true ending sequence (floor 100 cleared). Shows credits and final message.
 // エンディングへの遷移
 async function triggerEnding() {
     isProcessing = true;
@@ -30370,6 +30507,8 @@ async function performWarpTeleport() {
 // handleAction is the core turn loop entry point — called on every player input.
 // It moves the player, triggers combat, item pickup, stair descent, etc.
 // Always async; awaits enemyTurn() at the end of each turn.
+// Processes one player action (dx,dy = direction). Handles movement, attacks, item
+// pickups, wall breaking, and screen transitions. Sets isProcessing for the duration.
 // FRAGILE: すべての終了パス（早期 return・await 完了後）で isProcessing = false を通ること。
 // 漏れるとプレイヤー操作が永久フリーズする。
 async function handleAction(dx, dy) {
@@ -30658,15 +30797,15 @@ async function handleAction(dx, dy) {
                 newPlayerY = player.y;
                 canTransition = true;
             } else if (ny < 0 && _hasUpScreen(currentScreen.x, currentScreen.y) && player.x >= 18 && player.x <= 21) {
-                // 上端 → 上の画面へ
+                // 上端 → 上の画面へ（入口行の1マス上に出現して誤って戻らないようにする）
                 newScreenY = currentScreen.y - 1;
-                newPlayerY = ROWS - 1;
+                newPlayerY = ROWS - 2;
                 newPlayerX = player.x;
                 canTransition = true;
             } else if (ny >= ROWS && _hasDownScreen(currentScreen.x, currentScreen.y) && player.x >= 18 && player.x <= 21) {
-                // 下端 → 下の画面へ
+                // 下端 → 下の画面へ（入口行の1マス内側に出現して誤って戻らないようにする）
                 newScreenY = currentScreen.y + 1;
-                newPlayerY = 0;
+                newPlayerY = 1;
                 newPlayerX = player.x;
                 canTransition = true;
             }
@@ -33999,6 +34138,9 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
     if (isInEscapeRoom) saveEscapeRoomData();
 }
 
+// Resolves a melee attack against the target enemy. Handles damage, special
+// on-hit effects (stun, freeze, faction), and death/loot. isMain=false for
+// secondary hits (e.g. splash damage).
 async function attackEnemy(enemy, dx, dy, isMain = true) {
     // 太陽系軌道: 軌道敵への攻撃でアグロ発動（全軌道敵を白→赤に）
     if (enemy._solarOrbit && enemy._solarPassive) {
@@ -35250,7 +35392,51 @@ async function applyEnemyWarpPad(e) {
     spawnFloatingText(e.x, e.y, "THUD!", "#f97316", 700);
 }
 
+// Runs one full AI turn for every enemy on screen. Processes movement, attacks,
+// special abilities, and faction logic. Called once per player action.
 async function enemyTurn() {
+    // -------------------------------------------------------------------------
+    // AI INDEX  (search for "AI: XXX" to jump to a specific enemy type)
+    // -------------------------------------------------------------------------
+    // line 35709: AI: hostile LETTER  (幽霊文字 — ランダムウォーク＋アグロ)
+    // line 35855: AI: HEALER (slow-tick gate)
+    // line 35910: AI: SPIDER  (クモ — 壁伝い移動)
+    // line 36108: AI: GREEK_OMEGA  (Ω — 高速追跡)
+    // line 36154: AI: MIASMA  (毒霧 — 拡散)
+    // line 36221: AI: WEAVER  (糸張り)
+    // line 36378: AI: syncMode  (sync敵の同期移動)
+    // line 36430: AI: 3% universal random move
+    // line 36433: AI: LEECH  (吸血)
+    // line 36747: AI: ORC (bomb avoidance)
+    // line 37018: AI: BREAKER  (faction / queen)
+    // line 37128: AI: ORC (faction hole-push / queen)
+    // line 38674: AI: 召喚KEY_RUNNER
+    // line 38735: AI: flee  (逃走行動)
+    // line 39490: AI: ITEM_MIMIC
+    // line 39558: AI: FAIRY_MIMIC
+    // line 39632: AI: MIMIC
+    // line 39735: AI: WALL_MIMIC
+    // line 39809: AI: CLUSTER  (群体)
+    // line 39949: AI: SUMMONER  (召喚師)
+    // line 40045: AI: SPAWNER
+    // line 40110: AI: BOAR  (猪突猛進)
+    // line 40697: AI: HEALER (main — HP回復)
+    // line 40848: AI: TURRET  (固定砲台)
+    // line 40858: AI: HOPPER_TURRET  (跳躍砲台)
+    // line 40894: AI: CRAZY_G  (狂気移動)
+    // line 40950: AI: MINI_DRAGON
+    // line 41022: AI: DRAGON  (ドラゴン — 炎ブレス)
+    // line 41670: AI: VULCAN  (炎弾発射)
+    // line 41744: AI: SPLITTER / MINI / NANO  (分裂スライム)
+    // line 41809: AI: PHANTOM  (透明 — 2ターン毎出現)
+    // line 41851: AI: AMBULATOR  (二足歩行 — 障害物回避)
+    // line 41972: AI: NESTER  (巣作り)
+    // line 42150: AI: ROULETTE  (ルーレット移動)
+    // line 42296: AI: YONDER  (遠距離射撃)
+    // line 42433: AI: SLIDER  (壁まで滑る)
+    // line 42507: AI: NORMAL chase  (標準追跡 — 全未分類敵)
+    // -------------------------------------------------------------------------
+
     if (gameState !== 'PLAYING') return; // ゲームオーバー後は処理しない
 
     // PHANTOM強制表示ターンカウンタをデクリメント
@@ -44845,6 +45031,7 @@ function gainExp(amount) {
     if (leveled) updateUI();
 }
 
+// Handles player death: shows game-over animation, records best floor, clears save.
 async function triggerGameOver() {
     // エンドクレジット部屋：無敵（HP全回復して即返す）
     // 万一HP=0が二重に来た場合の非常用フォールバックとしてタイトルへ
