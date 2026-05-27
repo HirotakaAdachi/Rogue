@@ -25280,21 +25280,21 @@ function drawInventoryScreen() {
           desc: 'Divine grace dwelling in the dungeon\nSet her free — she will guide you\nTo the rightful place, under her protection',
           descJa: '迷宮に宿った神々の慈愛\n解き放てばあなたを誘う\n正しい場所へ　守護とともに' },
         { name: 'Breaker Tome',   nameJa: '破壊の魔導書',  symbol: SYMBOLS.BREAKER_TOME,  count: player.breakerTomes,
-          desc: "The Digger King's Gusto\nSmash walls while moving on this floor.",        descJa: '穴掘り王の豪快\n壁を破壊しながら移動できる。' },
+          desc: 'Smash walls while moving on this floor.',        descJa: '壁を破壊しながら移動できる。' },
         { name: 'Charm Tome',     nameJa: '魅了の魔導書',  symbol: SYMBOLS.CHARM,          count: player.charmTomes,
-          desc: "The Dread Lord's Gravity\nTame enemies within 5 tiles.",                  descJa: '恐ろしき支配者の引力\n周囲の敵を仲間にする。' },
+          desc: 'Tame enemies within 5 tiles.',                  descJa: '周囲の敵を仲間にする。' },
         { name: 'Explosion Tome', nameJa: '爆発の魔導書',  symbol: SYMBOLS.EXPLOSION,      count: player.explosionTomes,
-          desc: "The Dungeon King's Breath\nRelease a powerful blast around you.",         descJa: '迷宮王の息吹\n周囲に強力な爆発を引き起こす。' },
+          desc: 'Release a powerful blast around you.',         descJa: '周囲に強力な爆発を引き起こす。' },
         { name: 'Guardian Tome',  nameJa: '守護の魔導書',  symbol: SYMBOLS.GUARDIAN,       count: player.guardianTomes,
-          desc: 'Pact with the Dungeon Earth\nShield from terrain & laser damage.',        descJa: '迷宮地形との友誼\n地形ダメージを無効化する。' },
+          desc: 'Shield from terrain & laser damage.',        descJa: '地形ダメージを無効化する。' },
         { name: 'Haste Tome',     nameJa: '加速の魔導書',  symbol: SYMBOLS.SPEED,          count: player.hasteTomes,
-          desc: 'Contract with the Time Demon\nAct twice on the next turn.',               descJa: '時空悪魔との契約\n１ターンに２回行動できる。' },
+          desc: 'Act twice on the next turn.',               descJa: '１ターンに２回行動できる。' },
         { name: 'Heal Tome',      nameJa: '回復の魔導書',  symbol: SYMBOLS.HEAL_TOME,      count: player.healTomes,
-          desc: "The Goddess of Health's Embrace\nFully restore HP.",                      descJa: '健常の女神の抱擁\nHPを全回復する。' },
+          desc: 'Fully restore HP.',                      descJa: 'HPを全回復する。' },
         { name: 'Stealth Tome',   nameJa: '隠身の魔導書',  symbol: SYMBOLS.STEALTH,        count: player.stealthTomes,
-          desc: 'Grace of Darkness\nVanish from sight. Enemies cannot see you.',           descJa: '暗闇の恩寵\n姿を消して敵から見えなくなる。' },
+          desc: 'Vanish from sight. Enemies cannot see you.',           descJa: '姿を消して敵から見えなくなる。' },
         { name: 'Liminal Tome',    nameJa: '狭間の魔導書',  symbol: SYMBOLS.ESCAPE,         count: player.escapeTomes,
-          desc: 'Mercy for the Wretched\nMove to a sanctuary between the maze.',           descJa: '憐れなる者への慈悲\n迷宮の狭間へ移動する。' },
+          desc: 'Move to a sanctuary between the maze.',           descJa: '迷宮の狭間へ移動する。' },
     ];
     const items = fullItems.filter(it => it.count > 0);
 
@@ -31604,11 +31604,11 @@ async function handleAction(dx, dy) {
                 const equipCost = Math.floor(equipBase * priceMult);
                 shopEquipSellPrice = Math.floor(equipCost * 0.6);
                 const cheapTomePool = [
-                    { tomeType: 'healTomes',    symbol: SYMBOLS.HEAL_TOME,    name: 'Heal Tome',    nameJa: '回復の魔導書',   descJa: '健常の女神の抱擁\nHPを全回復する',                 cost: 60 },
-                    { tomeType: 'hasteTomes',   symbol: SYMBOLS.SPEED,        name: 'Haste Tome',   nameJa: '加速の魔導書',   descJa: '時空悪魔との契約\n１ターンに２回行動できる',       cost: 75 },
-                    { tomeType: 'breakerTomes', symbol: SYMBOLS.BREAKER_TOME, name: 'Breaker Tome', nameJa: '破壊の魔導書',   descJa: '穴掘り王の豪快\n壁を破壊しながら移動できる',       cost: 270 },
-                    { tomeType: 'stealthTomes', symbol: SYMBOLS.STEALTH,      name: 'Stealth Tome', nameJa: '隠身の魔導書',   descJa: '暗闇の恩寵\n姿を消して敵から見えなくなる',         cost: 66 },
-                    { tomeType: 'charmTomes',   symbol: SYMBOLS.CHARM,        name: 'Charm Tome',   nameJa: '魅了の魔導書',   descJa: '恐ろしき支配者の引力\n周囲の敵を仲間にする',       cost: 105 },
+                    { tomeType: 'healTomes',    symbol: SYMBOLS.HEAL_TOME,    name: 'Heal Tome',    nameJa: '回復の魔導書',   descJa: 'HPを全回復する',                 cost: 60 },
+                    { tomeType: 'hasteTomes',   symbol: SYMBOLS.SPEED,        name: 'Haste Tome',   nameJa: '加速の魔導書',   descJa: '１ターンに２回行動できる',       cost: 75 },
+                    { tomeType: 'breakerTomes', symbol: SYMBOLS.BREAKER_TOME, name: 'Breaker Tome', nameJa: '破壊の魔導書',   descJa: '壁を破壊しながら移動できる',       cost: 270 },
+                    { tomeType: 'stealthTomes', symbol: SYMBOLS.STEALTH,      name: 'Stealth Tome', nameJa: '隠身の魔導書',   descJa: '姿を消して敵から見えなくなる',         cost: 66 },
+                    { tomeType: 'charmTomes',   symbol: SYMBOLS.CHARM,        name: 'Charm Tome',   nameJa: '魅了の魔導書',   descJa: '周囲の敵を仲間にする',       cost: 105 },
                 ];
                 const shuffledTomes = cheapTomePool.slice().sort(() => Math.random() - 0.5);
                 const tomeItems = shuffledTomes.slice(0, 2).map(t => ({ type: 'tome', ...t }));
