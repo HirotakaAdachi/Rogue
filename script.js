@@ -1425,7 +1425,8 @@ const SOUNDS = {
 // ===== SECTION: BGM SYSTEM =====
 let bgmEnabled = true;
 let bgmVolumeLevel = safeStorageGetInt('rogue_bgm_vol', 3, 1, 5); // 1-5
-let settingsRow = 0;    // 0=BGM, 1=BGM VOLUME, 2=SFX VOLUME
+let settingsRow = 0;    // 0=BGM, 1=BGM VOLUME, 2=SFX VOLUME, 3=LANGUAGE
+let _gameLang = 'en';  // 'en' or 'ja'
 let sfxVolumeLevel = safeStorageGetInt('rogue_sfx_vol', 3, 0, 5); // 0-5 (0=mute)
 const SFX_VOLUME_LEVELS = [0, 0.2, 0.4, 0.6, 0.8, 1.0];
 function getSFXVolume() { return SFX_VOLUME_LEVELS[sfxVolumeLevel]; }
@@ -2418,6 +2419,7 @@ function loadGame() {
 
     if (data.terrainRingMerchantUnlocked) terrainRingMerchantUnlocked = data.terrainRingMerchantUnlocked;
     if (data.summonRingMerchantUnlocked) summonRingMerchantUnlocked = data.summonRingMerchantUnlocked;
+    if (data.gameLang) _gameLang = data.gameLang;
 
     // マップ・敵・フロア状態はコンティニュー時に再生成するためここでは復元しない
     updateUI();
@@ -3471,6 +3473,9 @@ function saveGame(notify = false) {
         // 地形の指輪：商人再購入アンロックフラグ
         terrainRingMerchantUnlocked: terrainRingMerchantUnlocked,
         summonRingMerchantUnlocked: summonRingMerchantUnlocked,
+
+        // 言語設定
+        gameLang: _gameLang,
     };
     safeStorageSetJSON('minimal_rogue_save', data);
     if (notify) addLog("[ Saved ]");
@@ -24403,6 +24408,7 @@ function drawStatusScreen() {
         const optY = CY + 40;
         const opt2Y = CY + 75;
         const opt3Y = CY + 110;
+        const opt4Y = CY + 145;
         ctx.textAlign = 'left';
 
         // BGM ON/OFF row
@@ -24428,13 +24434,20 @@ function drawStatusScreen() {
         const sfxStr = sfxVolumeLevel === 0 ? 'MUTE' : ('●'.repeat(sfxVolumeLevel) + '○'.repeat(5 - sfxVolumeLevel));
         ctx.fillText(sfxStr, valX, opt3Y);
 
+        // LANGUAGE row
+        ctx.font = 'bold 14px Courier New';
+        ctx.fillStyle = settingsRow === 3 ? '#ededed' : '#888';
+        ctx.fillText((settingsRow === 3 ? '▶' : ' ') + '  LANGUAGE', sx, opt4Y);
+        ctx.fillStyle = settingsRow === 3 ? '#4ade80' : '#888';
+        ctx.fillText(_gameLang === 'en' ? 'EN' : 'JA', valX, opt4Y);
+
         // hint
         ctx.fillStyle = '#555';
         ctx.font = '12px Courier New';
-        if (settingsRow === 0) {
-            ctx.fillText('[Enter] Toggle  [↑↓] Select', sx, opt3Y + 24);
+        if (settingsRow === 0 || settingsRow === 3) {
+            ctx.fillText('[Enter] Toggle  [↑↓] Select', sx, opt4Y + 24);
         } else {
-            ctx.fillText('[◀/▶] Adjust  [↑↓] Select', sx, opt3Y + 24);
+            ctx.fillText('[◀/▶] Adjust  [↑↓] Select', sx, opt4Y + 24);
         }
     }
 
@@ -24723,37 +24736,37 @@ function drawShopScreen() {
         else if (item.type === 'sell_tome') _sellable = player[item.field] > 0;
         else if (item.type === 'sell_fairy') _sellable = player.fairyCount > 0;
         const canAfford = isSellItem ? _sellable : (!boughtTome && !boughtRing && player.gold >= item.cost);
-        let name = '', nameJa = '', descJa = '', owned = false, symbol = ''; // owned は互換維持のため残す（未使用）
+        let name = '', nameJa = '', descJa = '', desc = '', owned = false, symbol = ''; // owned は互換維持のため残す（未使用）
 
         if (item.type === 'ring') {
             const ring = RINGS[item.ringIndex];
-            name = ring.name; nameJa = ring.nameJa; descJa = ring.descJa;
+            name = ring.name; nameJa = ring.nameJa; descJa = ring.descJa; desc = ring.desc || '';
             owned = player.ownedRings.includes(ring.id);
             symbol = ring.symbol;
         } else if (item.type === 'sword') {
-            name = 'Fallen Blade'; nameJa = '遺品の剣'; descJa = '攻撃力+1';
+            name = 'Fallen Blade'; nameJa = '遺品の剣'; descJa = '攻撃力+1'; desc = 'ATK +1';
             symbol = SYMBOLS.SWORD;
         } else if (item.type === 'armor') {
-            name = 'Fallen Mail'; nameJa = '遺品の鎧'; descJa = '防御力+1';
+            name = 'Fallen Mail'; nameJa = '遺品の鎧'; descJa = '防御力+1'; desc = 'DEF +1';
             symbol = SYMBOLS.ARMOR;
         } else if (item.type === 'tome') {
-            name = item.name; nameJa = item.nameJa; descJa = item.descJa;
+            name = item.name; nameJa = item.nameJa; descJa = item.descJa; desc = item.desc || item.descJa;
             symbol = SYMBOLS.TOME;
         } else if (item.type === 'sell_sword') {
-            name = 'Fallen Blade'; nameJa = '遺品の剣'; descJa = `所持数: ${player.swordCount}個`;
+            name = 'Fallen Blade'; nameJa = '遺品の剣'; descJa = `所持数: ${player.swordCount}個`; desc = `Owned: ${player.swordCount}`;
             symbol = SYMBOLS.SWORD;
         } else if (item.type === 'sell_armor') {
-            name = 'Fallen Mail'; nameJa = '遺品の鎧'; descJa = `所持数: ${player.armorCount}個`;
+            name = 'Fallen Mail'; nameJa = '遺品の鎧'; descJa = `所持数: ${player.armorCount}個`; desc = `Owned: ${player.armorCount}`;
             symbol = SYMBOLS.ARMOR;
         } else if (item.type === 'sell_ring') {
             const ring = RINGS[item.ringIndex];
-            name = ring.name; nameJa = ring.nameJa; descJa = ring.descJa;
+            name = ring.name; nameJa = ring.nameJa; descJa = ring.descJa; desc = ring.desc || '';
             symbol = ring.symbol;
         } else if (item.type === 'sell_tome') {
-            name = item.name; nameJa = item.nameJa; descJa = `所持数: ${player[item.field]}個`;
+            name = item.name; nameJa = item.nameJa; descJa = `所持数: ${player[item.field]}個`; desc = `Owned: ${player[item.field]}`;
             symbol = item.sym;
         } else if (item.type === 'sell_fairy') {
-            name = 'Fairy'; nameJa = '妖精'; descJa = `所持数: ${player.fairyCount}匹`;
+            name = 'Fairy'; nameJa = '妖精'; descJa = `所持数: ${player.fairyCount}匹`; desc = `Owned: ${player.fairyCount}`;
             symbol = SYMBOLS.FAIRY;
         }
 
@@ -24789,8 +24802,14 @@ function drawShopScreen() {
         const _nameStr = ` ${name}`;
         ctx.fillText(_nameStr, pad + 30 + _pfxW + _symW, yPos + 5);
         const _nameStrW = ctx.measureText(_nameStr).width;
-        ctx.font = `12px ${MINCHO}`;
-        ctx.fillText(`（${nameJa}）${countStr}`, pad + 30 + _pfxW + _symW + _nameStrW, yPos + 5);
+        if (_gameLang !== 'en') {
+            ctx.font = `12px ${MINCHO}`;
+            ctx.fillText(`（${nameJa}）${countStr}`, pad + 30 + _pfxW + _symW + _nameStrW, yPos + 5);
+        } else if (countStr) {
+            ctx.font = '12px Courier New';
+            ctx.fillStyle = '#888';
+            ctx.fillText(countStr, pad + 30 + _pfxW + _symW + _nameStrW, yPos + 5);
+        }
 
         // コスト / 売値
         ctx.textAlign = 'right';
@@ -24803,17 +24822,24 @@ function drawShopScreen() {
         }
         ctx.textAlign = 'left';
 
-        // 説明（明朝体）
-        ctx.font = `12px ${MINCHO}`;
-        const descLines = descJa.split('\n');
-        if (descLines.length > 1) {
-            ctx.fillStyle = isSelected ? '#777' : '#555';
-            ctx.fillText(`  ${descLines[0]}`, pad + 30, yPos + 17);
+        // 説明
+        const _shopDescText = _gameLang === 'en' ? desc : descJa;
+        if (_gameLang === 'en') {
+            ctx.font = '12px Courier New';
             ctx.fillStyle = isSelected ? '#aaa' : '#666';
-            ctx.fillText(`  ${descLines[1]}`, pad + 30, yPos + 31);
+            ctx.fillText(`  ${_shopDescText}`, pad + 30, yPos + 22);
         } else {
-            ctx.fillStyle = isSelected ? '#aaa' : '#666';
-            ctx.fillText(`  ${descJa}`, pad + 30, yPos + 22);
+            ctx.font = `12px ${MINCHO}`;
+            const descLines = _shopDescText.split('\n');
+            if (descLines.length > 1) {
+                ctx.fillStyle = isSelected ? '#777' : '#555';
+                ctx.fillText(`  ${descLines[0]}`, pad + 30, yPos + 17);
+                ctx.fillStyle = isSelected ? '#aaa' : '#666';
+                ctx.fillText(`  ${descLines[1]}`, pad + 30, yPos + 31);
+            } else {
+                ctx.fillStyle = isSelected ? '#aaa' : '#666';
+                ctx.fillText(`  ${_shopDescText}`, pad + 30, yPos + 22);
+            }
         }
     });
 
@@ -24838,7 +24864,7 @@ function drawShopScreen() {
             ctx.textAlign = 'left';
             ctx.font = '14px Courier New';
             ctx.fillStyle = '#ccc';
-            ctx.fillText(`  ${pSym} ${pName}（${pNameJa}）`, pad + 30, peekY + 5);
+            ctx.fillText(_gameLang === 'en' ? `  ${pSym} ${pName}` : `  ${pSym} ${pName}（${pNameJa}）`, pad + 30, peekY + 5);
             ctx.globalAlpha = 1;
         }
     }
@@ -24909,29 +24935,42 @@ function drawRingsScreen() {
                 ctx.fillStyle = isSel ? '#ededed' : '#ccc';
                 ctx.textAlign = 'left';
                 ctx.fillText(ring.name, boxX, boxY + 22);
-                // 右：日本語名 + カラーアイコン
-                ctx.font = 'bold 14px ' + JA_FONT;
-                const nameW = ctx.measureText(ring.nameJa).width;
-                const icx = RX - nameW - 14, icy = boxY + 17;
-                ctx.save();
-                ctx.fillStyle = isSel ? ring.color : ring.color + '99';
-                ctx.beginPath(); ctx.arc(icx, icy, 5, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#060614';
-                ctx.beginPath(); ctx.arc(icx, icy, 2.5, 0, Math.PI * 2); ctx.fill();
-                ctx.restore();
-                ctx.fillStyle = isSel ? '#ededed' : '#aaa';
-                ctx.textAlign = 'right';
-                ctx.fillText(ring.nameJa, RX, boxY + 22);
-                // 右：効能（日本語）— スロット2で二重装備時は二重効果を表示
+                // 右：指輪名 + カラーアイコン
                 const _isDual = s === 1 && player.equippedRings[0] === ring.id;
                 const _dualDesc = _isDual && RING_DOUBLED_DESC[ring.id];
-                ctx.font = '11px ' + JA_FONT;
-                ctx.fillStyle = isSel ? '#aaa' : '#555';
-                if (_dualDesc) {
-                    ctx.fillText('【二重効果発動】', RX, boxY + 36);
-                    ctx.fillText(_dualDesc.ja, RX, boxY + 50);
+                if (_gameLang !== 'en') {
+                    ctx.font = 'bold 14px ' + JA_FONT;
+                    const nameW = ctx.measureText(ring.nameJa).width;
+                    const icx = RX - nameW - 14, icy = boxY + 17;
+                    ctx.save();
+                    ctx.fillStyle = isSel ? ring.color : ring.color + '99';
+                    ctx.beginPath(); ctx.arc(icx, icy, 5, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#060614';
+                    ctx.beginPath(); ctx.arc(icx, icy, 2.5, 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+                    ctx.fillStyle = isSel ? '#ededed' : '#aaa';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(ring.nameJa, RX, boxY + 22);
+                    // 右：効能（日本語）
+                    ctx.font = '11px ' + JA_FONT;
+                    ctx.fillStyle = isSel ? '#aaa' : '#555';
+                    if (_dualDesc) {
+                        ctx.fillText('【二重効果発動】', RX, boxY + 36);
+                        ctx.fillText(_dualDesc.ja, RX, boxY + 50);
+                    } else {
+                        ctx.fillText(ring.descJa || '', RX, boxY + 40);
+                    }
                 } else {
-                    ctx.fillText(ring.descJa || '', RX, boxY + 40);
+                    // EN mode: right side shows English effect
+                    ctx.font = '11px Courier New';
+                    ctx.fillStyle = isSel ? '#aaa' : '#555';
+                    ctx.textAlign = 'right';
+                    if (_dualDesc) {
+                        ctx.fillText('[Dual Effect Active]', RX, boxY + 36);
+                        ctx.fillText(_dualDesc.en, RX, boxY + 50);
+                    } else {
+                        ctx.fillText(ring.desc || '', RX, boxY + 40);
+                    }
                 }
             } else {
                 ctx.font = '13px Courier New';
@@ -24961,7 +25000,7 @@ function drawRingsScreen() {
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(237,237,237,0.22)';
         ctx.font = 'bold 13px Courier New';
-        ctx.fillText('RINGS  指輪', SL_X + SL_W / 2, TOP_Y + 20);
+        ctx.fillText(_gameLang === 'en' ? 'RINGS' : 'RINGS  指輪', SL_X + SL_W / 2, TOP_Y + 20);
 
         const ROW_H_SLOT = 72;
         const slotListTop = TOP_Y + 36;
@@ -24984,16 +25023,22 @@ function drawRingsScreen() {
             ctx.strokeRect(boxX, boxY, boxW, boxH);
 
             if (ring) {
-                ctx.font = 'bold 13px ' + JA_FONT;
-                ctx.fillStyle = isSel ? 'rgba(237,237,237,0.55)' : 'rgba(237,237,237,0.22)';
-                ctx.fillText(ring.nameJa, boxX + 10, boxY + 22);
-                ctx.font = '11px Courier New';
-                ctx.fillStyle = isSel ? 'rgba(237,237,237,0.30)' : 'rgba(237,237,237,0.15)';
-                ctx.fillText(ring.name, boxX + 10, boxY + 38);
+                if (_gameLang !== 'en') {
+                    ctx.font = 'bold 13px ' + JA_FONT;
+                    ctx.fillStyle = isSel ? 'rgba(237,237,237,0.55)' : 'rgba(237,237,237,0.22)';
+                    ctx.fillText(ring.nameJa, boxX + 10, boxY + 22);
+                    ctx.font = '11px Courier New';
+                    ctx.fillStyle = isSel ? 'rgba(237,237,237,0.30)' : 'rgba(237,237,237,0.15)';
+                    ctx.fillText(ring.name, boxX + 10, boxY + 38);
+                } else {
+                    ctx.font = 'bold 13px Courier New';
+                    ctx.fillStyle = isSel ? 'rgba(237,237,237,0.55)' : 'rgba(237,237,237,0.22)';
+                    ctx.fillText(ring.name, boxX + 10, boxY + 22);
+                }
             } else {
-                ctx.font = '13px ' + JA_FONT;
+                ctx.font = '13px Courier New';
                 ctx.fillStyle = 'rgba(237,237,237,0.15)';
-                ctx.fillText('（空き）─ 装備なし', boxX + 10, boxY + 22);
+                ctx.fillText(_gameLang === 'en' ? '-- empty --' : '（空き）─ 装備なし', boxX + 10, boxY + 22);
             }
         }
 
@@ -25128,14 +25173,21 @@ function drawRingsScreen() {
                 ctx.restore();
             }
 
-            ctx.font = 'bold 15px ' + JA_FONT;
-            ctx.fillStyle = '#ededed';
-            ctx.textAlign = 'left';
-            ctx.fillText(selItem.nameJa, dx + 18, ry);
-            ry += 18;
-            ctx.font = '12px Courier New';
-            ctx.fillStyle = '#777';
-            ctx.fillText(selItem.name, dx + 18, ry);
+            if (_gameLang !== 'en') {
+                ctx.font = 'bold 15px ' + JA_FONT;
+                ctx.fillStyle = '#ededed';
+                ctx.textAlign = 'left';
+                ctx.fillText(selItem.nameJa, dx + 18, ry);
+                ry += 18;
+                ctx.font = '12px Courier New';
+                ctx.fillStyle = '#777';
+                ctx.fillText(selItem.name, dx + 18, ry);
+            } else {
+                ctx.font = 'bold 15px Courier New';
+                ctx.fillStyle = '#ededed';
+                ctx.textAlign = 'left';
+                ctx.fillText(selItem.name, dx + 18, ry);
+            }
             ry += 16;
 
             ctx.strokeStyle = 'rgba(237,237,237,0.12)';
@@ -25143,21 +25195,23 @@ function drawRingsScreen() {
             ctx.beginPath(); ctx.moveTo(dx, ry); ctx.lineTo(RL_X + RL_W - 14, ry); ctx.stroke();
             ry += 14;
 
-            ctx.font = '13px ' + JA_FONT;
-            ctx.fillStyle = '#ccc';
             const descW = DETAIL_W - 28;
-            const descText = selItem.descJa;
-            if (ctx.measureText(descText).width <= descW) {
-                ctx.fillText(descText, dx, ry);
-                ry += 18;
-            } else {
-                const parts = descText.split('。').filter(s => s.trim());
-                parts.forEach(p => { ctx.fillText(p + '。', dx, ry); ry += 18; });
+            if (_gameLang !== 'en') {
+                ctx.font = '13px ' + JA_FONT;
+                ctx.fillStyle = '#ccc';
+                const descText = selItem.descJa;
+                if (ctx.measureText(descText).width <= descW) {
+                    ctx.fillText(descText, dx, ry);
+                    ry += 18;
+                } else {
+                    const parts = descText.split('。').filter(s => s.trim());
+                    parts.forEach(p => { ctx.fillText(p + '。', dx, ry); ry += 18; });
+                }
             }
             // 英語説明（Removeの場合は desc が無いのでスキップ）
             if (selItem.desc) {
-                ctx.font = '11px Courier New';
-                ctx.fillStyle = '#888';
+                ctx.font = _gameLang !== 'en' ? '11px Courier New' : '13px Courier New';
+                ctx.fillStyle = _gameLang !== 'en' ? '#888' : '#ccc';
                 const descEn = selItem.desc;
                 if (ctx.measureText(descEn).width <= descW) {
                     ctx.fillText(descEn, dx, ry);
@@ -25189,41 +25243,49 @@ function drawRingsScreen() {
                 ctx.beginPath(); ctx.moveTo(dx, ry); ctx.lineTo(RL_X + RL_W - 14, ry); ctx.stroke();
                 ry += 18;
 
-                // ラベル (日本語 / 英語)
-                ctx.font = 'bold 12px ' + JA_FONT;
-                ctx.fillStyle = '#ededed';
-                ctx.fillText('二重装備効果', dx, ry);
-                ctx.font = '11px Courier New';
-                ctx.fillStyle = '#888';
-                const jaLabelW = ctx.measureText('二重装備効果').width; // ← JA_FONT基準で再計測のため少しずれるが許容範囲
-                ctx.fillText('/ Dual Equip Bonus', dx + jaLabelW + 8, ry);
+                // ラベル
+                if (_gameLang !== 'en') {
+                    ctx.font = 'bold 12px ' + JA_FONT;
+                    ctx.fillStyle = '#ededed';
+                    ctx.fillText('二重装備効果', dx, ry);
+                    ctx.font = '11px Courier New';
+                    ctx.fillStyle = '#888';
+                    const jaLabelW = ctx.measureText('二重装備効果').width;
+                    ctx.fillText('/ Dual Equip Bonus', dx + jaLabelW + 8, ry);
+                } else {
+                    ctx.font = 'bold 12px Courier New';
+                    ctx.fillStyle = '#ededed';
+                    ctx.fillText('Dual Equip Bonus', dx, ry);
+                }
                 ry += 18;
 
-                // 追加効果テキスト (日本語)
-                ctx.font = '12px ' + JA_FONT;
-                ctx.fillStyle = '#ccc';
-                const descJaText = specialDesc.ja;
-                if (ctx.measureText(descJaText).width <= descW) {
-                    ctx.fillText(descJaText, dx, ry);
-                    ry += 16;
-                } else {
-                    const segs = descJaText.split(/(?<=[、。])/);
-                    let line = '';
-                    for (const seg of segs) {
-                        const tentative = line + seg;
-                        if (ctx.measureText(tentative).width > descW) {
-                            ctx.fillText(line, dx, ry); ry += 16;
-                            line = seg;
-                        } else {
-                            line = tentative;
+                // 追加効果テキスト (日本語) — JA modeのみ
+                if (_gameLang !== 'en') {
+                    ctx.font = '12px ' + JA_FONT;
+                    ctx.fillStyle = '#ccc';
+                    const descJaText = specialDesc.ja;
+                    if (ctx.measureText(descJaText).width <= descW) {
+                        ctx.fillText(descJaText, dx, ry);
+                        ry += 16;
+                    } else {
+                        const segs = descJaText.split(/(?<=[、。])/);
+                        let line = '';
+                        for (const seg of segs) {
+                            const tentative = line + seg;
+                            if (ctx.measureText(tentative).width > descW) {
+                                ctx.fillText(line, dx, ry); ry += 16;
+                                line = seg;
+                            } else {
+                                line = tentative;
+                            }
                         }
+                        if (line) { ctx.fillText(line, dx, ry); ry += 16; }
                     }
-                    if (line) { ctx.fillText(line, dx, ry); ry += 16; }
                 }
 
                 // 追加効果テキスト (英語)
-                ctx.font = '11px Courier New';
-                ctx.fillStyle = '#888';
+                ctx.font = _gameLang !== 'en' ? '11px Courier New' : '12px Courier New';
+                ctx.fillStyle = _gameLang !== 'en' ? '#888' : '#ccc';
                 const descEnText = specialDesc.en;
                 if (ctx.measureText(descEnText).width <= descW) {
                     ctx.fillText(descEnText, dx, ry);
@@ -25377,9 +25439,11 @@ function drawInventoryScreen() {
         ctx.fillStyle = '#ededed';
         ctx.fillText(sel.name, rx + 34, ry);
 
-        ctx.font = '12px ' + JA_FONT;
-        ctx.fillStyle = '#aaa';
-        ctx.fillText(sel.nameJa, rx + 34, ry + 16);
+        if (_gameLang !== 'en') {
+            ctx.font = '12px ' + JA_FONT;
+            ctx.fillStyle = '#aaa';
+            ctx.fillText(sel.nameJa, rx + 34, ry + 16);
+        }
 
         ry += 34;
 
@@ -25406,20 +25470,22 @@ function drawInventoryScreen() {
 
         ry += 18;
 
-        ctx.font = '13px ' + JA_FONT;
-        const jpMaxW = RW - 36;
-        const jpLines = sel.descJa.split('\n');
-        for (let li = 0; li < jpLines.length; li++) {
-            const line = jpLines[li];
-            ctx.fillStyle = '#aaa';
-            if (ctx.measureText(line).width <= jpMaxW) {
-                ctx.fillText(line, rx, ry); ry += 18;
-            } else {
-                const parts = line.split('。').filter(s => s.trim());
-                parts.forEach(p => { ctx.fillText(p + '。', rx, ry); ry += 18; });
+        if (_gameLang !== 'en') {
+            ctx.font = '13px ' + JA_FONT;
+            const jpMaxW = RW - 36;
+            const jpLines = sel.descJa.split('\n');
+            for (let li = 0; li < jpLines.length; li++) {
+                const line = jpLines[li];
+                ctx.fillStyle = '#aaa';
+                if (ctx.measureText(line).width <= jpMaxW) {
+                    ctx.fillText(line, rx, ry); ry += 18;
+                } else {
+                    const parts = line.split('。').filter(s => s.trim());
+                    parts.forEach(p => { ctx.fillText(p + '。', rx, ry); ry += 18; });
+                }
             }
+            ry += 4;
         }
-        ry += 4;
 
         const footerY = CY + CH - 28;
         ctx.strokeStyle = 'rgba(237,237,237,0.15)';
@@ -27553,24 +27619,35 @@ function draw(now) {
             const enBlockH = allEN.length * LH + PAD * 2;
             const jpBlockH = allJP.length * LH + PAD * 2;
             const jpAtTop = storyMessage.useTopPos;
-            const jpRectY = jpAtTop ? 15 : CANVAS_H - jpBlockH - 15;
             const enRectY = jpAtTop ? CANVAS_H - enBlockH - 15 : 15;
+            const jpRectY = jpAtTop ? 15 : CANVAS_H - jpBlockH - 15;
             const drawBlock = (bLines, rectY, blockH, color, font) => {
                 ctx.fillStyle = '#000';
                 ctx.fillRect(RECT_X, rectY, RECT_W, blockH);
                 ctx.fillStyle = color; ctx.font = font;
                 bLines.forEach((l, i) => ctx.fillText(l, CANVAS_W / 2, rectY + PAD + 13 + i * LH));
             };
-            if (allEN.length > 0) drawBlock(allEN, enRectY, enBlockH, isWhiteBG ? '#000' : '#ccc', FONT_EN);
-            if (allJP.length > 0) drawBlock(allJP, jpRectY, jpBlockH, isWhiteBG ? '#444' : '#aaa', FONT_JP);
+            if (_gameLang !== 'ja' && allEN.length > 0) drawBlock(allEN, enRectY, enBlockH, isWhiteBG ? '#000' : '#ccc', FONT_EN);
+            if (_gameLang !== 'en' && allJP.length > 0) drawBlock(allJP, jpRectY, jpBlockH, isWhiteBG ? '#444' : '#aaa', FONT_JP);
         } else {
             // 通常表示
             let totalH = 0;
             lines.forEach(line => {
                 if (typeof line === 'object') {
-                    const enLines = line.en.split('\n'); const jpLines = line.jp.split('\n');
-                    totalH += (enLines.length * LH) + 8 + (jpLines.length * LH) + 8;
-                } else { totalH += LH; }
+                    if (_gameLang === 'en') {
+                        const enLines = line.en.split('\n');
+                        totalH += (enLines.length * LH) + 8;
+                    } else if (_gameLang === 'ja') {
+                        const jpLines = line.jp.split('\n');
+                        totalH += (jpLines.length * LH) + 8;
+                    } else {
+                        const enLines = line.en.split('\n'); const jpLines = line.jp.split('\n');
+                        totalH += (enLines.length * LH) + 8 + (jpLines.length * LH) + 8;
+                    }
+                } else {
+                    if (_gameLang === 'en' && _isJP(line)) { /* skip JP plain lines in EN mode */ }
+                    else { totalH += LH; }
+                }
             });
             let currentY = CANVAS_H - totalH - 45;
             let _solidWinX = 30, _solidWinY = null, _solidWinW = CANVAS_W - 60, _solidWinH = 170;
@@ -27594,15 +27671,21 @@ function draw(now) {
             }
             lines.forEach(line => {
                 if (typeof line === 'object') {
-                    const enLines = line.en.split('\n'); const jpLines = line.jp.split('\n');
-                    ctx.fillStyle = isWhiteBG ? '#000' : '#ccc'; ctx.font = FONT_EN;
-                    enLines.forEach(l => { ctx.fillText(l, CANVAS_W / 2, currentY + 13); currentY += LH; });
-                    currentY += 8;
-                    ctx.fillStyle = isWhiteBG ? '#444' : '#aaa'; ctx.font = FONT_JP;
-                    jpLines.forEach(l => { ctx.fillText(l, CANVAS_W / 2, currentY + 13); currentY += LH; });
-                    currentY += 8;
+                    if (_gameLang !== 'ja') {
+                        const enLines = line.en.split('\n');
+                        ctx.fillStyle = isWhiteBG ? '#000' : '#ccc'; ctx.font = FONT_EN;
+                        enLines.forEach(l => { ctx.fillText(l, CANVAS_W / 2, currentY + 13); currentY += LH; });
+                        currentY += 8;
+                    }
+                    if (_gameLang !== 'en') {
+                        const jpLines = line.jp.split('\n');
+                        ctx.fillStyle = isWhiteBG ? '#444' : '#aaa'; ctx.font = FONT_JP;
+                        jpLines.forEach(l => { ctx.fillText(l, CANVAS_W / 2, currentY + 13); currentY += LH; });
+                        currentY += 8;
+                    }
                 } else {
                     const isJP = _isJP(line);
+                    if (_gameLang === 'en' && isJP) return; // skip JP plain lines in EN mode
                     ctx.fillStyle = isWhiteBG ? (isJP ? '#444' : '#000') : (isJP ? '#aaa' : '#ccc');
                     ctx.font = isJP ? FONT_JP : FONT_EN;
                     ctx.fillText(line, CANVAS_W / 2, currentY + 13); currentY += LH;
@@ -31605,11 +31688,11 @@ async function handleAction(dx, dy) {
                 const equipCost = Math.floor(equipBase * priceMult);
                 shopEquipSellPrice = Math.floor(equipCost * 0.6);
                 const cheapTomePool = [
-                    { tomeType: 'healTomes',    symbol: SYMBOLS.HEAL_TOME,    name: 'Heal Tome',    nameJa: '回復の魔導書',   descJa: 'HPを全回復する',                 cost: 60 },
-                    { tomeType: 'hasteTomes',   symbol: SYMBOLS.SPEED,        name: 'Haste Tome',   nameJa: '加速の魔導書',   descJa: '１ターンに２回行動できる',       cost: 75 },
-                    { tomeType: 'breakerTomes', symbol: SYMBOLS.BREAKER_TOME, name: 'Breaker Tome', nameJa: '破壊の魔導書',   descJa: '壁を破壊しながら移動できる',       cost: 270 },
-                    { tomeType: 'stealthTomes', symbol: SYMBOLS.STEALTH,      name: 'Stealth Tome', nameJa: '隠身の魔導書',   descJa: '姿を消して敵から見えなくなる',         cost: 66 },
-                    { tomeType: 'charmTomes',   symbol: SYMBOLS.CHARM,        name: 'Charm Tome',   nameJa: '魅了の魔導書',   descJa: '周囲の敵を仲間にする',       cost: 105 },
+                    { tomeType: 'healTomes',    symbol: SYMBOLS.HEAL_TOME,    name: 'Heal Tome',    nameJa: '回復の魔導書',   desc: 'Fully restore HP.',                       descJa: 'HPを全回復する',                 cost: 60 },
+                    { tomeType: 'hasteTomes',   symbol: SYMBOLS.SPEED,        name: 'Haste Tome',   nameJa: '加速の魔導書',   desc: 'Act twice on the next turn.',             descJa: '１ターンに２回行動できる',       cost: 75 },
+                    { tomeType: 'breakerTomes', symbol: SYMBOLS.BREAKER_TOME, name: 'Breaker Tome', nameJa: '破壊の魔導書',   desc: 'Smash walls while moving on this floor.', descJa: '壁を破壊しながら移動できる',       cost: 270 },
+                    { tomeType: 'stealthTomes', symbol: SYMBOLS.STEALTH,      name: 'Stealth Tome', nameJa: '隠身の魔導書',   desc: 'Vanish from sight. Enemies cannot see you.', descJa: '姿を消して敵から見えなくなる',         cost: 66 },
+                    { tomeType: 'charmTomes',   symbol: SYMBOLS.CHARM,        name: 'Charm Tome',   nameJa: '魅了の魔導書',   desc: 'Tame enemies within 5 tiles.',            descJa: '周囲の敵を仲間にする',       cost: 105 },
                 ];
                 const shuffledTomes = cheapTomePool.slice().sort(() => Math.random() - 0.5);
                 const tomeItems = shuffledTomes.slice(0, 2).map(t => ({ type: 'tome', ...t }));
@@ -45609,7 +45692,7 @@ window.addEventListener('keydown', async e => {
             { const _duU = localStorage.getItem('deep_unlocked') === '1'; const _baseU = _duU ? 3 : 2; const count = testModeVisible ? _baseU + 4 : _baseU; titleSelection = (titleSelection + count - 1) % count; }
             SOUNDS.SELECT(); return;
         }
-        if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 2) % 3; SOUNDS.SELECT(); return; }
+        if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 3) % 4; SOUNDS.SELECT(); return; }
         if (gameState === 'MENU') { menuSelection = (menuSelection + 2) % 3; SOUNDS.SELECT(); return; }
         if (gameState === 'FIXED_STAGE_SELECT') {
             const n = FIXED_STAGES.length;
@@ -45660,7 +45743,7 @@ window.addEventListener('keydown', async e => {
             { const _duD2 = localStorage.getItem('deep_unlocked') === '1'; const _baseD2 = _duD2 ? 3 : 2; const count = testModeVisible ? _baseD2 + 4 : _baseD2; titleSelection = (titleSelection + 1) % count; }
             SOUNDS.SELECT(); return;
         }
-        if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 1) % 3; SOUNDS.SELECT(); return; }
+        if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 1) % 4; SOUNDS.SELECT(); return; }
         if (gameState === 'MENU') { menuSelection = (menuSelection + 1) % 3; SOUNDS.SELECT(); return; }
         if (gameState === 'FIXED_STAGE_SELECT') {
             const n = FIXED_STAGES.length;
@@ -45913,6 +45996,7 @@ window.addEventListener('keydown', async e => {
         e.preventDefault();
         if (gameState === 'STATUS' && statusPage === 2) {
             if (settingsRow === 0) toggleBGM();
+            if (settingsRow === 3) { _gameLang = _gameLang === 'en' ? 'ja' : 'en'; SOUNDS.SELECT(); }
             return;
         }
         if (gameState === 'TITLE') {
