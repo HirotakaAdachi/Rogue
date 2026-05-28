@@ -23032,6 +23032,7 @@ async function startFloorTransition() {
 
     // 完全暗転後にエスケープルームフラグを解除（暗転前に解除するとワープ床が一瞬紫になる）
     isInEscapeRoom = false;
+    updateUI(); // 落下アニメーション中にHTMLステータスバーの階層表示を正しく更新
 
     // 最下層: NOVEL_CORRIDORを強制起動（真エンディングへの廊下）
     if (floorLevel === DEEP_ENDING_FLOOR) {
