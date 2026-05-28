@@ -24096,31 +24096,27 @@ function drawLangSelect() {
     ctx.textAlign = 'center';
 
     ctx.fillStyle = '#ededed';
-    ctx.font = "bold 36px 'Courier New', Courier, monospace";
-    ctx.fillText('MINIMAL ROGUE', CANVAS_W / 2, CANVAS_H / 2 - 110);
-
-    ctx.fillStyle = '#444';
-    ctx.font = "13px 'Courier New'";
-    ctx.fillText('Select Language  /  言語を選んでください', CANVAS_W / 2, CANVAS_H / 2 - 68);
+    ctx.font = "bold 40px 'Courier New', Courier, monospace";
+    ctx.fillText('MINIMAL ROGUE', CANVAS_W / 2, CANVAS_H / 3);
 
     const en0 = langSelection === 0;
     const en1 = langSelection === 1;
 
+    const menuY = CANVAS_H / 2 + 30;
+
     // English option
-    ctx.fillStyle = en0 ? '#ededed' : '#555';
-    ctx.font = "bold 28px 'Courier New', Courier, monospace";
-    ctx.fillText(en0 ? '▶  English  ◀' : '   English   ', CANVAS_W / 2, CANVAS_H / 2 - 10);
+    ctx.fillStyle = en0 ? '#ededed' : '#666';
+    ctx.font = "24px 'Courier New', Courier, monospace";
+    ctx.fillText(en0 ? '> English <' : '  English  ', CANVAS_W / 2, menuY);
 
     // 日本語 option
-    ctx.fillStyle = en1 ? '#ededed' : '#555';
-    ctx.font = en1
-        ? 'bold 28px "Hiragino Mincho ProN","Yu Mincho",serif'
-        : '28px "Hiragino Mincho ProN","Yu Mincho",serif';
-    ctx.fillText(en1 ? '▶　日本語　◀' : '　　日本語　　', CANVAS_W / 2, CANVAS_H / 2 + 50);
+    ctx.fillStyle = en1 ? '#ededed' : '#666';
+    ctx.font = "24px 'Courier New', Courier, monospace";
+    ctx.fillText(en1 ? '> 日本語 <' : '  日本語  ', CANVAS_W / 2, menuY + 40);
 
-    ctx.fillStyle = '#333';
-    ctx.font = "12px 'Courier New'";
-    ctx.fillText('[↑↓] Select  [Enter] Confirm  [X] Back', CANVAS_W / 2, CANVAS_H / 2 + 110);
+    ctx.fillStyle = '#444';
+    ctx.font = "14px 'Courier New'";
+    ctx.fillText('[Arrows] to Select  [Enter] to Decide', CANVAS_W / 2, CANVAS_H - 40);
 }
 
 function drawFixedStageSelect() {
@@ -45733,7 +45729,6 @@ window.addEventListener('keydown', async e => {
             { const _duU = localStorage.getItem('deep_unlocked') === '1'; const _baseU = _duU ? 3 : 2; const count = testModeVisible ? _baseU + 4 : _baseU; titleSelection = (titleSelection + count - 1) % count; }
             SOUNDS.SELECT(); return;
         }
-        if (gameState === 'LANG_SELECT') { langSelection = langSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
         if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 3) % 4; SOUNDS.SELECT(); return; }
         if (gameState === 'MENU') { menuSelection = (menuSelection + 2) % 3; SOUNDS.SELECT(); return; }
         if (gameState === 'FIXED_STAGE_SELECT') {
@@ -45785,7 +45780,6 @@ window.addEventListener('keydown', async e => {
             { const _duD2 = localStorage.getItem('deep_unlocked') === '1'; const _baseD2 = _duD2 ? 3 : 2; const count = testModeVisible ? _baseD2 + 4 : _baseD2; titleSelection = (titleSelection + 1) % count; }
             SOUNDS.SELECT(); return;
         }
-        if (gameState === 'LANG_SELECT') { langSelection = langSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
         if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 1) % 4; SOUNDS.SELECT(); return; }
         if (gameState === 'MENU') { menuSelection = (menuSelection + 1) % 3; SOUNDS.SELECT(); return; }
         if (gameState === 'FIXED_STAGE_SELECT') {
@@ -45871,8 +45865,15 @@ window.addEventListener('keydown', async e => {
     }
 
     if (gameState === 'LANG_SELECT') {
-        if (e.key === 'Escape' || e.key.toLowerCase() === 'x') {
-            gameState = 'TITLE'; SOUNDS.SELECT(); e.preventDefault();
+        e.preventDefault();
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'w' || e.key === 's') {
+            langSelection = langSelection === 0 ? 1 : 0; SOUNDS.SELECT();
+        } else if (e.key === 'Enter') {
+            _gameLang = langSelection === 0 ? 'en' : 'ja';
+            SOUNDS.SELECT();
+            startGame();
+        } else if (e.key === 'Escape' || e.key.toLowerCase() === 'x') {
+            gameState = 'TITLE'; SOUNDS.SELECT();
         }
         return;
     }
@@ -46045,12 +46046,6 @@ window.addEventListener('keydown', async e => {
 
     if (e.key === 'Enter') {
         e.preventDefault();
-        if (gameState === 'LANG_SELECT') {
-            _gameLang = langSelection === 0 ? 'en' : 'ja';
-            SOUNDS.SELECT();
-            startGame();
-            return;
-        }
         if (gameState === 'STATUS' && statusPage === 2) {
             if (settingsRow === 0) toggleBGM();
             if (settingsRow === 3) { _gameLang = _gameLang === 'en' ? 'ja' : 'en'; SOUNDS.SELECT(); }
