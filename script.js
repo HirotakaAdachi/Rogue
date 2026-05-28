@@ -28357,6 +28357,7 @@ async function dragonDeathAnimation(dragon) {
         map[dungeonCore.y][dungeonCore.x] = SYMBOLS.FLOOR;
     }
     stopBGM();
+    latinKillCounts['LATIN_D'] = (latinKillCounts['LATIN_D'] || 0) + 1;
     await triggerEnding();
 }
 
@@ -31037,6 +31038,7 @@ async function handleAction(dx, dy) {
         dungeonCore.hp--;
         if (dungeonCore.hp <= 0) {
             stopBGM();
+            latinKillCounts['LATIN_D'] = (latinKillCounts['LATIN_D'] || 0) + 1;
             await triggerEnding();
             return;
         }
