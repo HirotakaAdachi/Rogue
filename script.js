@@ -24986,7 +24986,7 @@ function drawRingsScreen() {
                     ctx.save();
                     ctx.fillStyle = isSel ? ring.color : ring.color + '99';
                     ctx.beginPath(); ctx.arc(icx, icy, 5, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = '#060614';
+                    ctx.fillStyle = '#000';
                     ctx.beginPath(); ctx.arc(icx, icy, 2.5, 0, Math.PI * 2); ctx.fill();
                     ctx.restore();
                     ctx.fillStyle = isSel ? '#ededed' : '#aaa';
@@ -25057,7 +25057,7 @@ function drawRingsScreen() {
             ctx.fillText('Slot ' + (s + 1), SL_X + 30, sy + 16);
 
             const boxX = SL_X + 86, boxY = sy - 2, boxW = SL_W - 100, boxH = ROW_H_SLOT - 8;
-            ctx.fillStyle = 'rgba(6,6,20,0.5)';
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
             ctx.fillRect(boxX, boxY, boxW, boxH);
             ctx.strokeStyle = isSel ? 'rgba(237,237,237,0.22)' : 'rgba(237,237,237,0.07)';
             ctx.lineWidth = 1;
@@ -25151,7 +25151,7 @@ function drawRingsScreen() {
                 ctx.save();
                 ctx.fillStyle = isConflict ? ringColor + '28' : (isSel ? ringColor : ringColor + '99');
                 ctx.beginPath(); ctx.arc(icx, icy, 5, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#060614';
+                ctx.fillStyle = '#000';
                 ctx.beginPath(); ctx.arc(icx, icy, 2.5, 0, Math.PI * 2); ctx.fill();
                 ctx.restore();
             }
@@ -25209,7 +25209,7 @@ function drawRingsScreen() {
                 ctx.save();
                 ctx.fillStyle = selRing.color;
                 ctx.beginPath(); ctx.arc(dx + 6, ry - 5, 6, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#060614';
+                ctx.fillStyle = '#000';
                 ctx.beginPath(); ctx.arc(dx + 6, ry - 5, 3, 0, Math.PI * 2); ctx.fill();
                 ctx.restore();
             }
