@@ -32573,9 +32573,9 @@ async function handleAction(dx, dy) {
                 _f24ItemsTaken.warpText = true;
                 saveGame();
                 await showStoryPages([
-                    ['あなたの目の前に', '不思議な光を放つ床がある'],
-                    ['周囲をよく見ると'],
-                    ['だれかが生活していた', '形跡がある']
+                    [{ en: "Before you lies a floor\nglowing with strange light.", jp: "あなたの目の前に\n不思議な光を放つ床がある" }],
+                    [{ en: "Looking around carefully...", jp: "周囲をよく見ると" }],
+                    [{ en: "Someone once lived here.", jp: "だれかが生活していた\n形跡がある" }]
                 ], false, false, 0, false, true);
             }
 
