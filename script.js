@@ -24544,7 +24544,7 @@ function meltIceBlockAt(x, y) {
 
 // ─── DQ1-style UI Helpers ────────────────────────────────────────
 function drawDQWindow(x, y, w, h) {
-    ctx.fillStyle = '#000010';
+    ctx.fillStyle = '#000';
     ctx.fillRect(x, y, w, h);
     ctx.strokeStyle = '#ededed';
     ctx.lineWidth = 3;
@@ -24562,12 +24562,12 @@ function drawDQTitle(x, y, w, title) {
 }
 
 function drawDQWindowDim(x, y, w, h) {
-    ctx.fillStyle = '#000008';
+    ctx.fillStyle = '#000';
     ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = 'rgba(237,237,237,0.28)';
+    ctx.strokeStyle = '#ededed';
     ctx.lineWidth = 3;
     ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
-    ctx.strokeStyle = 'rgba(237,237,237,0.07)';
+    ctx.strokeStyle = 'rgba(237,237,237,0.15)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 6, y + 6, w - 12, h - 12);
 }
