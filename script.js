@@ -24111,8 +24111,8 @@ function drawLangSelect() {
 
     // 日本語 option
     ctx.fillStyle = en1 ? '#ededed' : '#666';
-    ctx.font = "24px 'Courier New', Courier, monospace";
-    ctx.fillText(en1 ? '> 日本語 <' : '  日本語  ', CANVAS_W / 2, menuY + 40);
+    ctx.font = '20px "Hiragino Mincho ProN","Yu Mincho","YuMincho","HGS Mincho",serif';
+    ctx.fillText(en1 ? '▶　日本語　◀' : '　　日本語　　', CANVAS_W / 2, menuY + 44);
 
     ctx.fillStyle = '#444';
     ctx.font = "14px 'Courier New'";
