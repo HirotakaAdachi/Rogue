@@ -23184,11 +23184,11 @@ async function startFloorTransition() {
         isProcessing = true;
         await new Promise(r => setTimeout(r, 600));
         await showStoryPages([
-            ["Before your eyes lies a sphere of light.", "", "あなたの目の前に、光の球体がある"],
-            ["It is the Dungeon Core.", "", "ダンジョンコアだ"],
-            ["You once read of it in ancient scrolls.", "", "古い文献で、読んだことがある"],
-            ["Destroy this, and the dungeon", "will vanish into nothingness.", "", "これを破壊すれば、ダンジョンは消え去るのだ"],
-            ["And then, you may finally", "return to the surface.", "", "そしてあなたは、地上へ帰還することが", "できるだろう"]
+            [{ en: "Before your eyes lies a sphere of light.", jp: "あなたの目の前に、光の球体がある" }],
+            [{ en: "It is the Dungeon Core.", jp: "ダンジョンコアだ" }],
+            [{ en: "You once read of it in ancient scrolls.", jp: "古い文献で、読んだことがある" }],
+            [{ en: "Destroy this, and the dungeon\nwill vanish into nothingness.", jp: "これを破壊すれば、ダンジョンは消え去るのだ" }],
+            [{ en: "And then, you may finally\nreturn to the surface.", jp: "そしてあなたは、地上へ帰還することが\nできるだろう" }]
         ], true);
     }
     isProcessing = false;
@@ -23502,25 +23502,9 @@ async function triggerStage1StaminaTutorial() {
     isProcessing = true;
     hasShownStage1Tut = true;
     await showStoryPages([
-        [
-            "Continuous attacks cause fatigue,",
-            "reducing your damage output.",
-            "",
-            "連続して攻撃すると",
-            "腕が疲労して攻撃力が下がる"
-        ],
-        [
-            "It is wise to mix in movement or",
-            "defense between your strikes.",
-            "",
-            "移動や防御をはさみながら",
-            "攻撃したほうが良さそうだ"
-        ],
-        [
-            "Defend yourself with [Space].",
-            "",
-            "【スペースキー】：防御"
-        ]
+        [{ en: "Continuous attacks cause fatigue,\nreducing your damage output.", jp: "連続して攻撃すると\n腕が疲労して攻撃力が下がる" }],
+        [{ en: "It is wise to mix in movement or\ndefense between your strikes.", jp: "移動や防御をはさみながら\n攻撃したほうが良さそうだ" }],
+        [{ en: "Defend yourself with [Space].", jp: "【スペースキー】：防御" }]
     ]);
     isProcessing = false;
 }
@@ -23528,32 +23512,10 @@ async function triggerStage1StaminaTutorial() {
 async function triggerStage1StartStory() {
     isProcessing = true;
     await showStoryPages([
-        [
-            "This dungeon is said to have",
-            "one hundred floors.",
-            "",
-            "このダンジョンは",
-            "地下100階まであるらしい"
-        ],
-        [
-            "The town's prophet",
-            "spoke of it so.",
-            "",
-            "町の予言者が",
-            "そう話していた"
-        ],
-        [
-            "The adventurers who descended",
-            "into its depths...",
-            "",
-            "探索におりた",
-            "冒険者たちは"
-        ],
-        [
-            "Never returned.",
-            "",
-            "もどってこなかった"
-        ]
+        [{ en: "This dungeon is said to have\none hundred floors.", jp: "このダンジョンは\n地下100階まであるらしい" }],
+        [{ en: "The town's prophet\nspoke of it so.", jp: "町の予言者が\nそう話していた" }],
+        [{ en: "The adventurers who descended\ninto its depths...", jp: "探索におりた\n冒険者たちは" }],
+        [{ en: "Never returned.", jp: "もどってこなかった" }]
     ]);
     isProcessing = false;
 }
@@ -23564,22 +23526,9 @@ async function triggerWandEvent() {
         await new Promise(r => setTimeout(r, 600)); // 杖を取った後の余韻
 
         await showStoryPages([
-            [
-                "You picked up the Magic Wand.",
-                "",
-                "魔法の杖を拾った"
-            ],
-            [
-                "It seems to have the power",
-                "to create walls.",
-                "",
-                "壁づくりの効果があるようだ"
-            ],
-            [
-                "[Space] + [Arrows]: Create Wall",
-                "",
-                "【スペースキー】＋【矢印キー】：壁づくり"
-            ]
+            [{ en: "You picked up the Magic Wand.", jp: "魔法の杖を拾った" }],
+            [{ en: "It seems to have the power\nto create walls.", jp: "壁づくりの効果があるようだ" }],
+            [{ en: "[Space] + [Arrows]: Create Wall", jp: "【スペースキー】＋【矢印キー】：壁づくり" }]
         ]);
 
 
@@ -23642,18 +23591,8 @@ async function triggerKeyLogStory() {
     await new Promise(r => setTimeout(r, 600));
 
     await showStoryPages([
-        [
-            "You obtained the Key.",
-            "",
-            "鍵を入手した"
-        ],
-        [
-            "With this, you should be able to",
-            "pass through the sealed areas.",
-            "",
-            "これがあれば",
-            "閉ざされた場所を通れるはず"
-        ]
+        [{ en: "You obtained the Key.", jp: "鍵を入手した" }],
+        [{ en: "With this, you should be able to\npass through the sealed areas.", jp: "これがあれば\n閉ざされた場所を通れるはず" }]
     ]);
     isProcessing = false;
 }
@@ -23664,16 +23603,8 @@ async function triggerGoldLogStory() {
     await new Promise(r => setTimeout(r, 600));
 
     await showStoryPages([
-        [
-            "Defeated a monster of a different color.",
-            "",
-            "色違いの敵を倒した"
-        ],
-        [
-            "Power is surging through you.",
-            "",
-            "力が\u3000みなぎってくる"
-        ]
+        [{ en: "Defeated a monster of a different color.", jp: "色違いの敵を倒した" }],
+        [{ en: "Power is surging through you.", jp: "力が\u3000みなぎってくる" }]
     ]);
     isProcessing = false;
 }
@@ -23684,17 +23615,8 @@ async function triggerSaveEvent() {
     await new Promise(r => setTimeout(r, 400));
 
     await showStoryPages([
-        [
-            "Somewhere, a voice spoke.",
-            "",
-            "どこかから\u3000声が聞こえた"
-        ],
-        [
-            "\"If your strength should fade...\"",
-            "\"You shall return here.\"",
-            "",
-            "「力つきた時\u3000おまえはここへ戻るだろう」と…"
-        ]
+        [{ en: "Somewhere, a voice spoke.", jp: "どこかから\u3000声が聞こえた" }],
+        [{ en: "\"If your strength should fade...\n\"You shall return here.\"", jp: "「力つきた時\u3000おまえはここへ戻るだろう」と…" }]
     ]);
     isProcessing = false;
 }
@@ -23705,21 +23627,9 @@ async function triggerFairyEvent() {
     await new Promise(r => setTimeout(r, 600));
 
     await showStoryPages([
-        [
-            "A fairy has joined you.",
-            "",
-            "妖精が仲間になった"
-        ],
-        [
-            "Release her, and she will guide you.",
-            "",
-            "放てば、あなたを誘うだろう。"
-        ],
-        [
-            "Press [X] → ITEM → Fairy to deploy.",
-            "",
-            "【Xキー】→【ITEM】→【妖精】で放てる"
-        ]
+        [{ en: "A fairy has joined you.", jp: "妖精が仲間になった" }],
+        [{ en: "Release her, and she will guide you.", jp: "放てば、あなたを誘うだろう。" }],
+        [{ en: "Press [X] → ITEM → Fairy to deploy.", jp: "【Xキー】→【ITEM】→【妖精】で放てる" }]
     ]);
     isProcessing = false;
 }
@@ -23730,23 +23640,9 @@ async function triggerTomeEvent() {
     await new Promise(r => setTimeout(r, 600));
 
     await showStoryPages([
-        [
-            "You picked up a magic tome.",
-            "",
-            "魔導書を拾った"
-        ],
-        [
-            "Likely a relic of an adventurer",
-            "who never returned.",
-            "",
-            "もどってこなかった冒険者の遺品だろう"
-        ],
-        [
-            "Press [X] key to open Inventory,",
-            "then select [ITEM] to use Tomes.",
-            "",
-            "【Xキー】→【ITEM】：魔導書の使用"
-        ]
+        [{ en: "You picked up a magic tome.", jp: "魔導書を拾った" }],
+        [{ en: "Likely a relic of an adventurer\nwho never returned.", jp: "もどってこなかった冒険者の遺品だろう" }],
+        [{ en: "Press [X] key to open Inventory,\nthen select [ITEM] to use Tomes.", jp: "【Xキー】→【ITEM】：魔導書の使用" }]
     ]);
     isProcessing = false;
 }
@@ -23757,20 +23653,8 @@ async function triggerEquipEvent() {
     await new Promise(r => setTimeout(r, 600));
 
     await showStoryPages([
-        [
-            "Equipment of the adventurers",
-            "who never returned.",
-            "",
-            "もどってこなかった",
-            "冒険者たちの装備だ"
-        ],
-        [
-            "By gathering these fragments,",
-            "you can make their strength your own.",
-            "",
-            "拾い集めることで",
-            "自らの力にすることができる"
-        ]
+        [{ en: "Equipment of the adventurers\nwho never returned.", jp: "もどってこなかった\n冒険者たちの装備だ" }],
+        [{ en: "By gathering these fragments,\nyou can make their strength your own.", jp: "拾い集めることで\n自らの力にすることができる" }]
     ]);
     isProcessing = false;
 }
@@ -23781,20 +23665,8 @@ async function triggerGolemEvent() {
     await new Promise(r => setTimeout(r, 500));
 
     await showStoryPages([
-        [
-            "There is a Golem Orc.",
-            "",
-            "ゴーレムオークがいる"
-        ],
-        [
-            "It is a powerful enemy.",
-            "If it charges at you,",
-            "you will be knocked back into a wall.",
-            "",
-            "オークの形をしたゴーレムだ。",
-            "体当たりをされると、",
-            "壁まで飛ばされてしまう"
-        ]
+        [{ en: "There is a Golem Orc.", jp: "ゴーレムオークがいる" }],
+        [{ en: "It is a powerful enemy.\nIf it charges at you,\nyou will be knocked back into a wall.", jp: "オークの形をしたゴーレムだ。\n体当たりをされると、\n壁まで飛ばされてしまう" }]
     ]);
     isProcessing = false;
 }
@@ -32895,20 +32767,8 @@ async function handleAction(dx, dy) {
         addKeyLog("EVENT: The Sealed Chamber.");
         addLog("TIP: W (Wall Breaker) destroys walls. Let it carve a path!");
         await showStoryPages([
-            [
-                "The Wall Breakers are",
-                "destroying the walls...",
-                "",
-                "ウォールブレイカーが",
-                "壁を破壊している"
-            ],
-            [
-                "They are reshaping",
-                "the dungeon!",
-                "",
-                "こいつらが",
-                "ダンジョンを作りかえている"
-            ]
+            [{ en: "The Wall Breakers are\ndestroying the walls...", jp: "ウォールブレイカーが\n壁を破壊している" }],
+            [{ en: "They are reshaping\nthe dungeon!", jp: "こいつらが\nダンジョンを作りかえている" }]
         ]);
     }
 
@@ -45518,49 +45378,11 @@ async function startDeepRun() {
     const deepStorySeen = safeStorageGet('deep_story_seen') === '1';
     if (!deepStorySeen) {
         await showStoryPages([
-            [
-                "You became a murderer.",
-                "Guilty of killing your own comrades...",
-                "",
-                "あなたは殺人者となった",
-                "仲間たちを殺した罪で…"
-            ],
-            [
-                "Fleeing from the executioners,",
-                "you found yourself at the ruins of the collapsed dungeon.",
-                "",
-                "刑吏から逃れるうちに",
-                "崩壊したダンジョンの跡地へ来ていた"
-            ],
-            [
-                "Someone is calling to you.",
-                "You turned around—a dark pit.",
-                "The collapsed dungeon, breathing again...",
-                "And it is watching you.",
-                "",
-                "だれかが、あなたを呼んでいる",
-                "振り返ると暗い穴があった",
-                "崩壊したはずのダンジョンが、息を吹き返し…",
-                "そして、あなたを見ている"
-            ],
-            [
-                "You made up your mind and leapt in.",
-                "Someone is calling, from deep within the darkness.",
-                "You must go there.",
-                "",
-                "意を決し、穴に飛びこんだ",
-                "だれかが呼んでいる、暗闇の深い場所で",
-                "あなたはそこへ、行かなくてはならない"
-            ],
-            [
-                "Only the darkness can heal you.",
-                "Falling, endlessly,",
-                "into the depths of the abyss...",
-                "",
-                "暗闇だけが、あなたを癒やす",
-                "落ちていく、どこまでも。",
-                "深淵の奥へ…"
-            ],
+            [{ en: "You became a murderer.\nGuilty of killing your own comrades...", jp: "あなたは殺人者となった\n仲間たちを殺した罪で…" }],
+            [{ en: "Fleeing from the executioners,\nyou found yourself at the ruins of the collapsed dungeon.", jp: "刑吏から逃れるうちに\n崩壊したダンジョンの跡地へ来ていた" }],
+            [{ en: "Someone is calling to you.\nYou turned around—a dark pit.\nThe collapsed dungeon, breathing again...\nAnd it is watching you.", jp: "だれかが、あなたを呼んでいる\n振り返ると暗い穴があった\n崩壊したはずのダンジョンが、息を吹き返し…\nそして、あなたを見ている" }],
+            [{ en: "You made up your mind and leapt in.\nSomeone is calling, from deep within the darkness.\nYou must go there.", jp: "意を決し、穴に飛びこんだ\nだれかが呼んでいる、暗闇の深い場所で\nあなたはそこへ、行かなくてはならない" }],
+            [{ en: "Only the darkness can heal you.\nFalling, endlessly,\ninto the depths of the abyss...", jp: "暗闇だけが、あなたを癒やす\n落ちていく、どこまでも。\n深淵の奥へ…" }],
         ], true, false, 0);
         safeStorageSet('deep_story_seen', '1');
     }
