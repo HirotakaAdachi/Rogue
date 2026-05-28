@@ -24396,8 +24396,12 @@ function drawStatusScreen() {
     } else if (statusPage === 1) {
         // ── Page 2: Equipment ──────────────────────────────────
         const equip = [
-            { symbol: SYMBOLS.SWORD,  name: 'Fallen Blade',  level: player.swordCount,  desc: `攻撃力 +${player.swordCount}`, subDesc: '1個取得ごとに 攻撃力 +1  /  +1 ATK per sword' },
-            { symbol: SYMBOLS.ARMOR,  name: 'Fallen Mail',  level: player.armorCount,  desc: `防御力 +${player.armorCount}`,     subDesc: '1個取得ごとに 防御力 +1  /  +1 DEF per armor' },
+            { symbol: SYMBOLS.SWORD, name: 'Fallen Blade', level: player.swordCount,
+              desc:    _gameLang === 'en' ? `ATK +${player.swordCount}`  : `攻撃力 +${player.swordCount}`,
+              subDesc: _gameLang === 'en' ? '+1 ATK per sword'           : '1個取得ごとに 攻撃力 +1' },
+            { symbol: SYMBOLS.ARMOR, name: 'Fallen Mail',  level: player.armorCount,
+              desc:    _gameLang === 'en' ? `DEF +${player.armorCount}`  : `防御力 +${player.armorCount}`,
+              subDesc: _gameLang === 'en' ? '+1 DEF per armor'           : '1個取得ごとに 防御力 +1' },
         ];
 
         let y = CY + 50;
