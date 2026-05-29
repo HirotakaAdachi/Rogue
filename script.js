@@ -23629,7 +23629,7 @@ async function triggerFairyEvent() {
 
     await showStoryPages([
         [{ en: "A fairy has joined you.", jp: "妖精が仲間になった" }],
-        [{ en: "Release her, and she will guide you.", jp: "放てば、あなたを誘うだろう。" }],
+        [{ en: "Release her, and she will guide you.", jp: "放てば、あなたを案内するだろう。" }],
         [{ en: "Press [X] → ITEM → Fairy to deploy.", jp: "【Xキー】→【ITEM】→【妖精】で放てる" }]
     ]);
     isProcessing = false;
@@ -23905,10 +23905,16 @@ function drawTitle() {
             text = `> ${text} <`;
             if (i === 1 && !hasSave) {
                 // セーブなし時のヒント（2行）
-                ctx.font = '11px Courier New';
                 ctx.fillStyle = '#555';
-                ctx.fillText('Auto-save only. Resume from where you died.  /  オートセーブのみ。死んだ階層から再開します。', CANVAS_W / 2, menuY + i * 40 + 22);
-                ctx.fillText('No save data yet.  /  まだデータがありません。', CANVAS_W / 2, menuY + i * 40 + 36);
+                if (_gameLang === 'en') {
+                    ctx.font = '11px Courier New';
+                    ctx.fillText('Auto-save only. Resume from where you died.', CANVAS_W / 2, menuY + i * 40 + 22);
+                    ctx.fillText('No save data yet.', CANVAS_W / 2, menuY + i * 40 + 36);
+                } else {
+                    ctx.font = '10px "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", serif';
+                    ctx.fillText('オートセーブのみ。死んだ階層から再開します。', CANVAS_W / 2, menuY + i * 40 + 22);
+                    ctx.fillText('まだデータがありません。', CANVAS_W / 2, menuY + i * 40 + 36);
+                }
                 ctx.font = '24px Courier New';
                 ctx.fillStyle = '#ededed';
             } else if (i === 1 && hasSave) {
@@ -24043,9 +24049,14 @@ function drawRoomTypeSelect() {
     ctx.fillStyle = '#ededed';
     ctx.font = "bold 26px 'Courier New', Courier, monospace";
     ctx.fillText('ROOM TYPE TEST', CANVAS_W / 2, 50);
-    ctx.font = '12px Courier New';
     ctx.fillStyle = '#a78bfa';
-    ctx.fillText('[LAYOUT TEST]  穴(>)に入ると選択画面に戻る', CANVAS_W / 2, 70);
+    if (_gameLang === 'en') {
+        ctx.font = '12px Courier New';
+        ctx.fillText('[LAYOUT TEST]  Enter hole (>) to return', CANVAS_W / 2, 70);
+    } else {
+        ctx.font = '11px "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", serif';
+        ctx.fillText('[LAYOUT TEST]  穴(>)に入ると選択画面に戻る', CANVAS_W / 2, 70);
+    }
     const listTop = 100;
     const rowH = 32;
     const startX = CANVAS_W / 2 - 230;
@@ -24062,9 +24073,14 @@ function drawRoomTypeSelect() {
             ctx.fillRect(startX - 8, y - 20, CANVAS_W - (startX - 8) * 2 + 16, rowH - 2);
         }
         ctx.textAlign = 'left';
-        ctx.font = (isSel ? 'bold ' : '') + "16px 'Courier New', Courier, monospace";
         ctx.fillStyle = isSel ? '#ededed' : '#666';
-        ctx.fillText((isSel ? '>' : ' ') + ' ' + t.name + '  ' + t.nameJa, startX, y);
+        if (_gameLang === 'en') {
+            ctx.font = (isSel ? 'bold ' : '') + "16px 'Courier New', Courier, monospace";
+            ctx.fillText((isSel ? '>' : ' ') + ' ' + t.name, startX, y);
+        } else {
+            ctx.font = (isSel ? 'bold ' : '') + '14px "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", serif';
+            ctx.fillText((isSel ? '>' : ' ') + ' ' + t.nameJa, startX, y);
+        }
     }
     ctx.textAlign = 'center';
     ctx.fillStyle = '#555';
@@ -24508,7 +24524,7 @@ function buildShopSellStock() {
     }).filter(Boolean).sort((a, b) => b.ring.cost - a.ring.cost);
     for (const { ring: r, rIdx } of ringEntries) {
         stock.push({ type: 'sell_ring', ringId: r.id, ringIndex: rIdx,
-                     sellPrice: Math.min(1000, Math.floor(r.cost * shopRingPriceMult / 3)) });
+                     sellPrice: Math.min(1000, Math.floor(r.cost * shopRingPriceMult / 2)) });
     }
 
     // ② 魔導書（所持数 > 0 のもの）
@@ -24565,16 +24581,19 @@ function drawShopScreen() {
         ctx.fillText('-- Stranded Adventurer --', CANVAS_W / 2, sy + 20);
         const midX = CANVAS_W / 2;
         const midY = sy + 58;
-        ctx.font = 'bold 16px Courier New';
-        ctx.fillStyle = shopModeSelection === 0 ? '#ededed' : '#444';
-        ctx.fillText(shopModeSelection === 0 ? '> BUY <' : '  BUY  ', midX - 68, midY);
-        ctx.fillStyle = shopModeSelection === 1 ? '#ededed' : '#444';
-        ctx.fillText(shopModeSelection === 1 ? '> SELL <' : '  SELL  ', midX + 68, midY);
-        ctx.font = `12px ${MINCHO}`;
-        ctx.fillStyle = shopModeSelection === 0 ? '#aaa' : '#444';
-        ctx.fillText('買う', midX - 68, midY + 20);
-        ctx.fillStyle = shopModeSelection === 1 ? '#aaa' : '#444';
-        ctx.fillText('売る', midX + 68, midY + 20);
+        if (_gameLang === 'en') {
+            ctx.font = 'bold 16px Courier New';
+            ctx.fillStyle = shopModeSelection === 0 ? '#ededed' : '#444';
+            ctx.fillText(shopModeSelection === 0 ? '> BUY <' : '  BUY  ', midX - 68, midY);
+            ctx.fillStyle = shopModeSelection === 1 ? '#ededed' : '#444';
+            ctx.fillText(shopModeSelection === 1 ? '> SELL <' : '  SELL  ', midX + 68, midY);
+        } else {
+            ctx.font = `bold 14px ${MINCHO}`;
+            ctx.fillStyle = shopModeSelection === 0 ? '#ededed' : '#444';
+            ctx.fillText(shopModeSelection === 0 ? '＞ 買う ＜' : '　買う　', midX - 68, midY);
+            ctx.fillStyle = shopModeSelection === 1 ? '#ededed' : '#444';
+            ctx.fillText(shopModeSelection === 1 ? '＞ 売る ＜' : '　売る　', midX + 68, midY);
+        }
         ctx.font = '10px Courier New';
         ctx.fillStyle = '#444';
         ctx.fillText('[←/→] Select  [Enter] Open  [X] Close', midX, sy + sh - 10);
@@ -24711,18 +24730,28 @@ function drawShopScreen() {
         else _iconColor = '#fbbf24';                   // 買い: 黄色
         ctx.fillStyle = _iconColor;
         ctx.fillText(symbol, pad + 30 + _pfxW, yPos + 5);
-        ctx.font = '14px Courier New';
-        ctx.fillStyle = _nc;
-        const _nameStr = ` ${name}`;
-        ctx.fillText(_nameStr, pad + 30 + _pfxW + _symW, yPos + 5);
-        const _nameStrW = ctx.measureText(_nameStr).width;
-        if (_gameLang !== 'en') {
-            ctx.font = `12px ${MINCHO}`;
-            ctx.fillText(`（${nameJa}）${countStr}`, pad + 30 + _pfxW + _symW + _nameStrW, yPos + 5);
-        } else if (countStr) {
-            ctx.font = '12px Courier New';
-            ctx.fillStyle = '#888';
-            ctx.fillText(countStr, pad + 30 + _pfxW + _symW + _nameStrW, yPos + 5);
+        if (_gameLang === 'en') {
+            ctx.font = '14px Courier New';
+            ctx.fillStyle = _nc;
+            const _nameStr = ` ${name}`;
+            ctx.fillText(_nameStr, pad + 30 + _pfxW + _symW, yPos + 5);
+            if (countStr) {
+                const _nameStrW = ctx.measureText(_nameStr).width;
+                ctx.font = '12px Courier New';
+                ctx.fillStyle = '#888';
+                ctx.fillText(countStr, pad + 30 + _pfxW + _symW + _nameStrW, yPos + 5);
+            }
+        } else {
+            ctx.font = `14px ${MINCHO}`;
+            ctx.fillStyle = _nc;
+            const _jaNameStr = ` ${nameJa}`;
+            ctx.fillText(_jaNameStr, pad + 30 + _pfxW + _symW, yPos + 5);
+            if (countStr) {
+                const _jaNameStrW = ctx.measureText(_jaNameStr).width;
+                ctx.font = '12px Courier New';
+                ctx.fillStyle = '#888';
+                ctx.fillText(countStr, pad + 30 + _pfxW + _symW + _jaNameStrW, yPos + 5);
+            }
         }
 
         // コスト / 売値
@@ -24736,23 +24765,26 @@ function drawShopScreen() {
         }
         ctx.textAlign = 'left';
 
-        // 説明
-        const _shopDescText = _gameLang === 'en' ? desc : descJa;
-        if (_gameLang === 'en') {
-            ctx.font = '12px Courier New';
-            ctx.fillStyle = isSelected ? '#aaa' : '#666';
-            ctx.fillText(`  ${_shopDescText}`, pad + 30, yPos + 22);
-        } else {
-            ctx.font = `12px ${MINCHO}`;
-            const descLines = _shopDescText.split('\n');
-            if (descLines.length > 1) {
-                ctx.fillStyle = isSelected ? '#777' : '#555';
-                ctx.fillText(`  ${descLines[0]}`, pad + 30, yPos + 17);
-                ctx.fillStyle = isSelected ? '#aaa' : '#666';
-                ctx.fillText(`  ${descLines[1]}`, pad + 30, yPos + 31);
+        // 説明（選択中のみ表示・色はアイテム名に合わせる）
+        if (isSelected) {
+            const _shopDescText = _gameLang === 'en' ? desc : descJa;
+            const _descColor = !canAfford ? '#555' : '#aaa';
+            if (_gameLang === 'en') {
+                ctx.font = '12px Courier New';
+                ctx.fillStyle = _descColor;
+                ctx.fillText(`  ${_shopDescText}`, pad + 50, yPos + 22);
             } else {
-                ctx.fillStyle = isSelected ? '#aaa' : '#666';
-                ctx.fillText(`  ${_shopDescText}`, pad + 30, yPos + 22);
+                ctx.font = `12px ${MINCHO}`;
+                const descLines = _shopDescText.split('\n');
+                if (descLines.length > 1) {
+                    ctx.fillStyle = !canAfford ? '#444' : '#777';
+                    ctx.fillText(`  ${descLines[0]}`, pad + 50, yPos + 17);
+                    ctx.fillStyle = _descColor;
+                    ctx.fillText(`  ${descLines[1]}`, pad + 50, yPos + 31);
+                } else {
+                    ctx.fillStyle = _descColor;
+                    ctx.fillText(`  ${_shopDescText}`, pad + 50, yPos + 22);
+                }
             }
         }
     });
@@ -24844,35 +24876,35 @@ function drawRingsScreen() {
 
             const RX = SX + SW - 20; // 右端基準
             if (ring) {
-                // 左：英語名
-                ctx.font = 'bold 14px Courier New';
+                // 左：指輪名（言語に応じて）
                 ctx.fillStyle = isSel ? '#ededed' : '#ccc';
                 ctx.textAlign = 'left';
-                ctx.fillText(ring.name, boxX, boxY + 22);
-                // 右：指輪名 + カラーアイコン
+                if (_gameLang === 'en') {
+                    ctx.font = 'bold 14px Courier New';
+                    ctx.fillText(ring.name, boxX, boxY + 22);
+                } else {
+                    ctx.font = 'bold 14px ' + JA_FONT;
+                    ctx.fillText(ring.nameJa, boxX, boxY + 22);
+                }
+                // 右：カラーアイコン + 効能
                 const _isDual = s === 1 && player.equippedRings[0] === ring.id;
                 const _dualDesc = _isDual && RING_DOUBLED_DESC[ring.id];
                 if (_gameLang !== 'en') {
-                    ctx.font = 'bold 14px ' + JA_FONT;
-                    const nameW = ctx.measureText(ring.nameJa).width;
-                    const icx = RX - nameW - 14, icy = boxY + 17;
+                    const icx = RX - 10, icy = boxY + 17;
                     ctx.save();
                     ctx.fillStyle = isSel ? ring.color : ring.color + '99';
                     ctx.beginPath(); ctx.arc(icx, icy, 5, 0, Math.PI * 2); ctx.fill();
                     ctx.fillStyle = '#000';
                     ctx.beginPath(); ctx.arc(icx, icy, 2.5, 0, Math.PI * 2); ctx.fill();
                     ctx.restore();
-                    ctx.fillStyle = isSel ? '#ededed' : '#aaa';
-                    ctx.textAlign = 'right';
-                    ctx.fillText(ring.nameJa, RX, boxY + 22);
-                    // 右：効能（日本語）
                     ctx.font = '11px ' + JA_FONT;
                     ctx.fillStyle = isSel ? '#aaa' : '#555';
+                    ctx.textAlign = 'right';
                     if (_dualDesc) {
-                        ctx.fillText('【二重効果発動】', RX, boxY + 36);
-                        ctx.fillText(_dualDesc.ja, RX, boxY + 50);
+                        ctx.fillText('【二重効果発動】', RX - 18, boxY + 36);
+                        ctx.fillText(_dualDesc.ja, RX - 18, boxY + 50);
                     } else {
-                        ctx.fillText(ring.descJa || '', RX, boxY + 40);
+                        ctx.fillText(ring.descJa || '', RX - 18, boxY + 40);
                     }
                 } else {
                     // EN mode: right side shows English effect
@@ -24941,9 +24973,6 @@ function drawRingsScreen() {
                     ctx.font = 'bold 13px ' + JA_FONT;
                     ctx.fillStyle = isSel ? 'rgba(237,237,237,0.55)' : 'rgba(237,237,237,0.22)';
                     ctx.fillText(ring.nameJa, boxX + 10, boxY + 22);
-                    ctx.font = '11px Courier New';
-                    ctx.fillStyle = isSel ? 'rgba(237,237,237,0.30)' : 'rgba(237,237,237,0.15)';
-                    ctx.fillText(ring.name, boxX + 10, boxY + 38);
                 } else {
                     ctx.font = 'bold 13px Courier New';
                     ctx.fillStyle = isSel ? 'rgba(237,237,237,0.55)' : 'rgba(237,237,237,0.22)';
@@ -25029,16 +25058,17 @@ function drawRingsScreen() {
                 ctx.restore();
             }
 
-            ctx.font = (isSel && !isConflict ? 'bold ' : '') + '13px Courier New';
             ctx.fillStyle = nameColor;
             // 所持数: 2個以上なら名前の後ろに "×N" を付ける
             const ownedCount = item.id ? player.ownedRings.filter(rid => rid === item.id).length : 0;
-            let nameLine = item.name;
-            if (ownedCount > 1) nameLine += ` ×${ownedCount}`;
-            ctx.fillText(nameLine, RL_X + 48, iy + 14);
-            ctx.font = '11px ' + JA_FONT;
-            ctx.fillStyle = isConflict ? '#2a2a2a' : (isSel ? '#999' : '#555');
-            ctx.fillText(item.nameJa, RL_X + 48, iy + 27);
+            const countSuffix = ownedCount > 1 ? ` ×${ownedCount}` : '';
+            if (_gameLang === 'en') {
+                ctx.font = (isSel && !isConflict ? 'bold ' : '') + '13px Courier New';
+                ctx.fillText(item.name + countSuffix, RL_X + 48, iy + 18);
+            } else {
+                ctx.font = (isSel && !isConflict ? 'bold ' : '') + '13px ' + JA_FONT;
+                ctx.fillText(item.nameJa + countSuffix, RL_X + 48, iy + 18);
+            }
 
             // スロット装備表示: 衝突・Slot表示・二重装備
             if (isConflict) {
@@ -25159,13 +25189,9 @@ function drawRingsScreen() {
 
                 // ラベル
                 if (_gameLang !== 'en') {
-                    ctx.font = 'bold 12px ' + JA_FONT;
+                    ctx.font = 'bold 11px ' + JA_FONT;
                     ctx.fillStyle = '#ededed';
                     ctx.fillText('二重装備効果', dx, ry);
-                    ctx.font = '11px Courier New';
-                    ctx.fillStyle = '#888';
-                    const jaLabelW = ctx.measureText('二重装備効果').width;
-                    ctx.fillText('/ Dual Equip Bonus', dx + jaLabelW + 8, ry);
                 } else {
                     ctx.font = 'bold 12px Courier New';
                     ctx.fillStyle = '#ededed';
@@ -25255,7 +25281,7 @@ function drawInventoryScreen() {
     const fullItems = [
         { name: 'Fairy',          nameJa: '妖精',           symbol: SYMBOLS.FAIRY,          count: player.fairyCount,
           desc: 'Divine grace dwelling in the dungeon\nSet her free — she will guide you\nTo the rightful place, under her protection',
-          descJa: '迷宮に宿った神々の慈愛\n解き放てばあなたを誘う\n正しい場所へ　守護とともに' },
+          descJa: '迷宮に宿った神々の慈愛\n解き放てばあなたを案内する\n正しい場所へ　守護とともに' },
         { name: 'Breaker Tome',   nameJa: '破壊の魔導書',  symbol: SYMBOLS.BREAKER_TOME,  count: player.breakerTomes,
           desc: 'Smash walls while moving on this floor.',        descJa: '壁を破壊しながら移動できる。' },
         { name: 'Charm Tome',     nameJa: '魅了の魔導書',  symbol: SYMBOLS.CHARM,          count: player.charmTomes,
@@ -25317,8 +25343,13 @@ function drawInventoryScreen() {
             ctx.fillText(item.symbol, LX + 30, iy + 18);
 
             ctx.fillStyle = isSel ? '#ededed' : '#aaa';
-            ctx.font = (isSel ? 'bold ' : '') + '13px Courier New';
-            ctx.fillText(item.name, LX + 50, iy + 18);
+            if (_gameLang === 'en') {
+                ctx.font = (isSel ? 'bold ' : '') + '13px Courier New';
+                ctx.fillText(item.name, LX + 50, iy + 18);
+            } else {
+                ctx.font = (isSel ? 'bold ' : '') + '13px ' + JA_FONT;
+                ctx.fillText(item.nameJa, LX + 50, iy + 18);
+            }
 
             ctx.textAlign = 'right';
             ctx.fillStyle = isSel ? '#ededed' : '#666';
@@ -25349,14 +25380,14 @@ function drawInventoryScreen() {
         ctx.textAlign = 'left';
         ctx.fillText(sel.symbol, rx, ry + 4);
 
-        ctx.font = 'bold 16px Courier New';
-        ctx.fillStyle = '#ededed';
-        ctx.fillText(sel.name, rx + 34, ry);
-
-        if (_gameLang !== 'en') {
-            ctx.font = '12px ' + JA_FONT;
-            ctx.fillStyle = '#aaa';
-            ctx.fillText(sel.nameJa, rx + 34, ry + 16);
+        if (_gameLang === 'en') {
+            ctx.font = 'bold 16px Courier New';
+            ctx.fillStyle = '#ededed';
+            ctx.fillText(sel.name, rx + 34, ry);
+        } else {
+            ctx.font = 'bold 16px ' + JA_FONT;
+            ctx.fillStyle = '#ededed';
+            ctx.fillText(sel.nameJa, rx + 34, ry);
         }
 
         ry += 34;
@@ -25366,23 +25397,24 @@ function drawInventoryScreen() {
         ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(RX + RW - 16, ry); ctx.stroke();
         ry += 16;
 
-        ctx.font = '13px Courier New';
-        const maxDescW = RW - 36;
-        const descSegments = sel.desc.split('\n');
-        for (let di = 0; di < descSegments.length; di++) {
-            ctx.fillStyle = '#ccc';
-            const words = descSegments[di].split(' ');
-            let line = '';
-            for (const word of words) {
-                const test = line + word + ' ';
-                if (ctx.measureText(test).width > maxDescW && line) {
-                    ctx.fillText(line.trim(), rx, ry); ry += 18; line = word + ' ';
-                } else { line = test; }
+        if (_gameLang === 'en') {
+            ctx.font = '13px Courier New';
+            const maxDescW = RW - 36;
+            const descSegments = sel.desc.split('\n');
+            for (let di = 0; di < descSegments.length; di++) {
+                ctx.fillStyle = '#ccc';
+                const words = descSegments[di].split(' ');
+                let line = '';
+                for (const word of words) {
+                    const test = line + word + ' ';
+                    if (ctx.measureText(test).width > maxDescW && line) {
+                        ctx.fillText(line.trim(), rx, ry); ry += 18; line = word + ' ';
+                    } else { line = test; }
+                }
+                if (line.trim()) { ctx.fillText(line.trim(), rx, ry); ry += 18; }
             }
-            if (line.trim()) { ctx.fillText(line.trim(), rx, ry); ry += 18; }
+            ry += 18;
         }
-
-        ry += 18;
 
         if (_gameLang !== 'en') {
             ctx.font = '13px ' + JA_FONT;
@@ -25424,16 +25456,16 @@ function drawInventoryScreen() {
 function drawConfirmBuy() {
     const item = shopStock[shopSelection];
     const isSellItem = item.type === 'sell_sword' || item.type === 'sell_armor' || item.type === 'sell_ring' || item.type === 'sell_tome' || item.type === 'sell_fairy';
-    let name = '';
-    if (item.type === 'ring') name = RINGS[item.ringIndex].name;
-    else if (item.type === 'sword') name = 'Fallen Blade';
-    else if (item.type === 'armor') name = 'Fallen Mail';
-    else if (item.type === 'tome') name = item.name;
-    else if (item.type === 'sell_sword') name = 'Fallen Blade';
-    else if (item.type === 'sell_armor') name = 'Fallen Mail';
-    else if (item.type === 'sell_ring') name = RINGS[item.ringIndex].name;
-    else if (item.type === 'sell_tome') name = item.name;
-    else if (item.type === 'sell_fairy') name = 'Fairy';
+    let name = '', nameJa = '';
+    if (item.type === 'ring') { name = RINGS[item.ringIndex].name; nameJa = RINGS[item.ringIndex].nameJa; }
+    else if (item.type === 'sword') { name = 'Fallen Blade'; nameJa = '遺品の剣'; }
+    else if (item.type === 'armor') { name = 'Fallen Mail'; nameJa = '遺品の鎧'; }
+    else if (item.type === 'tome') { name = item.name; nameJa = item.nameJa; }
+    else if (item.type === 'sell_sword') { name = 'Fallen Blade'; nameJa = '遺品の剣'; }
+    else if (item.type === 'sell_armor') { name = 'Fallen Mail'; nameJa = '遺品の鎧'; }
+    else if (item.type === 'sell_ring') { name = RINGS[item.ringIndex].name; nameJa = RINGS[item.ringIndex].nameJa; }
+    else if (item.type === 'sell_tome') { name = item.name; nameJa = item.nameJa; }
+    else if (item.type === 'sell_fairy') { name = 'Fairy'; nameJa = '妖精'; }
 
     const w = 320, h = 130;
     const x = (CANVAS_W - w) / 2;
@@ -25447,8 +25479,14 @@ function drawConfirmBuy() {
 
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ededed';
-    ctx.font = 'bold 14px Courier New';
-    ctx.fillText(isSellItem ? `Sell ${name}?` : `Buy ${name}?`, CANVAS_W / 2, y + 35);
+    const _cbMincho = '"Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Georgia", serif';
+    if (_gameLang === 'en') {
+        ctx.font = 'bold 14px Courier New';
+        ctx.fillText(isSellItem ? `Sell ${name}?` : `Buy ${name}?`, CANVAS_W / 2, y + 35);
+    } else {
+        ctx.font = `bold 14px ${_cbMincho}`;
+        ctx.fillText(isSellItem ? `${nameJa}を売る？` : `${nameJa}を買う？`, CANVAS_W / 2, y + 35);
+    }
 
     ctx.font = '13px Courier New';
     ctx.fillStyle = '#ccc';
@@ -25502,11 +25540,13 @@ function drawConfirmEscape() {
 
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ededed';
-    ctx.font = 'bold 18px Courier New';
-    ctx.fillText('REALLY USE LIMINAL TOME?', CANVAS_W / 2, y + 50);
-
-    ctx.font = '14px "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif';
-    ctx.fillText('本当に狭間の魔導書を使いますか？', CANVAS_W / 2, y + 80);
+    if (_gameLang === 'en') {
+        ctx.font = 'bold 18px Courier New';
+        ctx.fillText('REALLY USE LIMINAL TOME?', CANVAS_W / 2, y + 60);
+    } else {
+        ctx.font = 'bold 16px "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", serif';
+        ctx.fillText('本当に狭間の魔導書を使いますか？', CANVAS_W / 2, y + 60);
+    }
 
     ctx.font = '16px Courier New';
     ctx.fillStyle = (menuSelection === 0) ? '#fbbf24' : '#666';
@@ -31602,7 +31642,7 @@ async function handleAction(dx, dy) {
                 }
                 const equipBase = (floorLevel === 10) ? 100 : (80 + Math.floor(Math.random() * 121));
                 const equipCost = Math.floor(equipBase * priceMult);
-                shopEquipSellPrice = Math.floor(equipCost * 0.6);
+                shopEquipSellPrice = Math.floor(equipCost * 0.75);
                 const cheapTomePool = [
                     { tomeType: 'healTomes',    symbol: SYMBOLS.HEAL_TOME,    name: 'Heal Tome',    nameJa: '回復の魔導書',   desc: 'Fully restore HP.',                       descJa: 'HPを全回復する',                 cost: 60 },
                     { tomeType: 'hasteTomes',   symbol: SYMBOLS.SPEED,        name: 'Haste Tome',   nameJa: '加速の魔導書',   desc: 'Act twice on the next turn.',             descJa: '１ターンに２回行動できる',       cost: 75 },
