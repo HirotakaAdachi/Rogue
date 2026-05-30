@@ -7997,6 +7997,9 @@ function initMap() {
                 else if (_pfe.type === 'ORC' && Math.random() < 0.40) sEnemies.splice(_pfi, 1);
             }
 
+            // 穴(STAIRS)の上に敵がいる場合は除去
+            sEnemies.splice(0, sEnemies.length, ...sEnemies.filter(e => sMap[e.y]?.[e.x] !== SYMBOLS.STAIRS));
+
             return { sMap, sEnemies, sWisps, sTempWalls, rooms, sAmbushRooms };
         }
 
@@ -10607,6 +10610,9 @@ function initMap() {
                 }
             }
 
+
+            // 穴(STAIRS)の上に敵がいる場合は除去
+            sEnemies.splice(0, sEnemies.length, ...sEnemies.filter(e => sMap[e.y]?.[e.x] !== SYMBOLS.STAIRS));
 
             return { sMap, sEnemies, sWisps, sTempWalls, rooms, bizType, sInitialScrollWalls, sAmbushRooms };
         }
@@ -22898,6 +22904,17 @@ function initMap() {
         }
     }
 
+    // 全フロア共通: 穴(STAIRS)の上に敵がいれば除去
+    enemies = enemies.filter(e => map[e.y]?.[e.x] !== SYMBOLS.STAIRS);
+    if (screenGrid && screenGrid.enemies) {
+        for (let _sy = 0; _sy < screenGridRows; _sy++)
+            for (let _sx = 0; _sx < screenGridCols; _sx++)
+                if (screenGrid.enemies[_sy]?.[_sx])
+                    screenGrid.enemies[_sy][_sx] = screenGrid.enemies[_sy][_sx].filter(
+                        e => screenGrid.maps[_sy]?.[_sx]?.[e.y]?.[e.x] !== SYMBOLS.STAIRS
+                    );
+    }
+
 }
 
 // 女王スポーン: 全フロア共通（initMap後に呼ぶ）
@@ -27517,7 +27534,7 @@ function draw(now) {
 
         if (transition.mode === 'FALLING') {
             transition.particles.forEach(p => { ctx.fillStyle = '#444'; ctx.beginPath(); ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2); ctx.fill(); });
-            ctx.fillStyle = '#ededed'; ctx.font = `bold ${TILE_SIZE * 1.5}px 'Courier New'`; ctx.fillText(SYMBOLS.PLAYER, CANVAS_W / 2, transition.playerY);
+            ctx.fillStyle = '#ededed'; ctx.font = `bold ${TILE_SIZE * 1.5}px 'Courier New'`; ctx.textAlign = 'center'; ctx.fillText(SYMBOLS.PLAYER, CANVAS_W / 2, transition.playerY);
         } else if ((transition.mode === 'WHITE_OUT' || transition.mode === 'WHITE_ASCENT') && transition.particles) {
             transition.particles.forEach(p => {
                 p.y += p.speed * (1 + (transition.accel || 0) * 4); if (p.y > CANVAS_H) p.y = -20;
@@ -27532,6 +27549,7 @@ function draw(now) {
             ctx.fillStyle = transition.textColor || ((transition.mode === 'WHITE_OUT' || transition.mode === 'WHITE_ASCENT') ? '#000' : '#ededed');
             const _tFontSz = transition.fontSize || ((transition.mode === 'BLACK_OUT' || transition.mode === 'STARS' || transition.mode === 'RED_OUT') ? '48px' : '32px');
             ctx.font = `bold ${_tFontSz} 'Courier New', Courier, monospace`;
+            ctx.textAlign = 'center';
             ctx.fillText(transition.text, CANVAS_W / 2, CANVAS_H / 2);
         }
         ctx.restore();
