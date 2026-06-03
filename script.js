@@ -13413,13 +13413,13 @@ function initMap() {
         // screenGridCols=3, screenGridRows=1 の横一列レイアウト専用。
         // 中央[1,0]の右通路を塞ぎ、BlueHole+Wispを配置。右スクリーンへはBlueHole解除が必要。
         // 29F以降（28F=チュートリアル済み、31F=専用処理のため除外）
-        let _blueBlockPlaced = false;
         if (multiScreenMode && screenGridCols === 3 && screenGridRows === 1 &&
             !FIXED_STAGE_FLOORS.includes(floorLevel) && floorLevel >= 29 && floorLevel !== 31 && floorLevel < 101 &&
             Math.random() < (isRoomTestMode ? 1.0 : 0.5)) {
 
             const _h3Map = screenGrid.maps[0][1]; // 中央スクリーン
             const _h3SafeTypes = new Set([null, undefined, 'dungeon', 'maze', 'castle', 'spiral', 'breaker_room']);
+            let _h3Placed = false;
             if (_h3Map && _h3SafeTypes.has(screenGrid.types?.[0]?.[1])) {
                 const _h3Safe = new Set([SYMBOLS.STAIRS, SYMBOLS.DOOR, SYMBOLS.KEY, SYMBOLS.BLUE_KEY, SYMBOLS.MERCHANT]);
                 const _h3PassH = [11, 12, 13];
@@ -13486,139 +13486,14 @@ function initMap() {
                         const _h3Wisp = _h3WispCands[Math.floor(Math.random() * _h3WispCands.length)];
                         screenGrid.wisps[0][1].push({ x: _h3Wisp.x, y: _h3Wisp.y, dir: 1, mode: 'FOLLOW' });
                         addKeyLog("⊙ The way forward is sealed. Guide the Blue Wisp to ⊙.");
-                        _blueBlockPlaced = true;
+                        _h3Placed = true;
                     }
                 }
                 // 安全チェック: Hole/Wisp未配置ならBlueBlockを全除去
-                if (!_blueBlockPlaced) {
+                if (!_h3Placed) {
                     for (let _y = 0; _y < ROWS; _y++)
                         for (let _x = 0; _x < COLS; _x++)
                             if (_h3Map[_y][_x] === SYMBOLS.BLUE_BLOCK) _h3Map[_y][_x] = SYMBOLS.FLOOR;
-                }
-            }
-        }
-
-        // ----- BLUE BLOCK SHORTCUT (29F+, 2×2以上のマルチスクリーン) -----
-        // 通常: 15% / 101F+で列分割なし時は確定 / テストモード中は確定
-        // 1画面の1通路をBlueBlockで塞ぐ。ウィスプ→BlueHoleでショートカット開通。
-        // 29F以降（28F=チュートリアル済み、31F=専用処理のため除外）
-        const _bsForced = (floorLevel >= 101 && !_deepBlueDone);
-        if (!_blueBlockPlaced && multiScreenMode && screenGridRows >= 2 && screenGridCols >= 2 &&
-            !FIXED_STAGE_FLOORS.includes(floorLevel) && floorLevel >= 29 &&
-            floorLevel !== 31 && floorLevel !== 98 &&
-            (_bsForced || Math.random() < (isRoomTestMode ? 1.0 : 0.15))) {
-
-            const _bsPassH = [11, 12, 13];
-            const _bsPassV = [18, 19, 20, 21];
-            // FAIRY は通路から退かすので safe に含めない
-            const _bsSafe = new Set([SYMBOLS.STAIRS, SYMBOLS.DOOR, SYMBOLS.KEY,
-                SYMBOLS.BLUE_KEY, SYMBOLS.MERCHANT]);
-
-            // 候補: スタート画面以外・アクティブ・特殊タイプ除外
-            const _bsCands = [];
-            for (let _bsSy2 = 0; _bsSy2 < screenGridRows; _bsSy2++) {
-                for (let _bsSx2 = 0; _bsSx2 < screenGridCols; _bsSx2++) {
-                    if (_bsSx2 === _ssX && _bsSy2 === _ssY) continue;
-                    if (!screenGrid.active[_bsSy2][_bsSx2]) continue;
-                    const _bsType = screenGrid.types?.[_bsSy2]?.[_bsSx2];
-                    if (_bsType === 'SOLAR_SYSTEM' || _bsType === 'novel_corridor') continue;
-                    _bsCands.push({ sx: _bsSx2, sy: _bsSy2 });
-                }
-            }
-
-            if (_bsCands.length > 0) {
-                const _bsPick = _bsCands[Math.floor(Math.random() * _bsCands.length)];
-                const { sx: _bsSx, sy: _bsSy } = _bsPick;
-                const _bsMap = screenGrid.maps[_bsSy][_bsSx];
-
-                // 隣接方向を列挙（2方向以上あるときのみ: 1方向 = 完全封鎖になるので除外）
-                const _bsDirs = [];
-                if (_hasLeftScreen(_bsSx, _bsSy))  _bsDirs.push('L');
-                if (_hasRightScreen(_bsSx, _bsSy)) _bsDirs.push('R');
-                if (_hasUpScreen(_bsSx, _bsSy))    _bsDirs.push('U');
-                if (_hasDownScreen(_bsSx, _bsSy))  _bsDirs.push('D');
-
-                if (_bsDirs.length >= 2) {
-                    const _bsDir = _bsDirs[Math.floor(Math.random() * _bsDirs.length)];
-
-                    const _bsSetBlock = (_y, _x) => {
-                        if (_y >= 1 && _y < ROWS-1 && _x >= 1 && _x < COLS-1) {
-                            if (_bsSafe.has(_bsMap[_y][_x])) return;
-                            if (_bsMap[_y][_x] === SYMBOLS.FAIRY) {
-                                // 妖精を内側FLOORに退かす
-                                for (let _fy = 2; _fy < ROWS-2; _fy++)
-                                    for (let _fx = 2; _fx < COLS-4; _fx++)
-                                        if (_bsMap[_fy][_fx] === SYMBOLS.FLOOR) {
-                                            _bsMap[_fy][_fx] = SYMBOLS.FAIRY; break;
-                                        }
-                            }
-                            _bsMap[_y][_x] = SYMBOLS.BLUE_BLOCK;
-                        }
-                    };
-
-                    if (_bsDir === 'L') {
-                        for (const _py of _bsPassH) { _bsSetBlock(_py, 1); _bsSetBlock(_py, 2); }
-                    } else if (_bsDir === 'R') {
-                        for (const _py of _bsPassH) { _bsSetBlock(_py, COLS-2); _bsSetBlock(_py, COLS-3); }
-                    } else if (_bsDir === 'U') {
-                        for (const _px of _bsPassV) { _bsSetBlock(1, _px); _bsSetBlock(2, _px); }
-                    } else {
-                        for (const _px of _bsPassV) { _bsSetBlock(ROWS-2, _px); _bsSetBlock(ROWS-3, _px); }
-                    }
-
-                    // 敵をBlueBlock上から退かす
-                    _relocateEnemiesFromBlocks(_bsMap, screenGrid.enemies[_bsSy][_bsSx]);
-                    // BlueHole: 内側の開けた床（4方向のうち3つ以上が開放）に配置
-                    const _bsHoleCands = [];
-                    for (let _bsHy = 3; _bsHy < ROWS-3; _bsHy++) {
-                        for (let _bsHx = 3; _bsHx < COLS-3; _bsHx++) {
-                            if (_bsMap[_bsHy][_bsHx] !== SYMBOLS.FLOOR) continue;
-                            let _bsOpenCnt = 0;
-                            for (const [_bsDy, _bsDx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
-                                const _bsT = _bsMap[_bsHy+_bsDy]?.[_bsHx+_bsDx];
-                                if (_bsT && _bsT !== SYMBOLS.WALL && _bsT !== SYMBOLS.BLUE_BLOCK) _bsOpenCnt++;
-                            }
-                            if (_bsOpenCnt >= 3) _bsHoleCands.push({ x: _bsHx, y: _bsHy });
-                        }
-                    }
-
-                    if (_bsHoleCands.length > 0) {
-                        const _bsHole = _bsHoleCands[Math.floor(Math.random() * _bsHoleCands.length)];
-
-                        // BlueHole周囲3×3をFLOOR化（壁も削る、BlueBlockは保持）
-                        for (let _bsDy = -1; _bsDy <= 1; _bsDy++)
-                            for (let _bsDx = -1; _bsDx <= 1; _bsDx++) {
-                                const _bsCy = _bsHole.y+_bsDy, _bsCx = _bsHole.x+_bsDx;
-                                if (_bsCy>=1 && _bsCy<ROWS-1 && _bsCx>=1 && _bsCx<COLS-1 &&
-                                    _bsMap[_bsCy][_bsCx] !== SYMBOLS.BLUE_BLOCK)
-                                    _bsMap[_bsCy][_bsCx] = SYMBOLS.FLOOR;
-                            }
-                        _bsMap[_bsHole.y][_bsHole.x] = SYMBOLS.BLUE_HOLE;
-                        // 溶岩床を除去（ウィスプ誘導のためのブロック設置を妨げないよう）
-                        for (let _bsLy = 0; _bsLy < ROWS; _bsLy++)
-                            for (let _bsLx = 0; _bsLx < COLS; _bsLx++)
-                                if (_bsMap[_bsLy][_bsLx] === SYMBOLS.LAVA) _bsMap[_bsLy][_bsLx] = SYMBOLS.FLOOR;
-
-                        // Wisp: BlueHoleから5マス以上・壁隣接（FOLLOW右手法が機能するため）
-                        const _bsWispCands = [];
-                        for (let _bsWy = 2; _bsWy < ROWS-2; _bsWy++) {
-                            for (let _bsWx = 2; _bsWx < COLS-2; _bsWx++) {
-                                if (_bsMap[_bsWy][_bsWx] !== SYMBOLS.FLOOR) continue;
-                                if (Math.abs(_bsWx-_bsHole.x)+Math.abs(_bsWy-_bsHole.y) < 5) continue;
-                                const _bsNearWall = [[0,1],[0,-1],[1,0],[-1,0]].some(([_dy,_dx]) =>
-                                    _bsMap[_bsWy+_dy]?.[_bsWx+_dx] === SYMBOLS.WALL);
-                                if (_bsNearWall) _bsWispCands.push({ x: _bsWx, y: _bsWy });
-                            }
-                        }
-                        if (_bsWispCands.length > 0) {
-                            const _bsWisp = _bsWispCands[Math.floor(Math.random() * _bsWispCands.length)];
-                            screenGrid.wisps[_bsSy][_bsSx].push({
-                                x: _bsWisp.x, y: _bsWisp.y, dir: 1, mode: 'FOLLOW'
-                            });
-                            addKeyLog("⊙ A blue wisp wanders nearby. Lead it to ⊙ to open the sealed passage.");
-                        }
-                    }
-                    _validateBlueBlockSafety();
                 }
             }
         }
