@@ -566,7 +566,7 @@ const SOUNDS = {
         const noiseGain = audioCtx.createGain();
         noiseGain.gain.setValueAtTime(0.35, audioCtx.currentTime);
         noiseGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-        noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(audioCtx.destination);
+        noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(sfxMasterGain);
         noise.start();
         // 低音の「ドン」
         const osc = audioCtx.createOscillator();
@@ -576,7 +576,7 @@ const SOUNDS = {
         osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + duration);
         g.gain.setValueAtTime(0.25, audioCtx.currentTime);
         g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
-        osc.connect(g); g.connect(audioCtx.destination);
+        osc.connect(g); g.connect(sfxMasterGain);
         osc.start(); osc.stop(audioCtx.currentTime + duration);
     },
     GET_ITEM: () => playMelody([{ f: 880, d: 0.1 }, { f: 1760, d: 0.1 }]),
@@ -625,7 +625,7 @@ const SOUNDS = {
         noiseGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
         noise.connect(filter);
         filter.connect(noiseGain);
-        noiseGain.connect(audioCtx.destination);
+        noiseGain.connect(sfxMasterGain);
         noise.start();
 
         // 「とん」という低い歩行音を追加
@@ -636,7 +636,7 @@ const SOUNDS = {
         osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + duration);
         g.gain.setValueAtTime(0.04, audioCtx.currentTime);
         g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
-        osc.connect(g); g.connect(audioCtx.destination);
+        osc.connect(g); g.connect(sfxMasterGain);
         osc.start(); osc.stop(audioCtx.currentTime + duration);
     },
     TOME_READ: () => {
@@ -809,7 +809,7 @@ const SOUNDS = {
         nGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
         nGain.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 0.1);
         nGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
-        noise.connect(filter); filter.connect(nGain); nGain.connect(audioCtx.destination);
+        noise.connect(filter); filter.connect(nGain); nGain.connect(sfxMasterGain);
         noise.start(); noise.stop(audioCtx.currentTime + duration);
     },
     EXPLODE: () => {
@@ -1012,7 +1012,7 @@ const SOUNDS = {
         g.gain.setValueAtTime(0.35, t);
         g.gain.linearRampToValueAtTime(0.45, t + 0.08);
         g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-        osc.connect(lp); lp.connect(g); g.connect(audioCtx.destination);
+        osc.connect(lp); lp.connect(g); g.connect(sfxMasterGain);
         osc.start(t); osc.stop(t + 0.25);
         // 低域ノイズでゴッという空気感
         const bufferSize = audioCtx.sampleRate * 0.25;
@@ -1027,7 +1027,7 @@ const SOUNDS = {
         ng.gain.setValueAtTime(0.15, t);
         ng.gain.linearRampToValueAtTime(0.2, t + 0.08);
         ng.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-        noise.connect(nf); nf.connect(ng); ng.connect(audioCtx.destination);
+        noise.connect(nf); nf.connect(ng); ng.connect(sfxMasterGain);
         noise.start(t); noise.stop(t + 0.25);
     },
     DISPEL: () => {
@@ -1049,7 +1049,7 @@ const SOUNDS = {
             g2.gain.linearRampToValueAtTime(0.16, t + delay + 0.04);
             g2.gain.linearRampToValueAtTime(0.13, t + delay + 0.22);
             g2.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.3);
-            o.connect(lp); lp.connect(g2); g2.connect(audioCtx.destination);
+            o.connect(lp); lp.connect(g2); g2.connect(sfxMasterGain);
             o.start(t + delay); o.stop(t + delay + 0.32);
         });
         // --- 締め: しゅるるっとしぼむノイズ ---
@@ -1065,7 +1065,7 @@ const SOUNDS = {
         ng.gain.setValueAtTime(0, t + 1.1);
         ng.gain.linearRampToValueAtTime(0.18, t + 1.18);
         ng.gain.exponentialRampToValueAtTime(0.001, t + 1.55);
-        noise.connect(bp); bp.connect(ng); ng.connect(audioCtx.destination);
+        noise.connect(bp); bp.connect(ng); ng.connect(sfxMasterGain);
         noise.start(t + 1.1); noise.stop(t + 1.6);
     },
     MIMIC_REVEAL: () => {
@@ -1082,7 +1082,7 @@ const SOUNDS = {
         osc2.frequency.exponentialRampToValueAtTime(600, t + 0.3);
         g.gain.setValueAtTime(0.15, t);
         g.gain.linearRampToValueAtTime(0, t + 0.3);
-        osc1.connect(g); osc2.connect(g); g.connect(audioCtx.destination);
+        osc1.connect(g); osc2.connect(g); g.connect(sfxMasterGain);
         osc1.start(t); osc1.stop(t + 0.3);
         osc2.start(t); osc2.stop(t + 0.3);
     },
@@ -1096,7 +1096,7 @@ const SOUNDS = {
         osc.frequency.exponentialRampToValueAtTime(100, t + 0.4);
         g.gain.setValueAtTime(0.12, t);
         g.gain.linearRampToValueAtTime(0, t + 0.4);
-        osc.connect(g); g.connect(audioCtx.destination);
+        osc.connect(g); g.connect(sfxMasterGain);
         osc.start(t); osc.stop(t + 0.4);
     },
     SUMMON: () => {
@@ -1114,7 +1114,7 @@ const SOUNDS = {
         g.gain.setValueAtTime(0.15, t);
         g.gain.setValueAtTime(0.15, t + 0.2);
         g.gain.linearRampToValueAtTime(0, t + 0.5);
-        osc1.connect(g); osc2.connect(g); g.connect(audioCtx.destination);
+        osc1.connect(g); osc2.connect(g); g.connect(sfxMasterGain);
         osc1.start(t); osc1.stop(t + 0.5);
         osc2.start(t); osc2.stop(t + 0.5);
     },
@@ -1214,7 +1214,7 @@ const SOUNDS = {
         const ng = audioCtx.createGain();
         ng.gain.setValueAtTime(0.4, t);
         ng.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
-        noise.connect(bp); bp.connect(ng); ng.connect(audioCtx.destination);
+        noise.connect(bp); bp.connect(ng); ng.connect(sfxMasterGain);
         noise.start(t);
         // 2) 低音の唸り（不気味さ）
         const osc = audioCtx.createOscillator();
@@ -1224,7 +1224,7 @@ const SOUNDS = {
         const og = audioCtx.createGain();
         og.gain.setValueAtTime(0.25, t);
         og.gain.exponentialRampToValueAtTime(0.001, t + 0.65);
-        osc.connect(og); og.connect(audioCtx.destination);
+        osc.connect(og); og.connect(sfxMasterGain);
         osc.start(t); osc.stop(t + 0.65);
     },
     START_INTENSE_RUMBLE: () => {
@@ -1272,7 +1272,7 @@ const SOUNDS = {
         gain2.gain.setValueAtTime(0.0, now);
         gain2.gain.linearRampToValueAtTime(0.2, now + 0.15);
         gain2.gain.exponentialRampToValueAtTime(0.001, now + duration);
-        osc2.connect(gain2); gain2.connect(audioCtx.destination);
+        osc2.connect(gain2); gain2.connect(sfxMasterGain);
         osc2.start(now); osc2.stop(now + duration);
     },
     SLIDER_JUMP: () => {
