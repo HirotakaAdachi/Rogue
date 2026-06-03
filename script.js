@@ -1431,6 +1431,7 @@ let _gameLang = 'en';  // 'en' or 'ja'
 let sfxVolumeLevel = safeStorageGetInt('rogue_sfx_vol', 3, 0, 5); // 0-5 (0=mute)
 const SFX_VOLUME_LEVELS = [0, 0.2, 0.4, 0.6, 0.8, 1.0];
 function getSFXVolume() { return SFX_VOLUME_LEVELS[sfxVolumeLevel]; }
+sfxMasterGain.gain.value = getSFXVolume(); // 起動時にlocalStorageの保存値を反映
 let bgmActive = false;
 let bgmFadeTimer = null;
 let bgmFadeInterval = null;
