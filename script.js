@@ -13337,6 +13337,41 @@ function initMap() {
             }
         };
 
+        // BlueHoleを確実に配置するヘルパー（開放空間優先→なければ任意FLOOR）
+        const _placeBlueHoleRobust = (sMap, exitX, exitY) => {
+            const _tiers = [
+                // 1st: 5マス以上 + 3方向以上開放
+                (y, x) => Math.abs(x-exitX)+Math.abs(y-exitY)>=5 &&
+                    [[0,1],[0,-1],[1,0],[-1,0]].filter(([dy,dx])=>{const t=sMap[y+dy]?.[x+dx];return t&&t!==SYMBOLS.WALL&&t!==SYMBOLS.BLUE_BLOCK;}).length>=3,
+                // 2nd: 3マス以上（開放条件緩和）
+                (y, x) => Math.abs(x-exitX)+Math.abs(y-exitY)>=3,
+                // 3rd: 出口以外のFLOOR（最終手段）
+                (y, x) => !(x===exitX && y===exitY),
+            ];
+            for (const _cond of _tiers) {
+                const _cands = [];
+                for (let _hy=2;_hy<ROWS-2;_hy++) for (let _hx=2;_hx<COLS-2;_hx++) {
+                    if (sMap[_hy][_hx]!==SYMBOLS.FLOOR) continue;
+                    if (_cond(_hy,_hx)) _cands.push({x:_hx,y:_hy});
+                }
+                if (_cands.length > 0) {
+                    const _h = _cands[Math.floor(Math.random()*_cands.length)];
+                    // 周囲3×3をFLOOR化（BlueBlockは保持）
+                    for (let _dy=-1;_dy<=1;_dy++) for (let _dx=-1;_dx<=1;_dx++) {
+                        const _cy=_h.y+_dy,_cx=_h.x+_dx;
+                        if (_cy>=1&&_cy<ROWS-1&&_cx>=1&&_cx<COLS-1&&sMap[_cy][_cx]!==SYMBOLS.BLUE_BLOCK)
+                            sMap[_cy][_cx]=SYMBOLS.FLOOR;
+                    }
+                    sMap[_h.y][_h.x]=SYMBOLS.BLUE_HOLE;
+                    // 溶岩除去
+                    for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
+                        if (sMap[_ly][_lx]===SYMBOLS.LAVA) sMap[_ly][_lx]=SYMBOLS.FLOOR;
+                    return _h;
+                }
+            }
+            return null;
+        };
+
         // ウィスプを確実に配置するヘルパー（壁隣接優先→なければ任意FLOOR）
         const _placeWispRobust = (sMap, wispArr, holeX, holeY) => {
             const _tries = [
@@ -13394,28 +13429,9 @@ function initMap() {
                     }
                     // 敵をBlueBlock上から退かす
                     _relocateEnemiesFromBlocks(_t42Map, screenGrid.enemies[doorScreenY][doorScreenX]);
-                    // BlueHole: 出口から5マス以上・開けた床
-                    const _t42HC = [];
-                    for (let _hy=2;_hy<ROWS-2;_hy++) for (let _hx=2;_hx<COLS-2;_hx++) {
-                        if (_t42Map[_hy][_hx]!==SYMBOLS.FLOOR) continue;
-                        if (Math.abs(_hx-_t42Ex)+Math.abs(_hy-_t42Ey)<5) continue;
-                        let _op=0;
-                        for (const [_dy,_dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
-                            const _t=_t42Map[_hy+_dy]?.[_hx+_dx];
-                            if (_t&&_t!==SYMBOLS.WALL&&_t!==SYMBOLS.BLUE_BLOCK) _op++;
-                        }
-                        if (_op>=3) _t42HC.push({x:_hx,y:_hy});
-                    }
-                    if (_t42HC.length > 0) {
-                        const _t42H = _t42HC[Math.floor(Math.random()*_t42HC.length)];
-                        for (let _dy=-1;_dy<=1;_dy++) for (let _dx=-1;_dx<=1;_dx++) {
-                            const _cy=_t42H.y+_dy,_cx=_t42H.x+_dx;
-                            if (_cy>=1&&_cy<ROWS-1&&_cx>=1&&_cx<COLS-1&&_t42Map[_cy][_cx]!==SYMBOLS.BLUE_BLOCK)
-                                _t42Map[_cy][_cx]=SYMBOLS.FLOOR;
-                        }
-                        _t42Map[_t42H.y][_t42H.x] = SYMBOLS.BLUE_HOLE;
-                        for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
-                            if (_t42Map[_ly][_lx]===SYMBOLS.LAVA) _t42Map[_ly][_lx]=SYMBOLS.FLOOR;
+                    // BlueHole: フォールバック付きで確実に配置
+                    const _t42H = _placeBlueHoleRobust(_t42Map, _t42Ex, _t42Ey);
+                    if (_t42H) {
                         // Wisp（壁隣接優先→フォールバックで必ず配置）
                         if (_placeWispRobust(_t42Map, screenGrid.wisps[doorScreenY][doorScreenX], _t42H.x, _t42H.y))
                             addKeyLog("⊙ [42F] Exit sealed. Guide the Blue Wisp (※) to ⊙ to unseal it.");
@@ -13457,32 +13473,10 @@ function initMap() {
                     }
                     _relocateEnemiesFromBlocks(_rxMap, screenGrid.enemies[doorScreenY][doorScreenX]);
 
-                    // BlueHole: 出口から5マス以上・開けた床
-                    const _rxHC = [];
-                    for (let _hy=2;_hy<ROWS-2;_hy++) for (let _hx=2;_hx<COLS-2;_hx++) {
-                        if (_rxMap[_hy][_hx]!==SYMBOLS.FLOOR) continue;
-                        if (Math.abs(_hx-_rxEx)+Math.abs(_hy-_rxEy)<5) continue;
-                        let _op=0;
-                        for (const [_dy,_dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
-                            const _t=_rxMap[_hy+_dy]?.[_hx+_dx];
-                            if (_t&&_t!==SYMBOLS.WALL&&_t!==SYMBOLS.BLUE_BLOCK) _op++;
-                        }
-                        if (_op>=3) _rxHC.push({x:_hx,y:_hy});
-                    }
-                    if (_rxHC.length > 0) {
-                        const _rxH = _rxHC[Math.floor(Math.random()*_rxHC.length)];
-                        for (let _dy=-1;_dy<=1;_dy++) for (let _dx=-1;_dx<=1;_dx++) {
-                            const _cy=_rxH.y+_dy,_cx=_rxH.x+_dx;
-                            if (_cy>=1&&_cy<ROWS-1&&_cx>=1&&_cx<COLS-1&&_rxMap[_cy][_cx]!==SYMBOLS.BLUE_BLOCK)
-                                _rxMap[_cy][_cx]=SYMBOLS.FLOOR;
-                        }
-                        _rxMap[_rxH.y][_rxH.x] = SYMBOLS.BLUE_HOLE;
-                        for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
-                            if (_rxMap[_ly][_lx]===SYMBOLS.LAVA) _rxMap[_ly][_lx]=SYMBOLS.FLOOR;
-
-                        if (_placeWispRobust(_rxMap, screenGrid.wisps[doorScreenY][doorScreenX], _rxH.x, _rxH.y))
-                            addKeyLog("⊙ The exit is sealed by Blue Blocks. Guide the Wisp (※) to ⊙.");
-                    }
+                    // BlueHole + Wisp: フォールバック付きで確実に配置
+                    const _rxH = _placeBlueHoleRobust(_rxMap, _rxEx, _rxEy);
+                    if (_rxH && _placeWispRobust(_rxMap, screenGrid.wisps[doorScreenY][doorScreenX], _rxH.x, _rxH.y))
+                        addKeyLog("⊙ The exit is sealed by Blue Blocks. Guide the Wisp (※) to ⊙.");
                 }
             }
         }
