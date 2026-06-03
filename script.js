@@ -13306,6 +13306,76 @@ function initMap() {
             }
         }
 
+        // ----- FLOOR 42: デバッグテスト — 出口(DOOR)周囲1マスをBlueBlockで確定封鎖 -----
+        // BlueHole+Wispも同スクリーンに配置。レンダリング・動作確認用。
+        if (floorLevel === 42 && multiScreenMode && screenGrid &&
+            typeof doorScreenX !== 'undefined' && typeof doorScreenY !== 'undefined') {
+            const _t42Map = screenGrid.maps[doorScreenY]?.[doorScreenX];
+            if (_t42Map) {
+                // 出口（DOOR or STAIRS）の位置を探す
+                let _t42Ex = -1, _t42Ey = -1;
+                _t42outer: for (let _y = 1; _y < ROWS-1; _y++)
+                    for (let _x = 1; _x < COLS-1; _x++)
+                        if (_t42Map[_y][_x] === SYMBOLS.DOOR || _t42Map[_y][_x] === SYMBOLS.STAIRS)
+                            { _t42Ex = _x; _t42Ey = _y; break _t42outer; }
+
+                if (_t42Ex >= 0) {
+                    const _t42Safe = new Set([SYMBOLS.KEY, SYMBOLS.BLUE_KEY, SYMBOLS.DOOR, SYMBOLS.STAIRS]);
+                    // 出口周囲1マス（3×3の枠）をBlueBlockで囲む
+                    for (let _dy = -1; _dy <= 1; _dy++) {
+                        for (let _dx = -1; _dx <= 1; _dx++) {
+                            if (_dy === 0 && _dx === 0) continue;
+                            const _ty = _t42Ey+_dy, _tx = _t42Ex+_dx;
+                            if (_ty<1||_ty>=ROWS-1||_tx<1||_tx>=COLS-1) continue;
+                            if (_t42Safe.has(_t42Map[_ty][_tx])) continue;
+                            if (_t42Map[_ty][_tx] === SYMBOLS.FAIRY) {
+                                for (let _fy=2;_fy<ROWS-2;_fy++) for (let _fx=2;_fx<COLS-4;_fx++)
+                                    if (_t42Map[_fy][_fx]===SYMBOLS.FLOOR){_t42Map[_fy][_fx]=SYMBOLS.FAIRY;_fy=ROWS;break;}
+                            }
+                            _t42Map[_ty][_tx] = SYMBOLS.BLUE_BLOCK;
+                        }
+                    }
+                    // BlueHole: 出口から5マス以上・開けた床
+                    const _t42HC = [];
+                    for (let _hy=2;_hy<ROWS-2;_hy++) for (let _hx=2;_hx<COLS-2;_hx++) {
+                        if (_t42Map[_hy][_hx]!==SYMBOLS.FLOOR) continue;
+                        if (Math.abs(_hx-_t42Ex)+Math.abs(_hy-_t42Ey)<5) continue;
+                        let _op=0;
+                        for (const [_dy,_dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+                            const _t=_t42Map[_hy+_dy]?.[_hx+_dx];
+                            if (_t&&_t!==SYMBOLS.WALL&&_t!==SYMBOLS.BLUE_BLOCK) _op++;
+                        }
+                        if (_op>=3) _t42HC.push({x:_hx,y:_hy});
+                    }
+                    if (_t42HC.length > 0) {
+                        const _t42H = _t42HC[Math.floor(Math.random()*_t42HC.length)];
+                        for (let _dy=-1;_dy<=1;_dy++) for (let _dx=-1;_dx<=1;_dx++) {
+                            const _cy=_t42H.y+_dy,_cx=_t42H.x+_dx;
+                            if (_cy>=1&&_cy<ROWS-1&&_cx>=1&&_cx<COLS-1&&_t42Map[_cy][_cx]!==SYMBOLS.BLUE_BLOCK)
+                                _t42Map[_cy][_cx]=SYMBOLS.FLOOR;
+                        }
+                        _t42Map[_t42H.y][_t42H.x] = SYMBOLS.BLUE_HOLE;
+                        for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
+                            if (_t42Map[_ly][_lx]===SYMBOLS.LAVA) _t42Map[_ly][_lx]=SYMBOLS.FLOOR;
+                        // Wisp
+                        const _t42WC=[];
+                        for (let _wy=2;_wy<ROWS-2;_wy++) for (let _wx=2;_wx<COLS-2;_wx++) {
+                            if (_t42Map[_wy][_wx]!==SYMBOLS.FLOOR) continue;
+                            if (Math.abs(_wx-_t42H.x)+Math.abs(_wy-_t42H.y)<5) continue;
+                            const _nw=[[0,1],[0,-1],[1,0],[-1,0]].some(([_dy,_dx])=>
+                                _t42Map[_wy+_dy]?.[_wx+_dx]===SYMBOLS.WALL);
+                            if (_nw) _t42WC.push({x:_wx,y:_wy});
+                        }
+                        if (_t42WC.length > 0) {
+                            const _t42W=_t42WC[Math.floor(Math.random()*_t42WC.length)];
+                            screenGrid.wisps[doorScreenY][doorScreenX].push({x:_t42W.x,y:_t42W.y,dir:1,mode:'FOLLOW'});
+                            addKeyLog("⊙ [42F] Exit sealed. Guide the Blue Wisp (※) to ⊙ to unseal it.");
+                        }
+                    }
+                }
+            }
+        }
+
         // ----- 横3画面(3×1): 中央スクリーンの右通路をBlueBlockで封鎖 (50%) -----
         // screenGridCols=3, screenGridRows=1 の横一列レイアウト専用。
         // 中央[1,0]の右通路を塞ぎ、BlueHole+Wispを配置。右スクリーンへはBlueHole解除が必要。
