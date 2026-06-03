@@ -1424,7 +1424,7 @@ const SOUNDS = {
 }
 
 // ===== SECTION: BGM SYSTEM =====
-let bgmEnabled = true;
+let bgmEnabled = localStorage.getItem('rogue_bgm_enabled') !== 'false'; // 保存済みミュート状態を復元
 let bgmVolumeLevel = safeStorageGetInt('rogue_bgm_vol', 3, 1, 5); // 1-5
 let settingsRow = 0;    // 0=BGM, 1=BGM VOLUME, 2=SFX VOLUME, 3=LANGUAGE
 let _gameLang = 'en';  // 'en' or 'ja'
@@ -1572,6 +1572,7 @@ function playBossBGM(src) {
 
 function toggleBGM() {
     bgmEnabled = !bgmEnabled;
+    localStorage.setItem('rogue_bgm_enabled', bgmEnabled);
     SOUNDS.SELECT();
     if (bgmEnabled && gameState === 'PLAYING') startBGM();
     else stopBGM();
