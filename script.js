@@ -39799,9 +39799,19 @@ async function enemyTurn() {
                             + (a.allyNearby - b.allyNearby)
                             + (aAx - bAx);
                     });
+                    // BLAZE: BLUE_HOLEの周囲2マス以内には侵入しない（溶岩でブロック設置が詰むのを防ぐ）
+                    const _blazeAvoid = (nx, ny) => {
+                        if (e.type !== 'BLAZE') return false;
+                        for (let _dy = -2; _dy <= 2; _dy++)
+                            for (let _dx = -2; _dx <= 2; _dx++) {
+                                const _ty = ny+_dy, _tx = nx+_dx;
+                                if (_ty>=0&&_ty<ROWS&&_tx>=0&&_tx<COLS&&map[_ty][_tx]===SYMBOLS.BLUE_HOLE) return true;
+                            }
+                        return false;
+                    };
                     let fwMoved = false;
                     for (const { d, nx, ny } of scored) {
-                        if (!isRealHole(nx, ny) && canEnemyMove(nx, ny, e) && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
+                        if (!isRealHole(nx, ny) && canEnemyMove(nx, ny, e) && !_blazeAvoid(nx, ny) && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
                             e.x = nx; e.y = ny;
                             e._lastMoveAxis = d.x !== 0 ? 'X' : 'Y';
                             fwMoved = true; break;
@@ -39817,7 +39827,7 @@ async function enemyTurn() {
                         const tryOrder = [rotR(cur), cur, rotL(cur), rotB(cur)];
                         for (const d of tryOrder) {
                             const nx = e.x + d.x, ny = e.y + d.y;
-                            if (!isRealHole(nx, ny) && canEnemyMove(nx, ny, e) && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
+                            if (!isRealHole(nx, ny) && canEnemyMove(nx, ny, e) && !_blazeAvoid(nx, ny) && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
                                 e.x = nx; e.y = ny;
                                 e._fwLastDir = d;
                                 fwMoved = true;
