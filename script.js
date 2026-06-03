@@ -16073,29 +16073,29 @@ function initMap() {
             for (let dx = -1; dx <= 1; dx++)
                 map[player.y + dy][player.x + dx] = SYMBOLS.FLOOR;
 
-        // 出口をランダムな壁マスに配置（端から5マス以内を除外してBlueBlock配置の余白確保）
+        // 出口: できるだけ下方に配置（yが大きい＝画面下側を優先）
         let exitX, exitY;
-        for (let t = 0; t < 300; t++) {
-            const tx = 5 + Math.floor(Math.random() * (COLS - 10));
-            const ty = 5 + Math.floor(Math.random() * (ROWS - 10));
-            if (map[ty][tx] !== SYMBOLS.WALL) continue;
-            if (Math.abs(tx - player.x) + Math.abs(ty - player.y) < 12) continue;
-            exitX = tx; exitY = ty;
-            break;
+        for (let ty = ROWS - 6; ty >= 5 && exitX == null; ty--) {
+            for (let t = 0; t < 60; t++) {
+                const tx = 5 + Math.floor(Math.random() * (COLS - 10));
+                if (map[ty][tx] !== SYMBOLS.WALL) continue;
+                if (Math.abs(tx - player.x) + Math.abs(ty - player.y) < 12) continue;
+                exitX = tx; exitY = ty;
+                break;
+            }
         }
-        if (exitX == null) { exitX = 20; exitY = 12; }
+        if (exitX == null) { exitX = 20; exitY = ROWS - 6; }
 
-        // 出口の周囲1マスをFLOOR（ブロック消去後にプレイヤーが入れるスペース）
-        for (let dy = -1; dy <= 1; dy++)
-            for (let dx = -1; dx <= 1; dx++)
-                map[exitY + dy][exitX + dx] = SYMBOLS.FLOOR;
+        // STAIRS配置 → 周囲1マス（8方向）をBlueBlockで直接囲む
+        // Blue Hole解除でBlueBlock→FLOORになりSTAIRSに隣接できる
         map[exitY][exitX] = SYMBOLS.STAIRS;
-
-        // 出口の周囲2マスをBlueBlock（外周）
-        for (let dy = -2; dy <= 2; dy++)
-            for (let dx = -2; dx <= 2; dx++)
-                if (Math.abs(dx) === 2 || Math.abs(dy) === 2)
-                    map[exitY + dy][exitX + dx] = SYMBOLS.BLUE_BLOCK;
+        for (let dy = -1; dy <= 1; dy++)
+            for (let dx = -1; dx <= 1; dx++) {
+                if (dy === 0 && dx === 0) continue;
+                const _by = exitY + dy, _bx = exitX + dx;
+                if (_by >= 1 && _by < ROWS-1 && _bx >= 1 && _bx < COLS-1)
+                    map[_by][_bx] = SYMBOLS.BLUE_BLOCK;
+            }
 
         // 壁の中に孤立した1マス空間を見つけるヘルパー
         const findTrappedCell29 = (minDist, xMin = 2, xMax = COLS - 3, yMin = 2, yMax = ROWS - 3) => {
