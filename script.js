@@ -13143,13 +13143,175 @@ function initMap() {
             }
         }
 
-        // ----- BLUE BLOCK SHORTCUT (40F+, 2×2以上のマルチスクリーン, 通常15%) -----
+        // ----- DEEP FLOOR (101F+): SUB-GRID SPLIT — 3×3/4×4のスクリーンまとまりで列/行分割 (30%) -----
+        // グリッド内で全スクリーンがアクティブな3×3または4×4の矩形を探し、
+        // その中の1列(V)または1行(H)の右/下通路をBlueBlockで封鎖する。
+        // サブ領域外は無傷のため迂回路が必ず存在し詰みなし・ワープ安全。
+        let _deepBlueDone = false;
+        if (floorLevel >= 101 && multiScreenMode &&
+            Math.random() < (isRoomTestMode ? 1.0 : 0.30)) {
+
+            const _dpSafeTypes = new Set([null, undefined, 'dungeon', 'maze', 'castle', 'spiral', 'breaker_room']);
+            const _dpPassH = [11, 12, 13];   // 左右通路の行
+            const _dpPassV = [18, 19, 20, 21]; // 上下通路の列
+            const _dpSafe = new Set([SYMBOLS.STAIRS, SYMBOLS.DOOR, SYMBOLS.KEY, SYMBOLS.BLUE_KEY, SYMBOLS.MERCHANT]);
+
+            // 妖精を内側FLOORへ退かすヘルパー
+            const _dpMoveFairy = (sMap) => {
+                for (let _fy = 2; _fy < ROWS-2; _fy++)
+                    for (let _fx = 2; _fx < COLS-4; _fx++)
+                        if (sMap[_fy][_fx] === SYMBOLS.FLOOR) { sMap[_fy][_fx] = SYMBOLS.FAIRY; return; }
+            };
+
+            // 3×3 → 4×4 の順でアクティブな矩形サブ領域を探す
+            const _dpSubCands = [];
+            for (const _sz of [3, 4]) {
+                for (let _ry = 0; _ry <= screenGridRows - _sz; _ry++) {
+                    for (let _rx = 0; _rx <= screenGridCols - _sz; _rx++) {
+                        let _ok = true;
+                        for (let _dy = 0; _dy < _sz && _ok; _dy++)
+                            for (let _dx = 0; _dx < _sz && _ok; _dx++)
+                                if (!screenGrid.active[_ry+_dy][_rx+_dx]) _ok = false;
+                        if (_ok) _dpSubCands.push({ rx: _rx, ry: _ry, sz: _sz });
+                    }
+                }
+                if (_dpSubCands.length > 0) break; // 3×3で見つかれば4×4は試さない
+            }
+
+            if (_dpSubCands.length > 0) {
+                const _dpSub = _dpSubCands[Math.floor(Math.random() * _dpSubCands.length)];
+                const { rx: _dpRx, ry: _dpRy, sz: _dpSz } = _dpSub;
+                const _dpSplit = Math.random() < 0.5 ? 'V' : 'H';
+
+                // V: サブ領域の中央線（cx列の右通路 + cx+1列の左通路）を両側から封鎖
+                // H: 中央線（cy行の下通路 + cy+1行の上通路）を両側から封鎖
+                // → 真の分割壁。サブ領域外は一切手を付けないため迂回路あり。
+                const _dpDivIdx = Math.floor((_dpSz - 1) / 2); // sz=3→1, sz=4→1
+                const _dpBlockedScreens = []; // BlueHole候補スクリーン
+
+                const _dpSetBlock = (_m, _y, _x) => {
+                    if (_y < 1 || _y >= ROWS-1 || _x < 1 || _x >= COLS-1) return;
+                    const _t = _m[_y][_x];
+                    if (_dpSafe.has(_t)) return;
+                    if (_t === SYMBOLS.FAIRY) _dpMoveFairy(_m);
+                    _m[_y][_x] = SYMBOLS.BLUE_BLOCK;
+                };
+
+                if (_dpSplit === 'V') {
+                    const _dpCx  = _dpRx + _dpDivIdx;     // 左側列: 右通路を封鎖
+                    const _dpCx1 = _dpCx + 1;              // 右側列: 左通路を封鎖
+                    for (let _dsy = _dpRy; _dsy < _dpRy + _dpSz; _dsy++) {
+                        // 左側列の右通路
+                        const _mL = screenGrid.maps[_dsy][_dpCx];
+                        if (_mL) {
+                            for (const _py of _dpPassH) { _dpSetBlock(_mL, _py, COLS-2); _dpSetBlock(_mL, _py, COLS-3); }
+                            if (!(_dpCx === _ssX && _dsy === _ssY) &&
+                                _dpSafeTypes.has(screenGrid.types?.[_dsy]?.[_dpCx]))
+                                _dpBlockedScreens.push({ sx: _dpCx, sy: _dsy });
+                        }
+                        // 右側列の左通路（サブ領域内に存在する場合）
+                        if (_dpCx1 < _dpRx + _dpSz) {
+                            const _mR = screenGrid.maps[_dsy][_dpCx1];
+                            if (_mR) for (const _py of _dpPassH) { _dpSetBlock(_mR, _py, 1); _dpSetBlock(_mR, _py, 2); }
+                        }
+                    }
+                } else {
+                    const _dpCy  = _dpRy + _dpDivIdx;     // 上側行: 下通路を封鎖
+                    const _dpCy1 = _dpCy + 1;              // 下側行: 上通路を封鎖
+                    for (let _dsx = _dpRx; _dsx < _dpRx + _dpSz; _dsx++) {
+                        // 上側行の下通路
+                        const _mU = screenGrid.maps[_dpCy][_dsx];
+                        if (_mU) {
+                            for (const _px of _dpPassV) { _dpSetBlock(_mU, ROWS-2, _px); _dpSetBlock(_mU, ROWS-3, _px); }
+                            if (!(_dsx === _ssX && _dpCy === _ssY) &&
+                                _dpSafeTypes.has(screenGrid.types?.[_dpCy]?.[_dsx]))
+                                _dpBlockedScreens.push({ sx: _dsx, sy: _dpCy });
+                        }
+                        // 下側行の上通路（サブ領域内に存在する場合）
+                        if (_dpCy1 < _dpRy + _dpSz) {
+                            const _mD = screenGrid.maps[_dpCy1][_dsx];
+                            if (_mD) for (const _px of _dpPassV) { _dpSetBlock(_mD, 1, _px); _dpSetBlock(_mD, 2, _px); }
+                        }
+                    }
+                }
+
+                // BlueHole: 封鎖スクリーンの1つ（スタート画面除外済み）に配置
+                const _dpHoleSrcCands = _dpBlockedScreens.filter(
+                    s => !(s.sx === _ssX && s.sy === _ssY));
+                if (_dpHoleSrcCands.length > 0) {
+                    const _dpHoleSrc = _dpHoleSrcCands[Math.floor(Math.random() * _dpHoleSrcCands.length)];
+                    const _dpHMap = screenGrid.maps[_dpHoleSrc.sy][_dpHoleSrc.sx];
+
+                    const _dpHoleCands = [];
+                    for (let _hy = 2; _hy < ROWS-2; _hy++) {
+                        for (let _hx = 2; _hx < COLS-4; _hx++) {
+                            if (_dpHMap[_hy][_hx] !== SYMBOLS.FLOOR) continue;
+                            let _open = 0;
+                            for (const [_dy, _dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+                                const _t = _dpHMap[_hy+_dy]?.[_hx+_dx];
+                                if (_t && _t !== SYMBOLS.WALL && _t !== SYMBOLS.BLUE_BLOCK) _open++;
+                            }
+                            if (_open >= 3) _dpHoleCands.push({ x: _hx, y: _hy });
+                        }
+                    }
+                    if (_dpHoleCands.length > 0) {
+                        const _dpHole = _dpHoleCands[Math.floor(Math.random() * _dpHoleCands.length)];
+                        for (let _dy = -1; _dy <= 1; _dy++)
+                            for (let _dx = -1; _dx <= 1; _dx++) {
+                                const _cy = _dpHole.y+_dy, _cx = _dpHole.x+_dx;
+                                if (_cy>=1 && _cy<ROWS-1 && _cx>=1 && _cx<COLS-1 &&
+                                    _dpHMap[_cy][_cx] !== SYMBOLS.BLUE_BLOCK)
+                                    _dpHMap[_cy][_cx] = SYMBOLS.FLOOR;
+                            }
+                        _dpHMap[_dpHole.y][_dpHole.x] = SYMBOLS.BLUE_HOLE;
+                        for (let _ly = 0; _ly < ROWS; _ly++)
+                            for (let _lx = 0; _lx < COLS; _lx++)
+                                if (_dpHMap[_ly][_lx] === SYMBOLS.LAVA) _dpHMap[_ly][_lx] = SYMBOLS.FLOOR;
+
+                        // Wisp: FOLLOW右手法・BlueHoleから5マス以上・壁隣接
+                        const _dpWispCands = [];
+                        for (let _wy = 2; _wy < ROWS-2; _wy++) {
+                            for (let _wx = 2; _wx < COLS-4; _wx++) {
+                                if (_dpHMap[_wy][_wx] !== SYMBOLS.FLOOR) continue;
+                                if (Math.abs(_wx-_dpHole.x)+Math.abs(_wy-_dpHole.y) < 5) continue;
+                                const _nearWall = [[0,1],[0,-1],[1,0],[-1,0]].some(([_dy,_dx]) =>
+                                    _dpHMap[_wy+_dy]?.[_wx+_dx] === SYMBOLS.WALL);
+                                if (_nearWall) _dpWispCands.push({ x: _wx, y: _wy });
+                            }
+                        }
+                        if (_dpWispCands.length > 0) {
+                            const _dpWisp = _dpWispCands[Math.floor(Math.random() * _dpWispCands.length)];
+                            screenGrid.wisps[_dpHoleSrc.sy][_dpHoleSrc.sx].push({
+                                x: _dpWisp.x, y: _dpWisp.y, dir: 1, mode: 'FOLLOW'
+                            });
+                            addKeyLog("⊙ A barrier seals part of the dungeon. Guide the Wisp to ⊙.");
+                            _deepBlueDone = true;
+                        }
+                    }
+                }
+
+                // 安全チェック: Hole/Wisp未配置なら全BlueBlockを除去
+                if (!_deepBlueDone) {
+                    for (let _sy = 0; _sy < screenGridRows; _sy++)
+                        for (let _sx = 0; _sx < screenGridCols; _sx++) {
+                            const _m = screenGrid.maps[_sy]?.[_sx];
+                            if (!_m) continue;
+                            for (let _y = 0; _y < ROWS; _y++)
+                                for (let _x = 0; _x < COLS; _x++)
+                                    if (_m[_y][_x] === SYMBOLS.BLUE_BLOCK) _m[_y][_x] = SYMBOLS.FLOOR;
+                        }
+                }
+            }
+        }
+
+        // ----- BLUE BLOCK SHORTCUT (40F+, 2×2以上のマルチスクリーン) -----
+        // 通常: 15% / 101F+で列分割なし時は確定 / テストモード中は確定
         // 1画面の1通路をBlueBlockで塞ぐ。ウィスプ→BlueHoleでショートカット開通。
-        // テストモード中(isRoomTestMode)は40F+マルチスクリーンで必ず発動。
+        const _bsForced = (floorLevel >= 101 && !_deepBlueDone);
         if (multiScreenMode && screenGridRows >= 2 && screenGridCols >= 2 &&
             !FIXED_STAGE_FLOORS.includes(floorLevel) && floorLevel >= 40 &&
             floorLevel !== 98 &&
-            Math.random() < (isRoomTestMode ? 1.0 : 0.15)) {
+            (_bsForced || Math.random() < (isRoomTestMode ? 1.0 : 0.15))) {
 
             const _bsPassH = [11, 12, 13];
             const _bsPassV = [18, 19, 20, 21];
