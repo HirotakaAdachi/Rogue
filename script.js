@@ -13091,6 +13091,10 @@ function initMap() {
                                 _f98HMap[_cy][_cx] = SYMBOLS.FLOOR;
                         }
                     _f98HMap[_f98Hole.y][_f98Hole.x] = SYMBOLS.BLUE_HOLE;
+                    // 溶岩床を除去（ウィスプ誘導のためのブロック設置を妨げないよう）
+                    for (let _ly = 0; _ly < ROWS; _ly++)
+                        for (let _lx = 0; _lx < COLS; _lx++)
+                            if (_f98HMap[_ly][_lx] === SYMBOLS.LAVA) _f98HMap[_ly][_lx] = SYMBOLS.FLOOR;
 
                     // Wisp: BlueHoleから5マス以上・壁隣接（FOLLOW右手法）
                     const _f98WispCands = [];
@@ -13231,6 +13235,10 @@ function initMap() {
                                     _bsMap[_bsCy][_bsCx] = SYMBOLS.FLOOR;
                             }
                         _bsMap[_bsHole.y][_bsHole.x] = SYMBOLS.BLUE_HOLE;
+                        // 溶岩床を除去（ウィスプ誘導のためのブロック設置を妨げないよう）
+                        for (let _bsLy = 0; _bsLy < ROWS; _bsLy++)
+                            for (let _bsLx = 0; _bsLx < COLS; _bsLx++)
+                                if (_bsMap[_bsLy][_bsLx] === SYMBOLS.LAVA) _bsMap[_bsLy][_bsLx] = SYMBOLS.FLOOR;
 
                         // Wisp: BlueHoleから5マス以上・壁隣接（FOLLOW右手法が機能するため）
                         const _bsWispCands = [];
@@ -13338,6 +13346,10 @@ function initMap() {
                     const _bhIdx = Math.floor(Math.random() * _inner31.length);
                     const _bh31 = _inner31[_bhIdx];
                     _ss31Map[_bh31.y][_bh31.x] = SYMBOLS.BLUE_HOLE;
+                    // 溶岩床を除去（ウィスプ誘導のためのブロック設置を妨げないよう）
+                    for (let _31ly = 0; _31ly < ROWS; _31ly++)
+                        for (let _31lx = 0; _31lx < COLS; _31lx++)
+                            if (_ss31Map[_31ly][_31lx] === SYMBOLS.LAVA) _ss31Map[_31ly][_31lx] = SYMBOLS.FLOOR;
                     // BlueHole周囲1マスを正方形にFLOOR化（WALLも削る、BLUE_BLOCKは保持）
                     for (let _dy = -1; _dy <= 1; _dy++)
                         for (let _dx = -1; _dx <= 1; _dx++) {
