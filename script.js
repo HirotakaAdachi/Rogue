@@ -16142,6 +16142,14 @@ function initMap() {
             map[wpos.y][wpos.x] = SYMBOLS.FLOOR;
             wisps.push({ x: wpos.x, y: wpos.y, dir: i === 0 ? 1 : 2, mode: 'STRAIGHT' });
         }
+        // ウィスプ追加1体: マップ全体のランダムな壁の中に封印
+        {
+            const _w3pos = findTrappedCell29(8);
+            if (_w3pos) {
+                map[_w3pos.y][_w3pos.x] = SYMBOLS.FLOOR;
+                wisps.push({ x: _w3pos.x, y: _w3pos.y, dir: Math.floor(Math.random() * 4), mode: 'STRAIGHT' });
+            }
+        }
 
         // BlueHole: 主人公の近く（左上エリア）に配置
         const _bhX = 8, _bhY = 8;
