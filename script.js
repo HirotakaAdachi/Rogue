@@ -13483,6 +13483,76 @@ function initMap() {
             }
         }
 
+        // ----- 101F+ 深層階: 出口周囲1マスをBlueBlockで囲む (3%) -----
+        if (multiScreenMode && floorLevel >= 101 &&
+            typeof doorScreenX !== 'undefined' && typeof doorScreenY !== 'undefined' &&
+            Math.random() < (isRoomTestMode ? 1.0 : 0.03)) {
+
+            const _d101Map = screenGrid.maps[doorScreenY]?.[doorScreenX];
+            if (_d101Map) {
+                let _d101Ex = -1, _d101Ey = -1;
+                _d101Outer: for (let _y = 1; _y < ROWS-1; _y++)
+                    for (let _x = 1; _x < COLS-1; _x++)
+                        if (_d101Map[_y][_x] === SYMBOLS.DOOR || _d101Map[_y][_x] === SYMBOLS.STAIRS)
+                            { _d101Ex = _x; _d101Ey = _y; break _d101Outer; }
+
+                if (_d101Ex >= 0) {
+                    const _d101Safe = new Set([SYMBOLS.KEY, SYMBOLS.BLUE_KEY, SYMBOLS.DOOR, SYMBOLS.STAIRS]);
+                    for (let _dy = -1; _dy <= 1; _dy++) {
+                        for (let _dx = -1; _dx <= 1; _dx++) {
+                            if (_dy === 0 && _dx === 0) continue;
+                            const _ty = _d101Ey+_dy, _tx = _d101Ex+_dx;
+                            if (_ty<1||_ty>=ROWS-1||_tx<1||_tx>=COLS-1) continue;
+                            if (_d101Safe.has(_d101Map[_ty][_tx])) continue;
+                            if (_d101Map[_ty][_tx] === SYMBOLS.FAIRY) {
+                                for (let _fy=2;_fy<ROWS-2;_fy++) for (let _fx=2;_fx<COLS-4;_fx++)
+                                    if (_d101Map[_fy][_fx]===SYMBOLS.FLOOR){_d101Map[_fy][_fx]=SYMBOLS.FAIRY;_fy=ROWS;break;}
+                            }
+                            _d101Map[_ty][_tx] = SYMBOLS.BLUE_BLOCK;
+                        }
+                    }
+                    _relocateEnemiesFromBlocks(_d101Map, screenGrid.enemies[doorScreenY][doorScreenX]);
+
+                    const _d101HC = [];
+                    for (let _hy=2;_hy<ROWS-2;_hy++) for (let _hx=2;_hx<COLS-2;_hx++) {
+                        if (_d101Map[_hy][_hx]!==SYMBOLS.FLOOR) continue;
+                        if (Math.abs(_hx-_d101Ex)+Math.abs(_hy-_d101Ey)<5) continue;
+                        let _op=0;
+                        for (const [_dy,_dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+                            const _t=_d101Map[_hy+_dy]?.[_hx+_dx];
+                            if (_t&&_t!==SYMBOLS.WALL&&_t!==SYMBOLS.BLUE_BLOCK) _op++;
+                        }
+                        if (_op>=3) _d101HC.push({x:_hx,y:_hy});
+                    }
+                    if (_d101HC.length > 0) {
+                        const _d101H = _d101HC[Math.floor(Math.random()*_d101HC.length)];
+                        for (let _dy=-1;_dy<=1;_dy++) for (let _dx=-1;_dx<=1;_dx++) {
+                            const _cy=_d101H.y+_dy,_cx=_d101H.x+_dx;
+                            if (_cy>=1&&_cy<ROWS-1&&_cx>=1&&_cx<COLS-1&&_d101Map[_cy][_cx]!==SYMBOLS.BLUE_BLOCK)
+                                _d101Map[_cy][_cx]=SYMBOLS.FLOOR;
+                        }
+                        _d101Map[_d101H.y][_d101H.x] = SYMBOLS.BLUE_HOLE;
+                        for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
+                            if (_d101Map[_ly][_lx]===SYMBOLS.LAVA) _d101Map[_ly][_lx]=SYMBOLS.FLOOR;
+
+                        const _d101WC=[];
+                        for (let _wy=2;_wy<ROWS-2;_wy++) for (let _wx=2;_wx<COLS-2;_wx++) {
+                            if (_d101Map[_wy][_wx]!==SYMBOLS.FLOOR) continue;
+                            if (Math.abs(_wx-_d101H.x)+Math.abs(_wy-_d101H.y)<5) continue;
+                            const _nw=[[0,1],[0,-1],[1,0],[-1,0]].some(([_dy,_dx])=>
+                                _d101Map[_wy+_dy]?.[_wx+_dx]===SYMBOLS.WALL);
+                            if (_nw) _d101WC.push({x:_wx,y:_wy});
+                        }
+                        if (_d101WC.length > 0) {
+                            const _d101W=_d101WC[Math.floor(Math.random()*_d101WC.length)];
+                            screenGrid.wisps[doorScreenY][doorScreenX].push({x:_d101W.x,y:_d101W.y,dir:1,mode:'FOLLOW'});
+                            addKeyLog("⊙ The exit is sealed. Guide the Blue Wisp (※) to ⊙ to break the seal.");
+                        }
+                    }
+                }
+            }
+        }
+
         // ----- 横3画面(3×1): 中央スクリーンの右通路をBlueBlockで封鎖 (50%) -----
         // screenGridCols=3, screenGridRows=1 の横一列レイアウト専用。
         // 中央[1,0]の右通路を塞ぎ、BlueHole+Wispを配置。右スクリーンへはBlueHole解除が必要。
