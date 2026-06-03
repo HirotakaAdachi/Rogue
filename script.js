@@ -13337,6 +13337,32 @@ function initMap() {
             }
         };
 
+        // ウィスプを確実に配置するヘルパー（壁隣接優先→なければ任意FLOOR）
+        const _placeWispRobust = (sMap, wispArr, holeX, holeY) => {
+            const _tries = [
+                // 1st: 壁隣接 + 5マス以上
+                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=5 &&
+                    [[0,1],[0,-1],[1,0],[-1,0]].some(([dy,dx])=>sMap[y+dy]?.[x+dx]===SYMBOLS.WALL),
+                // 2nd: 壁隣接なしでも5マス以上
+                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=5,
+                // 3rd: 3マス以上（最終手段）
+                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=3,
+            ];
+            for (const _cond of _tries) {
+                const _cands = [];
+                for (let _wy=2;_wy<ROWS-2;_wy++) for (let _wx=2;_wx<COLS-2;_wx++) {
+                    if (sMap[_wy][_wx]!==SYMBOLS.FLOOR) continue;
+                    if (_cond(_wy,_wx)) _cands.push({x:_wx,y:_wy});
+                }
+                if (_cands.length > 0) {
+                    const _w = _cands[Math.floor(Math.random()*_cands.length)];
+                    wispArr.push({x:_w.x, y:_w.y, dir:1, mode:'FOLLOW'});
+                    return true;
+                }
+            }
+            return false;
+        };
+
         // ----- FLOOR 42: デバッグテスト — 出口(DOOR)周囲1マスをBlueBlockで確定封鎖 -----
         // BlueHole+Wispも同スクリーンに配置。レンダリング・動作確認用。
         if (floorLevel === 42 && multiScreenMode && screenGrid &&
@@ -13390,20 +13416,9 @@ function initMap() {
                         _t42Map[_t42H.y][_t42H.x] = SYMBOLS.BLUE_HOLE;
                         for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
                             if (_t42Map[_ly][_lx]===SYMBOLS.LAVA) _t42Map[_ly][_lx]=SYMBOLS.FLOOR;
-                        // Wisp
-                        const _t42WC=[];
-                        for (let _wy=2;_wy<ROWS-2;_wy++) for (let _wx=2;_wx<COLS-2;_wx++) {
-                            if (_t42Map[_wy][_wx]!==SYMBOLS.FLOOR) continue;
-                            if (Math.abs(_wx-_t42H.x)+Math.abs(_wy-_t42H.y)<5) continue;
-                            const _nw=[[0,1],[0,-1],[1,0],[-1,0]].some(([_dy,_dx])=>
-                                _t42Map[_wy+_dy]?.[_wx+_dx]===SYMBOLS.WALL);
-                            if (_nw) _t42WC.push({x:_wx,y:_wy});
-                        }
-                        if (_t42WC.length > 0) {
-                            const _t42W=_t42WC[Math.floor(Math.random()*_t42WC.length)];
-                            screenGrid.wisps[doorScreenY][doorScreenX].push({x:_t42W.x,y:_t42W.y,dir:1,mode:'FOLLOW'});
+                        // Wisp（壁隣接優先→フォールバックで必ず配置）
+                        if (_placeWispRobust(_t42Map, screenGrid.wisps[doorScreenY][doorScreenX], _t42H.x, _t42H.y))
                             addKeyLog("⊙ [42F] Exit sealed. Guide the Blue Wisp (※) to ⊙ to unseal it.");
-                        }
                     }
                 }
             }
@@ -13465,19 +13480,8 @@ function initMap() {
                         for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
                             if (_rxMap[_ly][_lx]===SYMBOLS.LAVA) _rxMap[_ly][_lx]=SYMBOLS.FLOOR;
 
-                        const _rxWC=[];
-                        for (let _wy=2;_wy<ROWS-2;_wy++) for (let _wx=2;_wx<COLS-2;_wx++) {
-                            if (_rxMap[_wy][_wx]!==SYMBOLS.FLOOR) continue;
-                            if (Math.abs(_wx-_rxH.x)+Math.abs(_wy-_rxH.y)<5) continue;
-                            const _nw=[[0,1],[0,-1],[1,0],[-1,0]].some(([_dy,_dx])=>
-                                _rxMap[_wy+_dy]?.[_wx+_dx]===SYMBOLS.WALL);
-                            if (_nw) _rxWC.push({x:_wx,y:_wy});
-                        }
-                        if (_rxWC.length > 0) {
-                            const _rxW=_rxWC[Math.floor(Math.random()*_rxWC.length)];
-                            screenGrid.wisps[doorScreenY][doorScreenX].push({x:_rxW.x,y:_rxW.y,dir:1,mode:'FOLLOW'});
+                        if (_placeWispRobust(_rxMap, screenGrid.wisps[doorScreenY][doorScreenX], _rxH.x, _rxH.y))
                             addKeyLog("⊙ The exit is sealed by Blue Blocks. Guide the Wisp (※) to ⊙.");
-                        }
                     }
                 }
             }
@@ -13535,19 +13539,8 @@ function initMap() {
                         for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
                             if (_d101Map[_ly][_lx]===SYMBOLS.LAVA) _d101Map[_ly][_lx]=SYMBOLS.FLOOR;
 
-                        const _d101WC=[];
-                        for (let _wy=2;_wy<ROWS-2;_wy++) for (let _wx=2;_wx<COLS-2;_wx++) {
-                            if (_d101Map[_wy][_wx]!==SYMBOLS.FLOOR) continue;
-                            if (Math.abs(_wx-_d101H.x)+Math.abs(_wy-_d101H.y)<5) continue;
-                            const _nw=[[0,1],[0,-1],[1,0],[-1,0]].some(([_dy,_dx])=>
-                                _d101Map[_wy+_dy]?.[_wx+_dx]===SYMBOLS.WALL);
-                            if (_nw) _d101WC.push({x:_wx,y:_wy});
-                        }
-                        if (_d101WC.length > 0) {
-                            const _d101W=_d101WC[Math.floor(Math.random()*_d101WC.length)];
-                            screenGrid.wisps[doorScreenY][doorScreenX].push({x:_d101W.x,y:_d101W.y,dir:1,mode:'FOLLOW'});
+                        if (_placeWispRobust(_d101Map, screenGrid.wisps[doorScreenY][doorScreenX], _d101H.x, _d101H.y))
                             addKeyLog("⊙ The exit is sealed. Guide the Blue Wisp (※) to ⊙ to break the seal.");
-                        }
                     }
                 }
             }
