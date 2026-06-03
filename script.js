@@ -13409,6 +13409,80 @@ function initMap() {
             }
         }
 
+        // ----- 43〜97F ランダムマルチスクリーン: 出口周囲1マスをBlueBlockで囲む (25%) -----
+        // 42Fと同タイプの仕掛け。Blue Hole解除で出口にアクセス可能になる。
+        if (multiScreenMode && floorLevel >= 43 && floorLevel <= 97 &&
+            !FIXED_STAGE_FLOORS.includes(floorLevel) &&
+            typeof doorScreenX !== 'undefined' && typeof doorScreenY !== 'undefined' &&
+            Math.random() < (isRoomTestMode ? 1.0 : 0.25)) {
+
+            const _rxMap = screenGrid.maps[doorScreenY]?.[doorScreenX];
+            if (_rxMap) {
+                let _rxEx = -1, _rxEy = -1;
+                _rxOuter: for (let _y = 1; _y < ROWS-1; _y++)
+                    for (let _x = 1; _x < COLS-1; _x++)
+                        if (_rxMap[_y][_x] === SYMBOLS.DOOR || _rxMap[_y][_x] === SYMBOLS.STAIRS)
+                            { _rxEx = _x; _rxEy = _y; break _rxOuter; }
+
+                if (_rxEx >= 0) {
+                    const _rxSafe = new Set([SYMBOLS.KEY, SYMBOLS.BLUE_KEY, SYMBOLS.DOOR, SYMBOLS.STAIRS]);
+                    // 出口周囲1マス（8方向）をBlueBlockで囲む
+                    for (let _dy = -1; _dy <= 1; _dy++) {
+                        for (let _dx = -1; _dx <= 1; _dx++) {
+                            if (_dy === 0 && _dx === 0) continue;
+                            const _ty = _rxEy+_dy, _tx = _rxEx+_dx;
+                            if (_ty<1||_ty>=ROWS-1||_tx<1||_tx>=COLS-1) continue;
+                            if (_rxSafe.has(_rxMap[_ty][_tx])) continue;
+                            if (_rxMap[_ty][_tx] === SYMBOLS.FAIRY) {
+                                for (let _fy=2;_fy<ROWS-2;_fy++) for (let _fx=2;_fx<COLS-4;_fx++)
+                                    if (_rxMap[_fy][_fx]===SYMBOLS.FLOOR){_rxMap[_fy][_fx]=SYMBOLS.FAIRY;_fy=ROWS;break;}
+                            }
+                            _rxMap[_ty][_tx] = SYMBOLS.BLUE_BLOCK;
+                        }
+                    }
+                    _relocateEnemiesFromBlocks(_rxMap, screenGrid.enemies[doorScreenY][doorScreenX]);
+
+                    // BlueHole: 出口から5マス以上・開けた床
+                    const _rxHC = [];
+                    for (let _hy=2;_hy<ROWS-2;_hy++) for (let _hx=2;_hx<COLS-2;_hx++) {
+                        if (_rxMap[_hy][_hx]!==SYMBOLS.FLOOR) continue;
+                        if (Math.abs(_hx-_rxEx)+Math.abs(_hy-_rxEy)<5) continue;
+                        let _op=0;
+                        for (const [_dy,_dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+                            const _t=_rxMap[_hy+_dy]?.[_hx+_dx];
+                            if (_t&&_t!==SYMBOLS.WALL&&_t!==SYMBOLS.BLUE_BLOCK) _op++;
+                        }
+                        if (_op>=3) _rxHC.push({x:_hx,y:_hy});
+                    }
+                    if (_rxHC.length > 0) {
+                        const _rxH = _rxHC[Math.floor(Math.random()*_rxHC.length)];
+                        for (let _dy=-1;_dy<=1;_dy++) for (let _dx=-1;_dx<=1;_dx++) {
+                            const _cy=_rxH.y+_dy,_cx=_rxH.x+_dx;
+                            if (_cy>=1&&_cy<ROWS-1&&_cx>=1&&_cx<COLS-1&&_rxMap[_cy][_cx]!==SYMBOLS.BLUE_BLOCK)
+                                _rxMap[_cy][_cx]=SYMBOLS.FLOOR;
+                        }
+                        _rxMap[_rxH.y][_rxH.x] = SYMBOLS.BLUE_HOLE;
+                        for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
+                            if (_rxMap[_ly][_lx]===SYMBOLS.LAVA) _rxMap[_ly][_lx]=SYMBOLS.FLOOR;
+
+                        const _rxWC=[];
+                        for (let _wy=2;_wy<ROWS-2;_wy++) for (let _wx=2;_wx<COLS-2;_wx++) {
+                            if (_rxMap[_wy][_wx]!==SYMBOLS.FLOOR) continue;
+                            if (Math.abs(_wx-_rxH.x)+Math.abs(_wy-_rxH.y)<5) continue;
+                            const _nw=[[0,1],[0,-1],[1,0],[-1,0]].some(([_dy,_dx])=>
+                                _rxMap[_wy+_dy]?.[_wx+_dx]===SYMBOLS.WALL);
+                            if (_nw) _rxWC.push({x:_wx,y:_wy});
+                        }
+                        if (_rxWC.length > 0) {
+                            const _rxW=_rxWC[Math.floor(Math.random()*_rxWC.length)];
+                            screenGrid.wisps[doorScreenY][doorScreenX].push({x:_rxW.x,y:_rxW.y,dir:1,mode:'FOLLOW'});
+                            addKeyLog("⊙ The exit is sealed by Blue Blocks. Guide the Wisp (※) to ⊙.");
+                        }
+                    }
+                }
+            }
+        }
+
         // ----- 横3画面(3×1): 中央スクリーンの右通路をBlueBlockで封鎖 (50%) -----
         // screenGridCols=3, screenGridRows=1 の横一列レイアウト専用。
         // 中央[1,0]の右通路を塞ぎ、BlueHole+Wispを配置。右スクリーンへはBlueHole解除が必要。
