@@ -13055,6 +13055,12 @@ function initMap() {
                 }
             }
 
+            // 敵をBlueBlock上から退かす（封鎖列の全スクリーン）
+            for (let _f98ESy = 0; _f98ESy < screenGridRows; _f98ESy++) {
+                if (!screenGrid.active[_f98ESy][_f98DivCol]) continue;
+                const _f98EM = screenGrid.maps[_f98ESy][_f98DivCol];
+                if (_f98EM) _relocateEnemiesFromBlocks(_f98EM, screenGrid.enemies[_f98ESy][_f98DivCol]);
+            }
             // BlueHole: 封鎖列のスタート画面以外・奇妙な部屋タイプを除外してランダム選択
             const _f98SafeTypes = new Set([null, undefined, 'dungeon', 'maze', 'castle', 'spiral', 'breaker_room']);
             const _f98HoleSyCands = [];
@@ -13237,6 +13243,11 @@ function initMap() {
                     }
                 }
 
+                // 敵をBlueBlock上から退かす（封鎖スクリーン全て）
+                for (const _dpES of _dpBlockedScreens)
+                    _relocateEnemiesFromBlocks(
+                        screenGrid.maps[_dpES.sy][_dpES.sx],
+                        screenGrid.enemies[_dpES.sy][_dpES.sx]);
                 // BlueHole: 封鎖スクリーンの1つ（スタート画面除外済み）に配置
                 const _dpHoleSrcCands = _dpBlockedScreens.filter(
                     s => !(s.sx === _ssX && s.sy === _ssY));
@@ -13306,6 +13317,26 @@ function initMap() {
             }
         }
 
+        // BlueBlock上の敵を近くのFLOORへ退かすヘルパー（全BlueBlock配置箇所で共有）
+        const _relocateEnemiesFromBlocks = (sMap, sEnemies) => {
+            for (const _e of (sEnemies || [])) {
+                if (sMap[_e.y]?.[_e.x] !== SYMBOLS.BLUE_BLOCK) continue;
+                for (let _r = 1; _r <= 6; _r++) {
+                    let _moved = false;
+                    for (let _dy = -_r; _dy <= _r && !_moved; _dy++)
+                        for (let _dx = -_r; _dx <= _r && !_moved; _dx++) {
+                            if (Math.abs(_dy) !== _r && Math.abs(_dx) !== _r) continue;
+                            const _ny = _e.y+_dy, _nx = _e.x+_dx;
+                            if (_ny<1||_ny>=ROWS-1||_nx<1||_nx>=COLS-1) continue;
+                            if (sMap[_ny][_nx] !== SYMBOLS.FLOOR) continue;
+                            if (sEnemies.some(oe => oe !== _e && oe.x === _nx && oe.y === _ny)) continue;
+                            _e.x = _nx; _e.y = _ny; _moved = true;
+                        }
+                    if (_moved || sMap[_e.y]?.[_e.x] !== SYMBOLS.BLUE_BLOCK) break;
+                }
+            }
+        };
+
         // ----- FLOOR 42: デバッグテスト — 出口(DOOR)周囲1マスをBlueBlockで確定封鎖 -----
         // BlueHole+Wispも同スクリーンに配置。レンダリング・動作確認用。
         if (floorLevel === 42 && multiScreenMode && screenGrid &&
@@ -13335,6 +13366,8 @@ function initMap() {
                             _t42Map[_ty][_tx] = SYMBOLS.BLUE_BLOCK;
                         }
                     }
+                    // 敵をBlueBlock上から退かす
+                    _relocateEnemiesFromBlocks(_t42Map, screenGrid.enemies[doorScreenY][doorScreenX]);
                     // BlueHole: 出口から5マス以上・開けた床
                     const _t42HC = [];
                     for (let _hy=2;_hy<ROWS-2;_hy++) for (let _hx=2;_hx<COLS-2;_hx++) {
@@ -13408,6 +13441,8 @@ function initMap() {
                     }
                 }
 
+                // 敵をBlueBlock上から退かす
+                _relocateEnemiesFromBlocks(_h3Map, screenGrid.enemies[0][1]);
                 // BlueHole: 中央スクリーン内の開けた床（右端から離れた位置）
                 const _h3HoleCands = [];
                 for (let _hy = 2; _hy < ROWS-2; _hy++) {
@@ -13531,6 +13566,8 @@ function initMap() {
                         for (const _px of _bsPassV) { _bsSetBlock(ROWS-2, _px); _bsSetBlock(ROWS-3, _px); }
                     }
 
+                    // 敵をBlueBlock上から退かす
+                    _relocateEnemiesFromBlocks(_bsMap, screenGrid.enemies[_bsSy][_bsSx]);
                     // BlueHole: 内側の開けた床（4方向のうち3つ以上が開放）に配置
                     const _bsHoleCands = [];
                     for (let _bsHy = 3; _bsHy < ROWS-3; _bsHy++) {
