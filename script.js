@@ -4753,6 +4753,51 @@ function _validateBlueBlockSafety() {
     }
 }
 
+// Blue Hole画面にWEAVERがいる場合、WISP_SPAWNERを追加配置する
+// _validateBlueBlockSafety() の後に呼ぶこと（同関数がWISP_SPAWNERを除去するため）
+function _addWispSpawnerForWeaver() {
+    const _place = (sMap, sEnemies) => {
+        // Blue Hole があるか確認
+        let bhX = -1, bhY = -1;
+        _bhOuter: for (let y = 0; y < ROWS; y++)
+            for (let x = 0; x < COLS; x++)
+                if (sMap[y][x] === SYMBOLS.BLUE_HOLE) { bhX = x; bhY = y; break _bhOuter; }
+        if (bhX < 0) return;
+        // WEAVER がいるか確認
+        if (!sEnemies.some(e => e.type === 'WEAVER')) return;
+        // 既に WISP_SPAWNER がいたらスキップ
+        if (sEnemies.some(e => e.type === 'WISP_SPAWNER')) return;
+        // WISP_SPAWNER を配置（Blue Holeから5マス以上・FLOOR優先）
+        const _tryPlace = (minDist) => {
+            for (let t = 0; t < 400; t++) {
+                const cx = 2 + Math.floor(Math.random() * (COLS - 4));
+                const cy = 2 + Math.floor(Math.random() * (ROWS - 4));
+                if (sMap[cy][cx] !== SYMBOLS.FLOOR) continue;
+                if (Math.abs(cx-bhX)+Math.abs(cy-bhY) < minDist) continue;
+                if (sEnemies.some(e => e.x === cx && e.y === cy)) continue;
+                const wsHp = 60 + floorLevel * 3;
+                sEnemies.push({ type: 'WISP_SPAWNER', x: cx, y: cy,
+                    hp: wsHp, maxHp: wsHp, flashUntil: 0, offsetX: 0, offsetY: 0,
+                    expValue: 50, stunTurns: 0, spawnCooldown: 10, immuneToWind: true });
+                return true;
+            }
+            return false;
+        };
+        if (!_tryPlace(5)) _tryPlace(0); // 距離条件を緩和してリトライ
+    };
+    if (multiScreenMode && screenGrid) {
+        for (let sy = 0; sy < screenGridRows; sy++)
+            for (let sx = 0; sx < screenGridCols; sx++) {
+                if (screenGrid.active && !screenGrid.active[sy][sx]) continue;
+                const sMap = screenGrid.maps[sy][sx];
+                if (!sMap) continue;
+                _place(sMap, screenGrid.enemies[sy][sx] || []);
+            }
+    } else {
+        _place(map, enemies);
+    }
+}
+
 function _initBlueKeyRoom() {
     // 全面を壁で初期化してから内側を床に
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) map[y][x] = SYMBOLS.WALL;
@@ -23917,6 +23962,7 @@ async function startFloorTransition() {
     // 完全暗転後にマップ生成（ここで1回だけinitMapを呼ぶ。continueGame等の呼び出し元では呼ばない）
     initMap();
     _validateBlueBlockSafety(); // BlueBlock詰み防止チェック
+    _addWispSpawnerForWeaver(); // WEAVER+BlueHole画面にWISP_SPAWNERを追加
     spawnQueenIfEligible();
     // NOVEL_CORRIDOR: BGM停止 + 地響き開始（部屋0から）+ 暗闇リセット
     if (isRoomTestMode && forcedLayoutType === 'NOVEL_CORRIDOR') {
