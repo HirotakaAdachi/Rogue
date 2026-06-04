@@ -9085,10 +9085,7 @@ function initMap() {
 
             // ---- RIVER_CROSSING: 川を渡れ ----
             } else if (bizType === 'RIVER_CROSSING') {
-                // 横連結チェーンに属する場合は共有hazardを使用
-                const _rcHazard = (_riverChain && _riverChain.sy === sy && _riverChain.sxSet.has(sx))
-                    ? _riverChain.hazard
-                    : (Math.random() < 0.33 ? SYMBOLS.LAVA : Math.random() < 0.5 ? SYMBOLS.ICE : SYMBOLS.POISON);
+                const _rcHazard = Math.random() < 0.33 ? SYMBOLS.LAVA : Math.random() < 0.5 ? SYMBOLS.ICE : SYMBOLS.POISON;
                 const _rcY1=10, _rcY2=14;
                 for (let y=_rcY1;y<=_rcY2;y++) for (let x=2;x<COLS-2;x++) sMap[y][x]=_rcHazard;
                 const _rcMakeRooms=(yMin,yMax,count)=>{
