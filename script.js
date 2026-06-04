@@ -5368,9 +5368,9 @@ function initMap() {
             const _shapeRoll50 = Math.random();
             let _gridMsg;
             if (floorLevel === 98) {
-                screenGridSize = 10; screenGridCols = 10; screenGridRows = 10;
-                addKeyLog("⚠️ DANGER ZONE: 10x10 MEGA LABYRINTH!");
-                addLog("Explore 10x10 screens to find the KEY and EXIT.");
+                screenGridSize = 5; screenGridCols = 5; screenGridRows = 5;
+                addKeyLog("⚠️ DANGER ZONE: 5x5 MEGA LABYRINTH!");
+                addLog("Explore 5x5 screens to find the KEY and EXIT.");
             } else if (floorLevel >= 90) {
                 // 確率配分: 2x3=12%, 3x2=12%, 3x4=12%, 4x3=12%, L=18%, T=17%, H=17%（3x3廃止）
                 if (_shapeRoll50 < 0.12) {
