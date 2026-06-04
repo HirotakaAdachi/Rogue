@@ -5368,9 +5368,9 @@ function initMap() {
             const _shapeRoll50 = Math.random();
             let _gridMsg;
             if (floorLevel === 98) {
-                screenGridSize = 5; screenGridCols = 5; screenGridRows = 5;
-                addKeyLog("⚠️ DANGER ZONE: 5x5 MEGA LABYRINTH!");
-                addLog("Explore 5x5 screens to find the KEY and EXIT.");
+                screenGridSize = 10; screenGridCols = 10; screenGridRows = 10;
+                addKeyLog("⚠️ DANGER ZONE: 10x10 MEGA LABYRINTH!");
+                addLog("Explore 10x10 screens to find the KEY and EXIT.");
             } else if (floorLevel >= 90) {
                 // 確率配分: 2x3=12%, 3x2=12%, 3x4=12%, 4x3=12%, L=18%, T=17%, H=17%（3x3廃止）
                 if (_shapeRoll50 < 0.12) {
@@ -12982,6 +12982,75 @@ function initMap() {
             }
         }
 
+        // ===== BlueBlock ヘルパー関数（98F・42F・43-97F・101F+・3×1 共通） =====
+        const _relocateEnemiesFromBlocks = (sMap, sEnemies) => {
+            for (const _e of (sEnemies || [])) {
+                if (sMap[_e.y]?.[_e.x] !== SYMBOLS.BLUE_BLOCK) continue;
+                for (let _r = 1; _r <= 6; _r++) {
+                    let _moved = false;
+                    for (let _dy = -_r; _dy <= _r && !_moved; _dy++)
+                        for (let _dx = -_r; _dx <= _r && !_moved; _dx++) {
+                            if (Math.abs(_dy) !== _r && Math.abs(_dx) !== _r) continue;
+                            const _ny = _e.y+_dy, _nx = _e.x+_dx;
+                            if (_ny<1||_ny>=ROWS-1||_nx<1||_nx>=COLS-1) continue;
+                            if (sMap[_ny][_nx] !== SYMBOLS.FLOOR) continue;
+                            if (sEnemies.some(oe => oe !== _e && oe.x === _nx && oe.y === _ny)) continue;
+                            _e.x = _nx; _e.y = _ny; _moved = true;
+                        }
+                    if (_moved || sMap[_e.y]?.[_e.x] !== SYMBOLS.BLUE_BLOCK) break;
+                }
+            }
+        };
+        const _placeBlueHoleRobust = (sMap, exitX, exitY) => {
+            const _tiers = [
+                (y, x) => Math.abs(x-exitX)+Math.abs(y-exitY)>=5 &&
+                    [[0,1],[0,-1],[1,0],[-1,0]].filter(([dy,dx])=>{const t=sMap[y+dy]?.[x+dx];return t&&t!==SYMBOLS.WALL&&t!==SYMBOLS.BLUE_BLOCK;}).length>=3,
+                (y, x) => Math.abs(x-exitX)+Math.abs(y-exitY)>=3,
+                (y, x) => !(x===exitX && y===exitY),
+            ];
+            for (const _cond of _tiers) {
+                const _cands = [];
+                for (let _hy=2;_hy<ROWS-2;_hy++) for (let _hx=2;_hx<COLS-2;_hx++) {
+                    if (sMap[_hy][_hx]!==SYMBOLS.FLOOR) continue;
+                    if (_cond(_hy,_hx)) _cands.push({x:_hx,y:_hy});
+                }
+                if (_cands.length > 0) {
+                    const _h = _cands[Math.floor(Math.random()*_cands.length)];
+                    for (let _dy=-1;_dy<=1;_dy++) for (let _dx=-1;_dx<=1;_dx++) {
+                        const _cy=_h.y+_dy,_cx=_h.x+_dx;
+                        if (_cy>=1&&_cy<ROWS-1&&_cx>=1&&_cx<COLS-1&&sMap[_cy][_cx]!==SYMBOLS.BLUE_BLOCK)
+                            sMap[_cy][_cx]=SYMBOLS.FLOOR;
+                    }
+                    sMap[_h.y][_h.x]=SYMBOLS.BLUE_HOLE;
+                    for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
+                        if (sMap[_ly][_lx]===SYMBOLS.LAVA) sMap[_ly][_lx]=SYMBOLS.FLOOR;
+                    return _h;
+                }
+            }
+            return null;
+        };
+        const _placeWispRobust = (sMap, wispArr, holeX, holeY) => {
+            const _tries = [
+                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=5 &&
+                    [[0,1],[0,-1],[1,0],[-1,0]].some(([dy,dx])=>sMap[y+dy]?.[x+dx]===SYMBOLS.WALL),
+                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=5,
+                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=3,
+            ];
+            for (const _cond of _tries) {
+                const _cands = [];
+                for (let _wy=2;_wy<ROWS-2;_wy++) for (let _wx=2;_wx<COLS-2;_wx++) {
+                    if (sMap[_wy][_wx]!==SYMBOLS.FLOOR) continue;
+                    if (_cond(_wy,_wx)) _cands.push({x:_wx,y:_wy});
+                }
+                if (_cands.length > 0) {
+                    const _w = _cands[Math.floor(Math.random()*_cands.length)];
+                    wispArr.push({x:_w.x, y:_w.y, dir:1, mode:'FOLLOW'});
+                    return true;
+                }
+            }
+            return false;
+        };
+
         // ----- FLOOR 98: BLUE DIVISION — スタート列の右通路を全封鎖 -----
         // 10×10グリッドのスタート列(sx=_ssX)全画面の右通路をBlueBlockで封鎖。
         // BlueHoleを同列の非スタート画面に配置。ウィスプ誘導で右ゾーン(列_ssX+1以降)が開通。
@@ -13281,85 +13350,7 @@ function initMap() {
         }
 
         // BlueBlock上の敵を近くのFLOORへ退かすヘルパー（全BlueBlock配置箇所で共有）
-        const _relocateEnemiesFromBlocks = (sMap, sEnemies) => {
-            for (const _e of (sEnemies || [])) {
-                if (sMap[_e.y]?.[_e.x] !== SYMBOLS.BLUE_BLOCK) continue;
-                for (let _r = 1; _r <= 6; _r++) {
-                    let _moved = false;
-                    for (let _dy = -_r; _dy <= _r && !_moved; _dy++)
-                        for (let _dx = -_r; _dx <= _r && !_moved; _dx++) {
-                            if (Math.abs(_dy) !== _r && Math.abs(_dx) !== _r) continue;
-                            const _ny = _e.y+_dy, _nx = _e.x+_dx;
-                            if (_ny<1||_ny>=ROWS-1||_nx<1||_nx>=COLS-1) continue;
-                            if (sMap[_ny][_nx] !== SYMBOLS.FLOOR) continue;
-                            if (sEnemies.some(oe => oe !== _e && oe.x === _nx && oe.y === _ny)) continue;
-                            _e.x = _nx; _e.y = _ny; _moved = true;
-                        }
-                    if (_moved || sMap[_e.y]?.[_e.x] !== SYMBOLS.BLUE_BLOCK) break;
-                }
-            }
-        };
-
-        // BlueHoleを確実に配置するヘルパー（開放空間優先→なければ任意FLOOR）
-        const _placeBlueHoleRobust = (sMap, exitX, exitY) => {
-            const _tiers = [
-                // 1st: 5マス以上 + 3方向以上開放
-                (y, x) => Math.abs(x-exitX)+Math.abs(y-exitY)>=5 &&
-                    [[0,1],[0,-1],[1,0],[-1,0]].filter(([dy,dx])=>{const t=sMap[y+dy]?.[x+dx];return t&&t!==SYMBOLS.WALL&&t!==SYMBOLS.BLUE_BLOCK;}).length>=3,
-                // 2nd: 3マス以上（開放条件緩和）
-                (y, x) => Math.abs(x-exitX)+Math.abs(y-exitY)>=3,
-                // 3rd: 出口以外のFLOOR（最終手段）
-                (y, x) => !(x===exitX && y===exitY),
-            ];
-            for (const _cond of _tiers) {
-                const _cands = [];
-                for (let _hy=2;_hy<ROWS-2;_hy++) for (let _hx=2;_hx<COLS-2;_hx++) {
-                    if (sMap[_hy][_hx]!==SYMBOLS.FLOOR) continue;
-                    if (_cond(_hy,_hx)) _cands.push({x:_hx,y:_hy});
-                }
-                if (_cands.length > 0) {
-                    const _h = _cands[Math.floor(Math.random()*_cands.length)];
-                    // 周囲3×3をFLOOR化（BlueBlockは保持）
-                    for (let _dy=-1;_dy<=1;_dy++) for (let _dx=-1;_dx<=1;_dx++) {
-                        const _cy=_h.y+_dy,_cx=_h.x+_dx;
-                        if (_cy>=1&&_cy<ROWS-1&&_cx>=1&&_cx<COLS-1&&sMap[_cy][_cx]!==SYMBOLS.BLUE_BLOCK)
-                            sMap[_cy][_cx]=SYMBOLS.FLOOR;
-                    }
-                    sMap[_h.y][_h.x]=SYMBOLS.BLUE_HOLE;
-                    // 溶岩除去
-                    for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
-                        if (sMap[_ly][_lx]===SYMBOLS.LAVA) sMap[_ly][_lx]=SYMBOLS.FLOOR;
-                    return _h;
-                }
-            }
-            return null;
-        };
-
-        // ウィスプを確実に配置するヘルパー（壁隣接優先→なければ任意FLOOR）
-        const _placeWispRobust = (sMap, wispArr, holeX, holeY) => {
-            const _tries = [
-                // 1st: 壁隣接 + 5マス以上
-                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=5 &&
-                    [[0,1],[0,-1],[1,0],[-1,0]].some(([dy,dx])=>sMap[y+dy]?.[x+dx]===SYMBOLS.WALL),
-                // 2nd: 壁隣接なしでも5マス以上
-                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=5,
-                // 3rd: 3マス以上（最終手段）
-                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=3,
-            ];
-            for (const _cond of _tries) {
-                const _cands = [];
-                for (let _wy=2;_wy<ROWS-2;_wy++) for (let _wx=2;_wx<COLS-2;_wx++) {
-                    if (sMap[_wy][_wx]!==SYMBOLS.FLOOR) continue;
-                    if (_cond(_wy,_wx)) _cands.push({x:_wx,y:_wy});
-                }
-                if (_cands.length > 0) {
-                    const _w = _cands[Math.floor(Math.random()*_cands.length)];
-                    wispArr.push({x:_w.x, y:_w.y, dir:1, mode:'FOLLOW'});
-                    return true;
-                }
-            }
-            return false;
-        };
+        // (helpers moved above floor-98 code — see below)
 
         // ----- FLOOR 42: デバッグテスト — 出口(DOOR)周囲1マスをBlueBlockで確定封鎖 -----
         // BlueHole+Wispも同スクリーンに配置。レンダリング・動作確認用。
