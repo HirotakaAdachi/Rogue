@@ -33826,13 +33826,11 @@ async function handleAction(dx, dy) {
         }
     }
 
-    // 回復床: 乗っている間、毎ターン少量HP回復
+    // 回復床: 乗っている間、毎ターン少量HP回復（音・テキストなしで即時処理）
     if (map[player.y][player.x] === SYMBOLS.HEAL_FLOOR) {
         if (player.hp < player.maxHp) {
             const _hfAmt = Math.min(1, player.maxHp - player.hp);
             player.hp += _hfAmt;
-            SOUNDS.HEAL_WARM && SOUNDS.HEAL_WARM();
-            spawnFloatingText(player.x, player.y, `+${_hfAmt}`, '#fde68a', 800);
             updateUI();
         }
     }
@@ -45218,14 +45216,12 @@ async function enemyTurn() {
         if (fireFloors[i].life < 0) fireFloors.splice(i, 1);
     }
 
-    // 回復床: プレイヤーと敵を毎ターン回復（+10 HP）
+    // 回復床: プレイヤーと敵を毎ターン回復（音・テキストなしで即時処理）
     for (const e of enemies) {
         if (e._dead || e.hp <= 0) continue;
         if (map[e.y] && map[e.y][e.x] === SYMBOLS.HEAL_FLOOR && e.hp < e.maxHp) {
             const _ea = Math.min(10, e.maxHp - e.hp);
             e.hp += _ea;
-            e.healGlowUntil = performance.now() + 600;
-            spawnFloatingText(e.x, e.y, `+${_ea}`, '#fde68a', 700);
         }
     }
 
