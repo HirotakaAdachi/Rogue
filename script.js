@@ -300,6 +300,7 @@ const RINGS = [
   { id: 'TERRAIN_RING',  name: 'Terrain Ring',    nameJa: '地形の指輪',   desc: 'Cannot place or destroy walls, but can change floor terrain.\nIncompatible with some rings.', descJa: '壁の作成・破壊はできないが、地形を変更できる。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#84cc16' },
   { id: 'SUMMON_RING',  name: 'Summon Ring',     nameJa: '召喚の指輪',   desc: 'Block action summons an ally (defeated enemy types only).\nNormal dungeon: costs 10% MaxHP.\nLiminal Space: no HP cost.\nIncompatible with some rings.', descJa: '体力を消費し、討伐済みの敵を召喚。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#a78bfa' },
   { id: 'PUSH_RING',    name: 'Push Ring',       nameJa: '壁押しの指輪', desc: 'Can push a small section of wall.', descJa: 'すこしの壁を押すことができる。', cost: 1000, symbol: '◎', color: '#78716c' },
+  { id: 'WALL_RING',    name: 'Wall Ring',        nameJa: '壁の指輪',     desc: 'Place normal indestructible walls instead of blocks.\nFace a wall + place action to remove it.', descJa: '設置ブロックの代わりに破壊不能の壁を置く。\n壁に向けて設置操作すると消せる。', cost: 1200, symbol: '◎', color: '#a3a3a3' },
 ];
 
 // 同時装備不可の指輪ペア（片方を装備すると他方を弾く）
@@ -310,6 +311,7 @@ const RING_EXCLUSIVES = {
     STAR_RING:      ['TERRAIN_RING', 'WEB_RING', 'SUMMON_RING'],
     WEB_RING:       ['ICE_BLOCK_RING', 'BOMB_RING', 'STAR_RING', 'TERRAIN_RING', 'SUMMON_RING'],
     SUMMON_RING:    ['ICE_BLOCK_RING', 'BOMB_RING', 'STAR_RING', 'TERRAIN_RING', 'WEB_RING'],
+    WALL_RING:      ['WALL_RING'],
 };
 // 指輪の排他チェック（TERRAIN_RING×2・SUMMON_RING×2 は常に許可）
 function _checkRingConflict(idA, idB) {
@@ -28990,6 +28992,36 @@ function tryPlaceBlock(dx, dy) {
     if (!player.hasWand) return false;
     const bx = player.x + dx, by = player.y + dy;
     if (bx < 0 || bx >= COLS || by < 0 || by >= ROWS) return false;
+
+    // 壁の指輪: 向いた先の通常WALLを消す / 床に通常WALLを設置する
+    if (hasRing('WALL_RING')) {
+        const _wrt = map[by][bx];
+        // 通常WALL → 除去（外周は除く。BLUE_BLOCKや設置ブロックは除去不可）
+        if (_wrt === SYMBOLS.WALL && bx >= 1 && bx < COLS - 1 && by >= 1 && by < ROWS - 1) {
+            map[by][bx] = SYMBOLS.FLOOR;
+            SOUNDS.CRUMBLE_WALL();
+            addLog("Removed the wall!");
+            return true;
+        }
+        // 床・毒沼・氷に通常WALLを設置（外周・敵・ウィスプ・ブロックなし）
+        const _wrPlaceable = (_wrt === SYMBOLS.FLOOR || _wrt === SYMBOLS.POISON || _wrt === SYMBOLS.ICE);
+        if (_wrPlaceable && bx >= 1 && bx < COLS - 1 && by >= 1 && by < ROWS - 1
+            && !enemies.some(e => {
+                if (e.type === 'LEECH' && e._attached) return false;
+                if (e.x === bx && e.y === by) return true;
+                if ((e.type === 'SNAKE' || e.type === 'SUMMONER') && e.body) return e.body.some(seg => seg.x === bx && seg.y === by);
+                return false;
+            })
+            && !wisps.some(w => w.x === bx && w.y === by)
+            && !tempWalls.some(w => w.x === bx && w.y === by)
+            && !bombs.some(b => b.x === bx && b.y === by)) {
+            map[by][bx] = SYMBOLS.WALL;
+            SOUNDS.PLACE_BLOCK();
+            addLog("Built a wall!");
+            return true;
+        }
+        return false;
+    }
 
     // 召喚の指輪: 敵（味方）を召喚
     // 通常ダンジョン・狭間の階層ともに: 倒した敵のみ召喚可
