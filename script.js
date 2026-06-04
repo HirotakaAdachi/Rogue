@@ -33826,11 +33826,13 @@ async function handleAction(dx, dy) {
         }
     }
 
-    // 回復床: 乗っている間、毎ターン少量HP回復（音・テキストなしで即時処理）
+    // 回復床: 乗っている間、毎ターン少量HP回復
     if (map[player.y][player.x] === SYMBOLS.HEAL_FLOOR) {
+        // HP+1 を短時間（350ms）だけ表示（HP満タンでも表示、音なし）
+        damageTexts.push({ x: player.x, y: player.y, text: 'HP+1', color: '#fde68a',
+            duration: 350, startTime: performance.now(), rise: true });
         if (player.hp < player.maxHp) {
-            const _hfAmt = Math.min(1, player.maxHp - player.hp);
-            player.hp += _hfAmt;
+            player.hp += Math.min(1, player.maxHp - player.hp);
             updateUI();
         }
     }
@@ -45216,12 +45218,13 @@ async function enemyTurn() {
         if (fireFloors[i].life < 0) fireFloors.splice(i, 1);
     }
 
-    // 回復床: プレイヤーと敵を毎ターン回復（音・テキストなしで即時処理）
+    // 回復床: 敵を毎ターン回復（短時間テキストのみ、ラグ防止のため350ms）
     for (const e of enemies) {
         if (e._dead || e.hp <= 0) continue;
-        if (map[e.y] && map[e.y][e.x] === SYMBOLS.HEAL_FLOOR && e.hp < e.maxHp) {
-            const _ea = Math.min(10, e.maxHp - e.hp);
-            e.hp += _ea;
+        if (map[e.y] && map[e.y][e.x] === SYMBOLS.HEAL_FLOOR) {
+            damageTexts.push({ x: e.x, y: e.y, text: '+', color: '#fde68a',
+                duration: 350, startTime: performance.now(), rise: true });
+            if (e.hp < e.maxHp) e.hp += Math.min(10, e.maxHp - e.hp);
         }
     }
 
