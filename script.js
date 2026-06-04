@@ -1661,6 +1661,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
+const _GAME_VERSION = 'v581';  // ← リリース時にここを更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -24915,6 +24916,12 @@ function drawTitle() {
     ctx.font = '14px Courier New';
     ctx.fillStyle = '#444';
     ctx.fillText('[Arrows] to Select  [Enter] to Decide', CANVAS_W / 2, CANVAS_H - 40);
+    // バージョン表示（右下）
+    ctx.textAlign = 'right';
+    ctx.font = "11px 'Courier New', Courier, monospace";
+    ctx.fillStyle = '#444';
+    ctx.fillText(_GAME_VERSION, CANVAS_W - 8, CANVAS_H - 8);
+    ctx.textAlign = 'center';
 }
 
 function drawLangSelect() {
