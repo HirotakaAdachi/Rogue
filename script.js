@@ -35259,7 +35259,7 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
                 _allyKiller.exp      -= _allyKiller.nextExp;
                 _allyKiller.level    += 1;
                 _allyKiller.nextExp   = _allyKiller.level * 10;
-                _allyKiller.maxHp    += 5;
+                _allyKiller.maxHp    += (_allyKiller.type === 'NORMAL' ? 20 : 5);
                 _allyKiller.hp        = _allyKiller.maxHp;
                 _allyKiller._atkBonus = (_allyKiller._atkBonus || 0) + _allyKiller._atkGrowth;
                 const _lvMsg = _allyKiller._atkGrowth === 2 ? 'LV UP! ATK+2' : 'LV UP!';
