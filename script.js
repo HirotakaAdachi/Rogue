@@ -37167,6 +37167,30 @@ async function enemyTurn() {
         }
     }
 
+    // === 蜘蛛の巣もがきアニメ 一括プレパス ===
+    // 巣にひっかかった全敵のオフセットをまとめてセットし、1回のdraw+awaitで処理する。
+    {
+        const _wbDirs = [{x:0,y:-1},{x:1,y:0},{x:0,y:1},{x:-1,y:0}];
+        const _wbStrugglers = [];
+        for (const e of enemies) {
+            if (!e || e.hp <= 0 || e._dead) continue;
+            const _wbImmune2 = e.type === 'SPIDER' || e.type === 'GREEK_OMEGA' || (e.type === 'DRAGON' && e._bossDragon);
+            if (_wbImmune2 || !map[e.y] || map[e.y][e.x] !== SYMBOLS.WEB) continue;
+            if (e._webLaserOffUntilNextAction) continue; // 解放ターンはスキップ
+            if (e._webStuck === undefined || !(e._webStuckAtX === e.x && e._webStuckAtY === e.y)) continue;
+            if (e._webStuck > 0) _wbStrugglers.push(e);
+        }
+        if (_wbStrugglers.length > 0) {
+            for (const e of _wbStrugglers) {
+                const wd = _wbDirs[Math.floor(Math.random() * 4)];
+                e.offsetX = wd.x * 5; e.offsetY = wd.y * 5;
+            }
+            draw(performance.now());
+            await _w(50);
+            for (const e of _wbStrugglers) { e.offsetX = 0; e.offsetY = 0; }
+        }
+    }
+
     for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
         if (!e || e.hp <= 0) continue;
@@ -37355,15 +37379,7 @@ async function enemyTurn() {
             } else if (e._webStuck > 0) {
                 e._webStuck--;
                 if (e._webStuck === 0) e._webLaserOffUntilNextAction = true;
-                // 自分のターン中だけ一瞬もがく: ランダム方向に少し動いて戻る
-                const wDirs = [{x:0,y:-1},{x:1,y:0},{x:0,y:1},{x:-1,y:0}];
-                const wd = wDirs[Math.floor(Math.random() * 4)];
-                e.offsetX = wd.x * 5;
-                e.offsetY = wd.y * 5;
-                draw(performance.now());
-                await _w(50);
-                e.offsetX = 0;
-                e.offsetY = 0;
+                // もがきアニメはプレパスで一括済み
                 continue; // ターン終了、停止状態に戻る
             }
             // _webStuck === 0: 次の行動判定で解放される
