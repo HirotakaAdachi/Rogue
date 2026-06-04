@@ -311,7 +311,7 @@ const RING_EXCLUSIVES = {
     STAR_RING:      ['TERRAIN_RING', 'WEB_RING', 'SUMMON_RING'],
     WEB_RING:       ['ICE_BLOCK_RING', 'BOMB_RING', 'STAR_RING', 'TERRAIN_RING', 'SUMMON_RING'],
     SUMMON_RING:    ['ICE_BLOCK_RING', 'BOMB_RING', 'STAR_RING', 'TERRAIN_RING', 'WEB_RING'],
-    WALL_RING:      ['WALL_RING'],
+    WALL_RING:      ['WALL_RING', 'BOMB_RING', 'ICE_BLOCK_RING', 'STAR_RING', 'WEB_RING', 'TERRAIN_RING', 'SUMMON_RING'],
 };
 // 指輪の排他チェック（TERRAIN_RING×2・SUMMON_RING×2 は常に許可）
 function _checkRingConflict(idA, idB) {
@@ -2164,9 +2164,10 @@ let _ncDarkAlpha = 1.0; // NOVEL_CORRIDOR 暗闇フェード (0=真っ暗, 1=通
 let tomeAuraParams = { active: false, x: 0, y: 0, radius: 0, alpha: 0, particles: [] };
 let isSpacePressed = false;
 let spaceUsedForBlock = false; // 今回のスペース押下でブロックを置いたかフラグ
-let _wallRingLockDx = 0;   // WALL_RING: 最初に壁を置いた/消した方向 X（Space離すまで保持）
-let _wallRingLockDy = 0;   // WALL_RING: 最初に壁を置いた/消した方向 Y
+let _wallRingLockDx = 0;     // WALL_RING: 最初に壁を置いた/消した方向 X（Space離すまで保持）
+let _wallRingLockDy = 0;     // WALL_RING: 最初に壁を置いた/消した方向 Y
 let _wallRingMode = 'place'; // WALL_RING: 'place'（設置ロック）/ 'remove'（除去ロック）
+let _wallRingPlacePending = false; // WALL_RING: 移動完了後に壁を設置するフラグ
 let gameOverAlpha = 0;
 let storyMessage = null; // { lines: [], alpha: 0, showNext: false }
 let isTutorialInputActive = false; // チュートリアル入力待ちフラグ
@@ -30629,6 +30630,29 @@ async function advanceVScrollWalls() {
 }
 
 async function windGustSlide() {
+    // WALL_RING 設置ロック: 移動完了後にプレイヤー新位置+ロック方向に壁を設置
+    if (_wallRingPlacePending) {
+        _wallRingPlacePending = false;
+        const _ppx = player.x + _wallRingLockDx;
+        const _ppy = player.y + _wallRingLockDy;
+        if (_ppx >= 1 && _ppx < COLS - 1 && _ppy >= 1 && _ppy < ROWS - 1) {
+            const _ppt = map[_ppy][_ppx];
+            if (_ppt !== SYMBOLS.WALL && _ppt !== SYMBOLS.BLUE_BLOCK
+                && !enemies.some(e => {
+                    if (e.type === 'LEECH' && e._attached) return false;
+                    if (e.x === _ppx && e.y === _ppy) return true;
+                    if ((e.type === 'SNAKE' || e.type === 'SUMMONER') && e.body)
+                        return e.body.some(seg => seg.x === _ppx && seg.y === _ppy);
+                    return false;
+                })
+                && !wisps.some(w => w.x === _ppx && w.y === _ppy)
+                && !tempWalls.some(w => w.x === _ppx && w.y === _ppy)
+                && !bombs.some(b => b.x === _ppx && b.y === _ppy)) {
+                map[_ppy][_ppx] = SYMBOLS.WALL;
+                SOUNDS.PLACE_BLOCK();
+            }
+        }
+    }
     if (isScrollWallFloor) { await advanceScrollWalls(); if (gameState !== 'PLAYING') return; }
     if (isVScrollWallFloor) { await advanceVScrollWalls(); if (gameState !== 'PLAYING') return; }
     if (!isWindFloor || windTimer < 5) return;
@@ -31840,29 +31864,11 @@ async function handleAction(dx, dy) {
         const _wrLocked = hasRing('WALL_RING') && spaceUsedForBlock
             && (_wallRingLockDx !== 0 || _wallRingLockDy !== 0);
 
-        // WALL_RING 設置ロック: ロック方向と異なる方向 → 移動先+ロック方向に壁設置して移動
+        // WALL_RING 設置ロック: ロック方向と異なる方向 → 移動後に壁を設置してから移動
         if (_wrLocked && _wallRingMode === 'place'
             && (dx !== _wallRingLockDx || dy !== _wallRingLockDy)) {
-            // 移動先の「ロック方向隣タイル」に壁を設置（即接続・ギャップなし）
-            const _wlx = player.x + dx + _wallRingLockDx;
-            const _wly = player.y + dy + _wallRingLockDy;
-            if (_wlx >= 1 && _wlx < COLS - 1 && _wly >= 1 && _wly < ROWS - 1) {
-                const _wlt = map[_wly][_wlx];
-                if ((_wlt === SYMBOLS.FLOOR || _wlt === SYMBOLS.POISON || _wlt === SYMBOLS.ICE)
-                    && !enemies.some(e => {
-                        if (e.type === 'LEECH' && e._attached) return false;
-                        if (e.x === _wlx && e.y === _wly) return true;
-                        if ((e.type === 'SNAKE' || e.type === 'SUMMONER') && e.body)
-                            return e.body.some(seg => seg.x === _wlx && seg.y === _wly);
-                        return false;
-                    })
-                    && !wisps.some(w => w.x === _wlx && w.y === _wly)
-                    && !tempWalls.some(w => w.x === _wlx && w.y === _wly)
-                    && !bombs.some(b => b.x === _wlx && b.y === _wly)) {
-                    map[_wly][_wlx] = SYMBOLS.WALL;
-                    SOUNDS.PLACE_BLOCK();
-                }
-            }
+            // 壁設置は移動完了後に windGustSlide() 冒頭で実行（ギャップなし）
+            _wallRingPlacePending = true;
             if (_wallRingLockDx > 0) player.facing = 'RIGHT';
             else if (_wallRingLockDx < 0) player.facing = 'LEFT';
             // return しない → 下の移動コードで dx/dy 方向に移動
@@ -47538,6 +47544,7 @@ window.addEventListener('keyup', e => {
         isSpacePressed = false;
         spaceUsedForBlock = false;
         _wallRingLockDx = 0; _wallRingLockDy = 0; _wallRingMode = 'place';
+        _wallRingPlacePending = false;
         e.preventDefault();
     }
 });
@@ -48499,6 +48506,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
         isSpacePressed = false;
         spaceUsedForBlock = false;
         _wallRingLockDx = 0; _wallRingLockDy = 0; _wallRingMode = 'place';
+        _wallRingPlacePending = false;
         _tcBlockBtn.classList.remove('tc-active');
         const icon = _tcBlockIcon();
         // フリック解除後は向きを復元（rAFループが次フレームで上書きするが、過渡期のちらつき防止）
