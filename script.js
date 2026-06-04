@@ -10795,29 +10795,7 @@ function initMap() {
         const _ALL_BIZ_TYPES = ['MONSTER_FLOOD', 'LAVA_SEA', 'FROZEN_PRISON', 'VOID_CELLS', 'CHAOS_ALTAR', 'TREASURY', 'BOMBER_MAZE', 'SPAWNER_HIVE', 'MIMIC_GARDEN', 'ISLAND_HAZARD', 'RIVER_CROSSING', 'TIGHT_MAZE', 'FACTION_WAR', 'FLEEING_HORDE', 'CIRCLE_SIEGE', 'KINGS_COURT', 'VSCROLL_WALLS', 'BIG_AMBUSH_HALL', 'STAGE_39', 'BOAR_CHAMBER', 'LAVA_CROSS', 'VERTICAL_RIVER', 'MAZE_LAVA_CORNER', 'WARP_CELLS', 'WARP_CELLS_V', 'WARP_CELLS_H', 'AURA_MAZE', 'SOLAR_SYSTEM'];
         let _bizAllIdx = 0;
 
-        // ===== 川渡り横連結の事前選定 =====
-        // 水平方向に連続する2画面以上を1行選んで川渡りにする（縦には並ばない）
-        let _riverChain = null;
-        if (!isRoomTestMode) {
-            const _rcRows = [];
-            for (let _rsy = 0; _rsy < screenGridRows; _rsy++) {
-                let _run = [];
-                for (let _rsx = 0; _rsx < screenGridCols; _rsx++) {
-                    if (screenGrid.active[_rsy][_rsx]) { _run.push(_rsx); }
-                    else if (_run.length >= 2) { _rcRows.push({ sy: _rsy, sxList: _run.slice() }); _run = []; }
-                    else { _run = []; }
-                }
-                if (_run.length >= 2) _rcRows.push({ sy: _rsy, sxList: _run.slice() });
-            }
-            if (_rcRows.length > 0 && Math.random() < 0.25) {
-                const _rcPick = _rcRows[Math.floor(Math.random() * _rcRows.length)];
-                _riverChain = {
-                    sy: _rcPick.sy,
-                    sxSet: new Set(_rcPick.sxList),
-                    hazard: Math.random() < 0.33 ? SYMBOLS.LAVA : Math.random() < 0.5 ? SYMBOLS.ICE : SYMBOLS.POISON
-                };
-            }
-        }
+        // RIVER_CROSSING は単発ビザールスクリーンとして generateBizarreScreen の通常プールから出現する
 
         for (let sy = 0; sy < screenGridRows; sy++) {
             for (let sx = 0; sx < screenGridCols; sx++) {
@@ -11369,22 +11347,10 @@ function initMap() {
                     if (screenGrid.ambushRooms) screenGrid.ambushRooms[sy][sx] = result.sAmbushRooms || [];
                     continue;
                 }
-                // 川渡り横連結: 事前選定画面は強制的にRIVER_CROSSING
-                if (_riverChain && sy === _riverChain.sy && _riverChain.sxSet.has(sx) && !isSpecial) {
-                    const result = generateBizarreScreen(sx, sy, 'RIVER_CROSSING');
-                    screenGrid.maps[sy][sx] = result.sMap;
-                    screenGrid.enemies[sy][sx] = result.sEnemies;
-                    screenGrid.wisps[sy][sx] = result.sWisps;
-                    screenGrid.tempWalls[sy][sx] = result.sTempWalls || [];
-                    if (screenGrid.types) screenGrid.types[sy][sx] = 'RIVER_CROSSING';
-                    allRooms[`${sx},${sy}`] = result.rooms;
-                    if (screenGrid.ambushRooms) screenGrid.ambushRooms[sy][sx] = result.sAmbushRooms || [];
-                    continue;
-                }
-                // 奇妙な場所（50F以上・特殊画面以外。101F+はテーマで変動、90〜99Fは高確率、50〜89Fは低確率）
+                // 奇妙な場所（50F以上・特殊画面以外。101F+はテーマで変動、98Fは10x10なので低確率、90〜97Fは25%、50〜89Fは低確率）
                 const _bizChance = floorLevel >= 101
                     ? (_sTheme ? _sTheme.bizarreChance : 0.25)
-                    : floorLevel >= 98 ? 0.40  // 98F(5×5): 40%
+                    : floorLevel >= 98 ? 0.10  // 98F(10×10): 10%（100画面分のため低めに）
                     : floorLevel >= 90 ? 0.25  // 90〜97F: 25%
                     : 0.06;                    // 50〜89F: 6%
                 if (!isSpecial && Math.random() < _bizChance) {
