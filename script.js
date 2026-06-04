@@ -300,7 +300,7 @@ const RINGS = [
   { id: 'TERRAIN_RING',  name: 'Terrain Ring',    nameJa: '地形の指輪',   desc: 'Cannot place or destroy walls, but can change floor terrain.\nIncompatible with some rings.', descJa: '壁の作成・破壊はできないが、地形を変更できる。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#84cc16' },
   { id: 'SUMMON_RING',  name: 'Summon Ring',     nameJa: '召喚の指輪',   desc: 'Block action summons an ally (defeated enemy types only).\nNormal dungeon: costs 10% MaxHP.\nLiminal Space: no HP cost.\nIncompatible with some rings.', descJa: '体力を消費し、討伐済みの敵を召喚。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#a78bfa' },
   { id: 'PUSH_RING',    name: 'Push Ring',       nameJa: '壁押しの指輪', desc: 'Can push a small section of wall.', descJa: 'すこしの壁を押すことができる。', cost: 1000, symbol: '◎', color: '#78716c' },
-  { id: 'WALL_RING',    name: 'Wall Ring',        nameJa: '壁の指輪',     desc: 'Place normal indestructible walls instead of blocks.\nFace a wall + place action to remove it.', descJa: '設置ブロックの代わりに破壊不能の壁を置く。\n壁に向けて設置操作すると消せる。', cost: 1200, symbol: '◎', color: '#a3a3a3' },
+  { id: 'WALL_RING',    name: 'Wall Ring',        nameJa: '壁の指輪',     desc: 'Place normal indestructible walls instead of blocks.\nFace a wall + place action to remove it.', descJa: '設置ブロックの代わりに破壊不能の壁を置く。\n壁に向けて設置操作すると消せる。', cost: 2000, symbol: '◎', color: '#a3a3a3' },
 ];
 
 // 同時装備不可の指輪ペア（片方を装備すると他方を弾く）
