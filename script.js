@@ -42702,7 +42702,7 @@ async function enemyTurn() {
             const dPlayerNow = Math.abs(player.x - e.x) + Math.abs(player.y - e.y);
             const shouldFollowPlayer = dPlayerNow > 8;
 
-            if (allyBestTarget && allyMinDist <= 8 && !shouldFollowPlayer) {
+            if (allyBestTarget && allyMinDist <= 8 && (!shouldFollowPlayer || allyMinDist === 1)) {
                 // 敵を優先して行動
                 if (allyMinDist === 1) {
                     // 攻撃
