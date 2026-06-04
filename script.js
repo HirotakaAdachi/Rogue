@@ -12982,6 +12982,29 @@ function initMap() {
             }
         }
 
+        // ----- FLOOR 98: 画面ごとの敵種類を最大4種類に絞る -----
+        // generateOneScreen + 各種スポーン後にすべての画面に適用。
+        // 体数の多い上位4種を残し、それ以外の敵を除去する。
+        if (floorLevel === 98 && multiScreenMode) {
+            for (let _sy = 0; _sy < screenGridRows; _sy++) {
+                for (let _sx = 0; _sx < screenGridCols; _sx++) {
+                    if (!screenGrid.active[_sy][_sx]) continue;
+                    const _e98 = screenGrid.enemies[_sy][_sx];
+                    if (!_e98 || _e98.length === 0) continue;
+                    // タイプ別の体数を集計
+                    const _cnt98 = {};
+                    for (const e of _e98) _cnt98[e.type] = (_cnt98[e.type] || 0) + 1;
+                    const _types98 = Object.keys(_cnt98);
+                    if (_types98.length <= 4) continue;
+                    // 体数の多い順に上位4種を選択
+                    const _keep98 = new Set(
+                        _types98.sort((a, b) => _cnt98[b] - _cnt98[a]).slice(0, 4)
+                    );
+                    screenGrid.enemies[_sy][_sx] = _e98.filter(e => _keep98.has(e.type));
+                }
+            }
+        }
+
         // ===== BlueBlock ヘルパー関数（98F・42F・43-97F・101F+・3×1 共通） =====
         const _relocateEnemiesFromBlocks = (sMap, sEnemies) => {
             for (const _e of (sEnemies || [])) {
