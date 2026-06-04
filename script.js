@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v600';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v601';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -32031,7 +32031,7 @@ async function handleAction(dx, dy) {
                 leavingMadmen.forEach(m => movingMadmen.push({ ...m, screenX: currentScreen.x, screenY: currentScreen.y }));
                 // isAlly な仲間を画面遷移でプレイヤーに追従させる
                 // 固定砲台・ブロック・擬態系は連れていかず、その場に残す（仲間蜘蛛は追従する）
-                const leavingAllies = enemies.filter(e => e.isAlly && !ENEMY_NO_CARRY_TYPES.has(e.type));
+                const leavingAllies = enemies.filter(e => e.isAlly && !ENEMY_NO_CARRY_TYPES.has(e.type) && e.hp > 0 && !e._dead);
                 leavingAllies.forEach(a => travelingAllies.push({ ...a }));
                 // 寄生中のLEECHも画面遷移で持ち越す
                 const _leavingLeech = enemies.find(e => e.type === 'LEECH' && e._attached);
