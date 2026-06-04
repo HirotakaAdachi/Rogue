@@ -28038,7 +28038,7 @@ function draw(now) {
                     ctx.fillStyle = '#bfdbfe';
                     ctx.textAlign = 'right';
                     ctx.textBaseline = 'bottom';
-                    ctx.fillText(e.level, px + 9, py + 9);
+                    ctx.fillText('lv' + e.level, px + 9, py + 9);
                     ctx.font = _lvFont;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
