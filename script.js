@@ -35240,6 +35240,29 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
         }
     }
 
+    // 仲間が敵を倒した場合: EXP を仲間に付与し、レベルアップ時に HP 全回復
+    if (enemy._killedByAlly) {
+        const _allyKiller = enemy._killedByAlly;
+        delete enemy._killedByAlly;
+        if (_allyKiller && !_allyKiller._dead && _allyKiller.hp > 0) {
+            const _aExp = enemy.type === 'NORMAL'
+                ? (enemy.expValue || 5) * 2
+                : (enemy.expValue || 5);
+            _allyKiller.exp      = (_allyKiller.exp      || 0) + _aExp;
+            _allyKiller.level    =  _allyKiller.level    || 1;
+            _allyKiller.nextExp  =  _allyKiller.nextExp  || (_allyKiller.level * 10);
+            while (_allyKiller.exp >= _allyKiller.nextExp) {
+                _allyKiller.exp    -= _allyKiller.nextExp;
+                _allyKiller.level  += 1;
+                _allyKiller.nextExp = _allyKiller.level * 10;
+                _allyKiller.maxHp  += 5;
+                _allyKiller.hp      = _allyKiller.maxHp;
+                spawnFloatingText(_allyKiller.x, _allyKiller.y, 'LV UP!', '#fbbf24', 1200);
+                SOUNDS.LEVEL_UP();
+            }
+        }
+    }
+
     // NECRO_RING: プレイヤーが倒した敵を仲間として蘇らせる
     if (killedByPlayer && hasRing('NECRO_RING') && !enemy.isAlly && !enemy.isFalling) {
         const necroExclude = ['DRAGON', 'GOLD', 'KING', 'SNAKE', 'FAIRY_MIMIC'];
@@ -42702,7 +42725,7 @@ async function enemyTurn() {
                     SOUNDS.HIT();
                     attackOccurred = true;
 
-                    if (allyBestTarget.hp <= 0) handleEnemyDeath(allyBestTarget);
+                    if (allyBestTarget.hp <= 0) { allyBestTarget._killedByAlly = e; handleEnemyDeath(allyBestTarget); }
                     else if (e.type === 'ORC' && allyBestTarget.type !== 'DRAGON' && allyBestTarget.type !== 'SUMMONER') {
                         // 味方オークによる突き飛ばし（ドラゴン・サモナーは吹き飛ばせない）
                         addLog("Ally Orc's mighty blow sends the enemy flying!");
@@ -42766,7 +42789,7 @@ async function enemyTurn() {
                                 allyBestTarget.hp = 0; break;
                             }
                         }
-                        if (allyBestTarget.hp <= 0) handleEnemyDeath(allyBestTarget);
+                        if (allyBestTarget.hp <= 0) { allyBestTarget._killedByAlly = e; handleEnemyDeath(allyBestTarget); }
                     }
                     await _w(40);
                     e.offsetX = 0; e.offsetY = 0;
