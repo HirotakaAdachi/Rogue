@@ -28029,6 +28029,20 @@ function draw(now) {
                         ctx.fillText(eChar, px, py);
                     }
                 }
+                // 仲間(isAlly): 右下にレベルを小さく表示
+                if (e.isAlly && e.level && e.level >= 1) {
+                    const _lvFont = ctx.font;
+                    ctx.font = `bold 7px 'Courier New'`;
+                    ctx.shadowColor = '#1e3a5f';
+                    ctx.shadowBlur = 2;
+                    ctx.fillStyle = '#bfdbfe';
+                    ctx.textAlign = 'right';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(e.level, px + 9, py + 9);
+                    ctx.font = _lvFont;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                }
                 // KEY_RUNNER: 移動前の位置に追従する小さなkを描画
                 if (e.type === 'KEY_RUNNER' && e.trailX != null && (e.trailX !== e.x || e.trailY !== e.y)) {
                     const tkx = e.trailX * TILE_SIZE + TILE_SIZE / 2;
