@@ -42714,8 +42714,8 @@ async function enemyTurn() {
                         setScreenShake(8, 200);
                     }
 
-                    // 味方の攻撃力計算 (オークなら強い)
-                    let dmg = (e.type === 'ORC' ? 15 : (e.type === 'BREAKER' ? 12 : (e.type === 'LAYER' ? 6 : (e.type === 'SNAKE' ? 10 : (e.type === 'MIMIC' ? 12 : (e.type === 'SUMMONER' ? 8 : 5)))))) + Math.floor(floorLevel / 2);
+                    // 味方の攻撃力計算 (オークなら強い、レベルアップで+1ずつ増加)
+                    let dmg = (e.type === 'ORC' ? 15 : (e.type === 'BREAKER' ? 12 : (e.type === 'LAYER' ? 6 : (e.type === 'SNAKE' ? 10 : (e.type === 'MIMIC' ? 12 : (e.type === 'SUMMONER' ? 8 : 5)))))) + Math.floor(floorLevel / 2) + ((e.level || 1) - 1);
                     // NECRO_RING 二重装備で蘇生された味方は攻撃力+3
                     if (e._necroBoosted) dmg += 3;
                     allyBestTarget.hp -= dmg;
