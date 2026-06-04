@@ -13050,6 +13050,25 @@ function initMap() {
             }
         }
 
+        // ----- ランダムフロア: 各スクリーンのBREAKER(W)を最大2体に制限 -----
+        // breaker_room タイプの画面と固定ステージは除外する
+        if (!FIXED_STAGE_FLOORS.includes(floorLevel)) {
+            for (let _bsy = 0; _bsy < screenGridRows; _bsy++) {
+                for (let _bsx = 0; _bsx < screenGridCols; _bsx++) {
+                    if (!screenGrid.active[_bsy][_bsx]) continue;
+                    const _bsType = screenGrid.types?.[_bsy]?.[_bsx];
+                    if (_bsType === 'breaker' || _bsType === 'breaker_room') continue;
+                    const _bsArr = screenGrid.enemies[_bsy][_bsx];
+                    if (!_bsArr) continue;
+                    let _bsCnt = 0;
+                    screenGrid.enemies[_bsy][_bsx] = _bsArr.filter(e => {
+                        if (e.type !== 'BREAKER') return true;
+                        return ++_bsCnt <= 2;
+                    });
+                }
+            }
+        }
+
         // ===== BlueBlock ヘルパー関数（98F・42F・43-97F・101F+・3×1 共通） =====
         const _relocateEnemiesFromBlocks = (sMap, sEnemies) => {
             for (const _e of (sEnemies || [])) {
