@@ -13051,15 +13051,17 @@ function initMap() {
             return false;
         };
 
-        // ----- FLOOR 98: BLUE DIVISION — スタート列の右通路を全封鎖 -----
-        // 10×10グリッドのスタート列(sx=_ssX)全画面の右通路をBlueBlockで封鎖。
-        // BlueHoleを同列の非スタート画面に配置。ウィスプ誘導で右ゾーン(列_ssX+1以降)が開通。
-        if (floorLevel === 98 && multiScreenMode && _ssX < screenGridCols - 1) {
+        // ----- FLOOR 98: BLUE DIVISION — スタート列の通路を封鎖 -----
+        // 左寄りスタート(列0〜4): 右通路を封鎖 → 右ゾーンへはWisp必要
+        // 右寄りスタート(列5〜9): 左通路を封鎖 → 左ゾーンへはWisp必要
+        if (floorLevel === 98 && multiScreenMode && screenGridCols >= 2) {
             const _f98PassH = [11, 12, 13];
-            // FAIRY は通路から退かして内側へ移動させるので safe に含めない
             const _f98Safe = new Set([SYMBOLS.STAIRS, SYMBOLS.DOOR, SYMBOLS.KEY,
                 SYMBOLS.BLUE_KEY, SYMBOLS.MERCHANT]);
             const _f98DivCol = _ssX;
+            // スタートが左寄りなら右通路、右寄りなら左通路を封鎖
+            const _f98SealRight = _ssX < Math.ceil(screenGridCols / 2);
+            const _f98PassX = _f98SealRight ? [COLS-2, COLS-3] : [1, 2];
 
             // 妖精を通路タイルから画面内側のFLOORへ退かすヘルパー
             const _f98MoveFairy = (sMap) => {
@@ -13072,13 +13074,13 @@ function initMap() {
                 return false;
             };
 
-            // 封鎖列の全アクティブ画面: 右通路をBlueBlockで封鎖
+            // 封鎖列の全アクティブ画面: 対象通路をBlueBlockで封鎖
             for (let _f98Sy = 0; _f98Sy < screenGridRows; _f98Sy++) {
                 if (!screenGrid.active[_f98Sy][_f98DivCol]) continue;
                 const _f98Map = screenGrid.maps[_f98Sy][_f98DivCol];
                 if (!_f98Map) continue;
                 for (const _py of _f98PassH) {
-                    for (const _px of [COLS-2, COLS-3]) {
+                    for (const _px of _f98PassX) {
                         const _tile = _f98Map[_py][_px];
                         if (_f98Safe.has(_tile)) continue;
                         if (_tile === SYMBOLS.FAIRY) _f98MoveFairy(_f98Map);
@@ -13152,7 +13154,9 @@ function initMap() {
                         screenGrid.wisps[_f98HoleSy][_f98DivCol].push({
                             x: _f98Wisp.x, y: _f98Wisp.y, dir: 1, mode: 'FOLLOW'
                         });
-                        addKeyLog("⊙ The right zone is sealed by Blue Blocks. Find the Wisp — guide it to ⊙.");
+                        addKeyLog(_f98SealRight
+                            ? "⊙ The right zone is sealed by Blue Blocks. Find the Wisp — guide it to ⊙."
+                            : "⊙ The left zone is sealed by Blue Blocks. Find the Wisp — guide it to ⊙.");
                     }
                 }
             }
