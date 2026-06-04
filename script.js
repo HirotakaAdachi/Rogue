@@ -2331,6 +2331,8 @@ let screenShake = { x: 0, y: 0, until: 0 };
 // マルチスクリーンマップ（90-99F ゼルダ式画面切替）
 let multiScreenMode = false;
 let screenGrid = null;               // { maps: [N][N], enemies: [N][N], wisps: [N][N] }
+let _blueDivCol = null;             // 98F列分断: 分断列インデックス（nullなら未設定/解除済み）
+let _blueDivSealRight = true;       // 98F列分断: true=右封鎖, false=左封鎖
 let currentScreen = { x: 0, y: 0 };
 let screenGridSize = 2;  // kept for deep/test modes that don't need non-square
 let screenGridCols = 2;
@@ -5116,6 +5118,7 @@ function initMap() {
     multiScreenMode = false;
     screenGrid = null;
     visitedScreens = null;
+    _blueDivCol = null;
     ambushRooms = [];
     _dynamicWarpPad = null;
 
@@ -13270,6 +13273,10 @@ function initMap() {
                                 if (_m[y][x] === SYMBOLS.BLUE_BLOCK) _m[y][x] = SYMBOLS.FLOOR;
                     }
                     console.warn(`[98F Safety] Blue Division removed — no Hole or Wisp placed.`);
+                } else {
+                    // 分断成立: ワープ制限用にグローバルを設定
+                    _blueDivCol = _f98DivCol;
+                    _blueDivSealRight = _f98SealRight;
                 }
             }
         }
@@ -31457,11 +31464,43 @@ async function performWarpTeleport() {
         }
 
         // 別画面をランダム選択
-        const _wpScreens = [];
+        let _wpScreens = [];
         for (let _sy = 0; _sy < screenGridRows; _sy++)
             for (let _sx = 0; _sx < screenGridCols; _sx++)
                 if (_sx !== currentScreen.x || _sy !== currentScreen.y)
                     _wpScreens.push({ sx: _sx, sy: _sy });
+
+        // Blue Division が有効な場合、封鎖済み向こう側へのワープを禁止
+        if (_blueDivCol !== null) {
+            // 通路にBlue Blockがまだ残っているか確認
+            const _divCheckX = _blueDivSealRight ? [COLS-2, COLS-3] : [1, 2];
+            let _divStillActive = false;
+            for (let _dsy = 0; _dsy < screenGridRows && !_divStillActive; _dsy++) {
+                if (!screenGrid.active[_dsy][_blueDivCol]) continue;
+                const _dm = screenGrid.maps[_dsy][_blueDivCol];
+                if (!_dm) continue;
+                for (const _dpy of [11, 12, 13]) {
+                    for (const _dpx of _divCheckX) {
+                        if (_dm[_dpy][_dpx] === SYMBOLS.BLUE_BLOCK) { _divStillActive = true; break; }
+                    }
+                    if (_divStillActive) break;
+                }
+            }
+            if (_divStillActive) {
+                // プレイヤーの現在ゾーン（アクセス可能側）
+                const _playerOnAccessSide = _blueDivSealRight
+                    ? currentScreen.x <= _blueDivCol   // 右封鎖: 左ゾーン(≤divCol)がアクセス可
+                    : currentScreen.x >= _blueDivCol;  // 左封鎖: 右ゾーン(≥divCol)がアクセス可
+                const _filtered = _wpScreens.filter(({sx}) => {
+                    const _destOnAccess = _blueDivSealRight ? sx <= _blueDivCol : sx >= _blueDivCol;
+                    return _destOnAccess === _playerOnAccessSide;
+                });
+                if (_filtered.length > 0) _wpScreens = _filtered;
+                // filterで0件になった場合は制限なし（フォールバック）
+            } else {
+                _blueDivCol = null; // Blue Block解除済み → 制限を解放
+            }
+        }
 
         if (_wpScreens.length > 0) {
             const _wpDest = _wpScreens[Math.floor(Math.random() * _wpScreens.length)];
