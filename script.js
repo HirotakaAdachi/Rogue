@@ -269,7 +269,8 @@ const SYMBOLS = {
 const ENEMY_NO_CARRY_TYPES = new Set([
     'TURRET', 'HOPPER_TURRET', 'SPAWNER', 'WISP_SPAWNER',
     'MIMIC', 'FAIRY_MIMIC', 'RING_MIMIC', 'TOME_MIMIC', 'WEAPON_MIMIC', 'ARMOR_MIMIC', 'WALL_MIMIC', 'PAUPER_SHADE', 'KEY_RUNNER',
-    'DRAGON', 'SUMMONER', 'KING'
+    'DRAGON', 'SUMMONER', 'KING',
+    'WEAVER', // 軌跡が危険なため画面移動・フロア移動でついてこない
 ]);
 const ITEM_MIMIC_TYPES = new Set(['RING_MIMIC', 'TOME_MIMIC', 'WEAPON_MIMIC', 'ARMOR_MIMIC']);
 const ITEM_MIMIC_META = {
@@ -37591,9 +37592,10 @@ async function enemyTurn() {
                 }
             }
             // 軌跡ダメージ: 軌跡タイルに乗っているエンティティに毎ターンダメージ
+            // 味方WEAVERの場合はプレイヤー・味方敵への軌跡ダメージ・スタンなし
             if (e.trail.length > 0) {
                 const trailSet = new Set(e.trail.map(t => `${t.x},${t.y}`));
-                if (trailSet.has(`${player.x},${player.y}`)) {
+                if (!e.isAlly && trailSet.has(`${player.x},${player.y}`)) {
                     const dmg = 5;
                     player.hp -= dmg;
                     player.trailStunned = true;
@@ -37608,9 +37610,11 @@ async function enemyTurn() {
                     if (other === e || other._dead || other.hp <= 0) continue;
                     if (other.type === 'WEAVER') continue;
                     if (other.type === 'KEY_RUNNER') continue; // KEY_RUNNERはWEAVER軌跡免疫
+                    if (e.isAlly && other.isAlly) continue; // 味方同士は軌跡ダメージなし
                     if (trailSet.has(`${other.x},${other.y}`)) {
                         other.hp -= 5;
-                        other.stunTurns = Math.max(other.stunTurns || 0, 1);
+                        // 味方WEAVERの軌跡はスタンなし（敵のみスタン）
+                        if (!e.isAlly) other.stunTurns = Math.max(other.stunTurns || 0, 1);
                         spawnDamageText(other.x, other.y, 5, '#22d3ee');
                         animateBounce(other);
                         if (other.hp <= 0 && !other._dead) _wDying.push(other);
