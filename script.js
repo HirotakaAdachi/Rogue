@@ -29007,9 +29007,10 @@ function tryPlaceBlock(dx, dy) {
             addLog("Removed the wall!");
             return true;
         }
-        // 床・毒沼・氷に通常WALLを設置（外周・敵・ウィスプ・ブロックなし）
+        // 床・毒沼・氷に通常WALLを設置（外周・敵・ウィスプ・ブロックなし・自分の上には置けない）
         const _wrPlaceable = (_wrt === SYMBOLS.FLOOR || _wrt === SYMBOLS.POISON || _wrt === SYMBOLS.ICE);
-        if (_wrPlaceable && bx >= 1 && bx < COLS - 1 && by >= 1 && by < ROWS - 1
+        if (_wrPlaceable && (bx !== player.x || by !== player.y)
+            && bx >= 1 && bx < COLS - 1 && by >= 1 && by < ROWS - 1
             && !enemies.some(e => {
                 if (e.type === 'LEECH' && e._attached) return false;
                 if (e.x === bx && e.y === by) return true;
@@ -30635,21 +30636,24 @@ async function windGustSlide() {
         _wallRingPlacePending = false;
         const _ppx = player.x + _wallRingLockDx;
         const _ppy = player.y + _wallRingLockDy;
-        if (_ppx >= 1 && _ppx < COLS - 1 && _ppy >= 1 && _ppy < ROWS - 1) {
-            const _ppt = map[_ppy][_ppx];
-            if (_ppt !== SYMBOLS.WALL && _ppt !== SYMBOLS.BLUE_BLOCK
-                && !enemies.some(e => {
-                    if (e.type === 'LEECH' && e._attached) return false;
-                    if (e.x === _ppx && e.y === _ppy) return true;
-                    if ((e.type === 'SNAKE' || e.type === 'SUMMONER') && e.body)
-                        return e.body.some(seg => seg.x === _ppx && seg.y === _ppy);
-                    return false;
-                })
-                && !wisps.some(w => w.x === _ppx && w.y === _ppy)
-                && !tempWalls.some(w => w.x === _ppx && w.y === _ppy)
-                && !bombs.some(b => b.x === _ppx && b.y === _ppy)) {
-                map[_ppy][_ppx] = SYMBOLS.WALL;
-                SOUNDS.PLACE_BLOCK();
+        // 絶対にプレイヤーの現在地に壁を置かない（安全チェック）
+        if (_ppx !== player.x || _ppy !== player.y) {
+            if (_ppx >= 1 && _ppx < COLS - 1 && _ppy >= 1 && _ppy < ROWS - 1) {
+                const _ppt = map[_ppy][_ppx];
+                if (_ppt !== SYMBOLS.WALL && _ppt !== SYMBOLS.BLUE_BLOCK
+                    && !enemies.some(e => {
+                        if (e.type === 'LEECH' && e._attached) return false;
+                        if (e.x === _ppx && e.y === _ppy) return true;
+                        if ((e.type === 'SNAKE' || e.type === 'SUMMONER') && e.body)
+                            return e.body.some(seg => seg.x === _ppx && seg.y === _ppy);
+                        return false;
+                    })
+                    && !wisps.some(w => w.x === _ppx && w.y === _ppy)
+                    && !tempWalls.some(w => w.x === _ppx && w.y === _ppy)
+                    && !bombs.some(b => b.x === _ppx && b.y === _ppy)) {
+                    map[_ppy][_ppx] = SYMBOLS.WALL;
+                    SOUNDS.PLACE_BLOCK();
+                }
             }
         }
     }
