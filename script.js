@@ -35252,12 +35252,18 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
             _allyKiller.level    =  _allyKiller.level    || 1;
             _allyKiller.nextExp  =  _allyKiller.nextExp  || (_allyKiller.level * 10);
             while (_allyKiller.exp >= _allyKiller.nextExp) {
-                _allyKiller.exp    -= _allyKiller.nextExp;
-                _allyKiller.level  += 1;
-                _allyKiller.nextExp = _allyKiller.level * 10;
-                _allyKiller.maxHp  += 5;
-                _allyKiller.hp      = _allyKiller.maxHp;
-                spawnFloatingText(_allyKiller.x, _allyKiller.y, 'LV UP!', '#fbbf24', 1200);
+                // 初回レベルアップ時に攻撃成長タイプを確定（+1 か +2、個体ごと固定）
+                if (_allyKiller._atkGrowth === undefined) {
+                    _allyKiller._atkGrowth = Math.random() < 0.5 ? 1 : 2;
+                }
+                _allyKiller.exp      -= _allyKiller.nextExp;
+                _allyKiller.level    += 1;
+                _allyKiller.nextExp   = _allyKiller.level * 10;
+                _allyKiller.maxHp    += 5;
+                _allyKiller.hp        = _allyKiller.maxHp;
+                _allyKiller._atkBonus = (_allyKiller._atkBonus || 0) + _allyKiller._atkGrowth;
+                const _lvMsg = _allyKiller._atkGrowth === 2 ? 'LV UP! ATK+2' : 'LV UP!';
+                spawnFloatingText(_allyKiller.x, _allyKiller.y, _lvMsg, '#fbbf24', 1200);
                 SOUNDS.LEVEL_UP();
             }
         }
@@ -42714,8 +42720,8 @@ async function enemyTurn() {
                         setScreenShake(8, 200);
                     }
 
-                    // 味方の攻撃力計算 (オークなら強い、レベルアップで+1ずつ増加)
-                    let dmg = (e.type === 'ORC' ? 15 : (e.type === 'BREAKER' ? 12 : (e.type === 'LAYER' ? 6 : (e.type === 'SNAKE' ? 10 : (e.type === 'MIMIC' ? 12 : (e.type === 'SUMMONER' ? 8 : 5)))))) + Math.floor(floorLevel / 2) + ((e.level || 1) - 1);
+                    // 味方の攻撃力計算 (オークなら強い、レベルアップで成長タイプ分増加)
+                    let dmg = (e.type === 'ORC' ? 15 : (e.type === 'BREAKER' ? 12 : (e.type === 'LAYER' ? 6 : (e.type === 'SNAKE' ? 10 : (e.type === 'MIMIC' ? 12 : (e.type === 'SUMMONER' ? 8 : 5)))))) + Math.floor(floorLevel / 2) + (e._atkBonus || 0);
                     // NECRO_RING 二重装備で蘇生された味方は攻撃力+3
                     if (e._necroBoosted) dmg += 3;
                     allyBestTarget.hp -= dmg;
