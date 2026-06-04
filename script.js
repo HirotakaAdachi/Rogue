@@ -2018,6 +2018,7 @@ let ambushRooms = [];
 let movingFairies = []; // {x, y, screenX, screenY} - マルチスクリーン用自律移動妖精
 let movingMadmen = []; // {x, y, screenX, screenY, hp, ...} - マルチスクリーン追跡狂人
 let travelingAllies = []; // isAlly=true の仲間敵：画面をまたいでプレイヤーについてくる
+let _liminalSavedAllies = []; // リミナルスペース入室前に保存した仲間（帰還時に復元）
 let floorLevel = 1;
 let maxReachedFloor = 1; // 最高到達階層
 let _f24ItemsTaken = { sword: false, escape: false, warpText: false }; // 24F固定アイテム取得済みフラグ
@@ -3332,6 +3333,10 @@ async function enterEscapeRoom() {
 
     // --- エスケープルーム状態に移行 ---
     isInEscapeRoom = true;
+    // リミナルスペース入室前の仲間を保存（帰還時に復元するため）
+    _liminalSavedAllies = enemies
+        .filter(e => e.isAlly && e.hp > 0 && !e._dead && !ENEMY_NO_CARRY_TYPES.has(e.type))
+        .map(e => ({ ...e, body: undefined, offsetX: 0, offsetY: 0, flashUntil: 0 }));
     multiScreenMode = false;
     screenGrid = null;
     resetFloorHazardState();
@@ -5104,6 +5109,7 @@ function initMap() {
     movingFairies = []; // 妖精をリセット
     movingMadmen = []; // 狂人をリセット
     travelingAllies = []; // 仲間をリセット
+    _liminalSavedAllies = []; // リミナルスペース保存仲間もリセット
     _pushRingMoves = []; _pushRingRoomIdx = -1; _floorRooms = []; // PUSH_RING状態リセット
     player.hasKey = false;
     player.hasBlueKey = false;
@@ -23964,6 +23970,11 @@ async function startFloorTransition() {
     const _carriedAllies = enemies
         .filter(e => e.isAlly && e.hp > 0 && !e._dead && !ENEMY_NO_CARRY_TYPES.has(e.type))
         .map(e => ({ ...e, body: undefined, offsetX: 0, offsetY: 0, flashUntil: 0 }));
+    // リミナルスペースから戻る際は、入室前に保存した仲間を復元
+    if (_wasEscapeRoom && _liminalSavedAllies.length > 0) {
+        _carriedAllies.push(..._liminalSavedAllies);
+        _liminalSavedAllies = [];
+    }
     transition.active = true;
     transition.mode = 'FALLING';
     transition.text = floorLevel === -1 ? 'END CREDITS' : floorLevel === DEEP_ENDING_FLOOR ? 'THE TRUE BOTTOM' : `FLOOR ${formatFloor(floorLevel)}`;
@@ -37085,6 +37096,7 @@ async function enemyTurn() {
                 e.type === 'SPAWNER' || e.type === 'WISP_SPAWNER' ||
                 (e.type === 'LEECH' && e._leechArmed) ||
                 ALL_COLLECTOR_TYPES.has(e.type)) continue; // コレクター敵は溶岩免疫
+            if (e.isAlly && hasRing('FIRE_RING')) continue; // 炎の指輪装備中は仲間も溶岩免疫
 
             if (!_lavaPlayedThisFullTurn) { SOUNDS.LAVA_BURN(); _lavaPlayedThisFullTurn = true; }
             e.flashUntil = _now + 100;
@@ -46199,7 +46211,7 @@ function canEnemyMove(x, y, mover = null) {
     if (tile === SYMBOLS.STAIRS && enemies.some(e => e.type === 'MIMIC' && e.disguised && e.x === x && e.y === y)) return false;
     // ブレイズとオークは溶岩を障害物と見なさない。SLIDERはブロックを通過できる
     if (isObstacle) {
-        if (tile === SYMBOLS.LAVA && mover && (mover.type === 'BLAZE' || mover.type === 'VULCAN' || mover.type === 'ORC' || mover.type === 'KEY_RUNNER' || mover.type === 'WEAVER' || mover.type === 'PAUPER_SHADE' || mover.lavaSync)) {
+        if (tile === SYMBOLS.LAVA && mover && (mover.type === 'BLAZE' || mover.type === 'VULCAN' || mover.type === 'ORC' || mover.type === 'KEY_RUNNER' || mover.type === 'WEAVER' || mover.type === 'PAUPER_SHADE' || mover.lavaSync || (mover.isAlly && hasRing('FIRE_RING')))) {
             // 移動を許可
         } else if ((tile === SYMBOLS.BLOCK || tile === SYMBOLS.BLOCK_CRACKED) && mover && mover.type === 'SLIDER') {
             // SLIDER はブロックを通過・停止できる
@@ -46309,6 +46321,7 @@ async function triggerGameOver() {
     updateUI();
     bufferedInput = null; // ゲームオーバー後のバッファ入力を捨てる
     travelingAllies = []; // 死亡時に仲間をリセット（リトライ時に引き継がないよう）
+    _liminalSavedAllies = [];
     // 死亡回数を記録
     const prevDeaths = safeStorageGetInt('minimal_rogue_deaths', 0, 0);
     safeStorageSet('minimal_rogue_deaths', String(prevDeaths + 1));
