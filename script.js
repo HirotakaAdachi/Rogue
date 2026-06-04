@@ -2164,6 +2164,8 @@ let _ncDarkAlpha = 1.0; // NOVEL_CORRIDOR 暗闇フェード (0=真っ暗, 1=通
 let tomeAuraParams = { active: false, x: 0, y: 0, radius: 0, alpha: 0, particles: [] };
 let isSpacePressed = false;
 let spaceUsedForBlock = false; // 今回のスペース押下でブロックを置いたかフラグ
+let _wallRingLockDx = 0; // WALL_RING: 最初に壁を置いた方向 X（Space離すまで保持）
+let _wallRingLockDy = 0; // WALL_RING: 最初に壁を置いた方向 Y
 let gameOverAlpha = 0;
 let storyMessage = null; // { lines: [], alpha: 0, showNext: false }
 let isTutorialInputActive = false; // チュートリアル入力待ちフラグ
@@ -31834,31 +31836,64 @@ async function handleAction(dx, dy) {
 
     // ブロック設置モード（杖を持っている時のみ）
     if (player.hasWand && isSpacePressed && (dx !== 0 || dy !== 0)) {
-        if (tryPlaceBlock(dx, dy)) {
-            player.isDefending = false; // ブロック設置ターンはGuard解除
-            spaceUsedForBlock = true;
-            isProcessing = true;
-            turnCount++;
-            updateUI();
-            try {
-                if (_webShotPending) { await _fireWebShot(_webShotPending); _webShotPending = null; }
-                await windGustSlide();
-                await enemyTurn();
-            } catch(err) {
-                console.error('[block turn ERROR]', err);
-            } finally {
-                try { await moveWisps(); } catch(we) { console.error('[wisp ERROR]', we); }
-                moveFairies();
-                moveMadmen();
-                isProcessing = false;
+        // WALL_RING 壁追随移動: ロック方向確定済み＋異なる方向キーが押された
+        if (hasRing('WALL_RING') && spaceUsedForBlock
+            && (_wallRingLockDx !== 0 || _wallRingLockDy !== 0)
+            && (dx !== _wallRingLockDx || dy !== _wallRingLockDy)) {
+            // ロック方向の隣タイルが床なら壁を設置（ターンは下の移動コードで処理）
+            const _wlx = player.x + _wallRingLockDx, _wly = player.y + _wallRingLockDy;
+            if (_wlx >= 1 && _wlx < COLS - 1 && _wly >= 1 && _wly < ROWS - 1) {
+                const _wlt = map[_wly][_wlx];
+                if ((_wlt === SYMBOLS.FLOOR || _wlt === SYMBOLS.POISON || _wlt === SYMBOLS.ICE)
+                    && !enemies.some(e => {
+                        if (e.type === 'LEECH' && e._attached) return false;
+                        if (e.x === _wlx && e.y === _wly) return true;
+                        if ((e.type === 'SNAKE' || e.type === 'SUMMONER') && e.body)
+                            return e.body.some(seg => seg.x === _wlx && seg.y === _wly);
+                        return false;
+                    })
+                    && !wisps.some(w => w.x === _wlx && w.y === _wly)
+                    && !tempWalls.some(w => w.x === _wlx && w.y === _wly)
+                    && !bombs.some(b => b.x === _wlx && b.y === _wly)) {
+                    map[_wly][_wlx] = SYMBOLS.WALL;
+                    SOUNDS.PLACE_BLOCK();
+                }
             }
-            if (isInEscapeRoom) {
-                _escapeRoomPageTempWalls[_escapeRoomPage] = [...tempWalls];
-                saveEscapeRoomData();
+            // プレイヤーの向きはロック方向に維持し、移動コードへフォールスルー
+            if (_wallRingLockDx > 0) player.facing = 'RIGHT';
+            else if (_wallRingLockDx < 0) player.facing = 'LEFT';
+            // return しない → 下の移動コードで dx/dy 方向に移動
+        } else {
+            if (tryPlaceBlock(dx, dy)) {
+                // WALL_RING: 最初の設置でロック方向を記録
+                if (hasRing('WALL_RING') && !spaceUsedForBlock) {
+                    _wallRingLockDx = dx; _wallRingLockDy = dy;
+                }
+                player.isDefending = false; // ブロック設置ターンはGuard解除
+                spaceUsedForBlock = true;
+                isProcessing = true;
+                turnCount++;
+                updateUI();
+                try {
+                    if (_webShotPending) { await _fireWebShot(_webShotPending); _webShotPending = null; }
+                    await windGustSlide();
+                    await enemyTurn();
+                } catch(err) {
+                    console.error('[block turn ERROR]', err);
+                } finally {
+                    try { await moveWisps(); } catch(we) { console.error('[wisp ERROR]', we); }
+                    moveFairies();
+                    moveMadmen();
+                    isProcessing = false;
+                }
+                if (isInEscapeRoom) {
+                    _escapeRoomPageTempWalls[_escapeRoomPage] = [...tempWalls];
+                    saveEscapeRoomData();
+                }
+                if (bufferedInput) { const b = bufferedInput; bufferedInput = null; handleAction(b.dx, b.dy); }
             }
-            if (bufferedInput) { const b = bufferedInput; bufferedInput = null; handleAction(b.dx, b.dy); }
+            return;
         }
-        return;
     }
 
     // 杖なしでスペース+方向キー：移動しない（方向を無視してその場で防御）
@@ -47480,6 +47515,7 @@ window.addEventListener('keyup', e => {
         }
         isSpacePressed = false;
         spaceUsedForBlock = false;
+        _wallRingLockDx = 0; _wallRingLockDy = 0;
         e.preventDefault();
     }
 });
@@ -48440,6 +48476,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
         _tcBlockActive = false;
         isSpacePressed = false;
         spaceUsedForBlock = false;
+        _wallRingLockDx = 0; _wallRingLockDy = 0;
         _tcBlockBtn.classList.remove('tc-active');
         const icon = _tcBlockIcon();
         // フリック解除後は向きを復元（rAFループが次フレームで上書きするが、過渡期のちらつき防止）
