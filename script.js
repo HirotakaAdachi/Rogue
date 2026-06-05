@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v611';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v612';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -42960,6 +42960,29 @@ async function enemyTurn() {
                     }
                 }
             } else {
+                // ダメージあり かつ 回復床が近く（12タイル以内）にある → 先に回復しに向かう
+                if (e.hp < e.maxHp && map[e.y] && map[e.y][e.x] !== SYMBOLS.HEAL_FLOOR) {
+                    let _hfBest = null, _hfBestDist = 13;
+                    for (let _hy = Math.max(0, e.y - 12); _hy <= Math.min(ROWS - 1, e.y + 12); _hy++) {
+                        for (let _hx = Math.max(0, e.x - 12); _hx <= Math.min(COLS - 1, e.x + 12); _hx++) {
+                            if (map[_hy][_hx] !== SYMBOLS.HEAL_FLOOR) continue;
+                            const _hd = Math.abs(_hx - e.x) + Math.abs(_hy - e.y);
+                            if (_hd < _hfBestDist) { _hfBestDist = _hd; _hfBest = { x: _hx, y: _hy }; }
+                        }
+                    }
+                    if (_hfBest) {
+                        const _hfStep = enemyGroundBFS(e.x, e.y, _hfBest.x, _hfBest.y);
+                        if (_hfStep) {
+                            const _hnx = e.x + _hfStep.dx, _hny = e.y + _hfStep.dy;
+                            if (canEnemyMove(_hnx, _hny, e)
+                                && !(_hnx === player.x && _hny === player.y)
+                                && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === _hnx && o.y === _hny)) {
+                                e.x = _hnx; e.y = _hny;
+                                continue;
+                            }
+                        }
+                    }
+                }
                 // 敵がいない or プレイヤーが遠い → プレイヤーを追いかける
                 const dP = Math.abs(player.x - e.x) + Math.abs(player.y - e.y);
                 if (dP > 1) { // 隣接していなければ近づく
