@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v607';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v608';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -47969,6 +47969,16 @@ async function useHealTome() {
     SOUNDS.HEAL();
     addKeyLog("Recited the Heal Tome! HP fully restored!");
     spawnFloatingText(player.x, player.y, "FULL HEAL!!", "#4ade80");
+    // 仲間も全員全回復
+    let allyCount = 0;
+    enemies.forEach(e => {
+        if (e.isAlly && e.hp > 0 && !e._dead) {
+            e.hp = e.maxHp;
+            e.flashUntil = performance.now() + 300;
+            allyCount++;
+        }
+    });
+    if (allyCount > 0) spawnFloatingText(player.x, player.y - 1, `+${allyCount} ALLIES HEALED`, "#4ade80", 1200);
     updateUI();
 }
 
