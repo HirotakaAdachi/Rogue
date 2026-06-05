@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v608';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v609';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -34911,6 +34911,24 @@ function scheduleEnemyFall(enemy, msg, killedByPlayer = false) {
     setTimeout(() => { handleEnemyDeath(enemy, killedByPlayer); }, 400);
 }
 
+function _grantAllyExp(ally, exp) {
+    ally.exp     = (ally.exp     || 0) + exp;
+    ally.level   =  ally.level   || 1;
+    ally.nextExp =  ally.nextExp || (ally.level * 10);
+    while (ally.exp >= ally.nextExp) {
+        if (ally._hpGrowth  === undefined) ally._hpGrowth  = Math.floor(Math.random() * 48) + 3;
+        if (ally._atkGrowth === undefined) ally._atkGrowth = Math.floor(Math.random() * 8)  + 1;
+        ally.exp      -= ally.nextExp;
+        ally.level    += 1;
+        ally.nextExp   = ally.level * 10;
+        ally.maxHp    += ally._hpGrowth;
+        ally.hp        = ally.maxHp;
+        ally._atkBonus = (ally._atkBonus || 0) + ally._atkGrowth;
+        spawnFloatingText(ally.x, ally.y, `LV UP! HP+${ally._hpGrowth} ATK+${ally._atkGrowth}`, '#fbbf24', 1400);
+        SOUNDS.LEVEL_UP();
+    }
+}
+
 async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = false, _skipAnimWait = false, suppressDeathSound = false) {
     if (enemy._dead) return; // 二重処理防止
     // LEECHが寄生中にダメージを受けた → 起動 or 即爆発
@@ -35288,27 +35306,17 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
         const _allyKiller = enemy._killedByAlly;
         delete enemy._killedByAlly;
         if (_allyKiller && !_allyKiller._dead && _allyKiller.hp > 0) {
-            const _aExp = (enemy.expValue || 5) * 4;
-            _allyKiller.exp      = (_allyKiller.exp      || 0) + _aExp;
-            _allyKiller.level    =  _allyKiller.level    || 1;
-            _allyKiller.nextExp  =  _allyKiller.nextExp  || (_allyKiller.level * 10);
-            while (_allyKiller.exp >= _allyKiller.nextExp) {
-                // 初回レベルアップ時に成長タイプを確定（個体ごと固定）
-                if (_allyKiller._hpGrowth === undefined) {
-                    _allyKiller._hpGrowth  = Math.floor(Math.random() * 48) + 3; // 3〜50
-                }
-                if (_allyKiller._atkGrowth === undefined) {
-                    _allyKiller._atkGrowth = Math.floor(Math.random() * 8)  + 1;  // 1〜8
-                }
-                _allyKiller.exp      -= _allyKiller.nextExp;
-                _allyKiller.level    += 1;
-                _allyKiller.nextExp   = _allyKiller.level * 10;
-                _allyKiller.maxHp    += _allyKiller._hpGrowth;
-                _allyKiller.hp        = _allyKiller.maxHp;
-                _allyKiller._atkBonus = (_allyKiller._atkBonus || 0) + _allyKiller._atkGrowth;
-                spawnFloatingText(_allyKiller.x, _allyKiller.y, `LV UP! HP+${_allyKiller._hpGrowth} ATK+${_allyKiller._atkGrowth}`, '#fbbf24', 1400);
-                SOUNDS.LEVEL_UP();
-            }
+            _grantAllyExp(_allyKiller, (enemy.expValue || 5) * 4);
+        }
+    }
+
+    // HEALER仲間: 8タイル以内で敵が倒されたらEXP付与（倒した仲間との二重取り防止済み）
+    if (!enemy.isAlly) {
+        const _heaExp = (enemy.expValue || 5) * 4;
+        for (const _he of enemies) {
+            if (!_he.isAlly || _he._dead || _he.hp <= 0 || _he.type !== 'HEALER') continue;
+            if (Math.abs(_he.x - enemy.x) + Math.abs(_he.y - enemy.y) > 8) continue;
+            _grantAllyExp(_he, _heaExp);
         }
     }
 
