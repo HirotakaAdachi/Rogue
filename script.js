@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v605';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v606';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -35293,18 +35293,20 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
             _allyKiller.level    =  _allyKiller.level    || 1;
             _allyKiller.nextExp  =  _allyKiller.nextExp  || (_allyKiller.level * 10);
             while (_allyKiller.exp >= _allyKiller.nextExp) {
-                // 初回レベルアップ時に攻撃成長タイプを確定（+1 か +2、個体ごと固定）
+                // 初回レベルアップ時に成長タイプを確定（個体ごと固定）
+                if (_allyKiller._hpGrowth === undefined) {
+                    _allyKiller._hpGrowth  = Math.floor(Math.random() * 41) + 10; // 10〜50
+                }
                 if (_allyKiller._atkGrowth === undefined) {
-                    _allyKiller._atkGrowth = Math.random() < 0.5 ? 1 : 2;
+                    _allyKiller._atkGrowth = Math.floor(Math.random() * 8)  + 1;  // 1〜8
                 }
                 _allyKiller.exp      -= _allyKiller.nextExp;
                 _allyKiller.level    += 1;
                 _allyKiller.nextExp   = _allyKiller.level * 10;
-                _allyKiller.maxHp    += (_allyKiller.type === 'NORMAL' ? 20 : 5);
+                _allyKiller.maxHp    += _allyKiller._hpGrowth;
                 _allyKiller.hp        = _allyKiller.maxHp;
                 _allyKiller._atkBonus = (_allyKiller._atkBonus || 0) + _allyKiller._atkGrowth;
-                const _lvMsg = _allyKiller._atkGrowth === 2 ? 'LV UP! ATK+2' : 'LV UP!';
-                spawnFloatingText(_allyKiller.x, _allyKiller.y, _lvMsg, '#fbbf24', 1200);
+                spawnFloatingText(_allyKiller.x, _allyKiller.y, `LV UP! HP+${_allyKiller._hpGrowth} ATK+${_allyKiller._atkGrowth}`, '#fbbf24', 1400);
                 SOUNDS.LEVEL_UP();
             }
         }
