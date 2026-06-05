@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v614';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v615';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -28061,8 +28061,8 @@ function draw(now) {
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                 }
-                // 仲間(isAlly): 主人公が隣接している時だけ HP/MaxHP を上に小さく表示
-                if (e.isAlly && Math.max(Math.abs(player.x - e.x), Math.abs(player.y - e.y)) <= 1) {
+                // 仲間(isAlly): メニュー画面を開いている時だけ全員の HP/MaxHP を上に小さく表示
+                if (e.isAlly && gameState === 'MENU') {
                     const _hpFont = ctx.font;
                     ctx.font = `bold 7px 'Courier New'`;
                     ctx.shadowColor = '#052e16';
