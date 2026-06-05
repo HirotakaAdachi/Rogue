@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v612';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v613';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -42200,7 +42200,7 @@ async function enemyTurn() {
 
         // ===== AI: HEALER (main) =====
         if (e.type === 'HEALER' && !e._betrayed) {
-            const healAmount = 5 + floorLevel;
+            const healAmount = 5 + floorLevel + (e.isAlly ? (e._atkBonus || 0) : 0);
             const adj = [{x:0,y:1},{x:1,y:0},{x:0,y:-1},{x:-1,y:0},
                          {x:1,y:1},{x:-1,y:1},{x:1,y:-1},{x:-1,y:-1}];
             let healedAny = false;
