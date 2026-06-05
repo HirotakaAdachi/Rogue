@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v604';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v605';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -37465,6 +37465,7 @@ async function enemyTurn() {
                     await new Promise(r => setTimeout(r, 120));
                     if (target.hp <= 0) {
                         // 仕留めた: 蜘蛛は獲物のマスへ移動して留まる
+                        if (e.isAlly) target._killedByAlly = e;
                         handleEnemyDeath(target, false);
                         e.x = targetX;
                         e.y = targetY;
@@ -41700,7 +41701,7 @@ async function enemyTurn() {
                             }
                             spawnFloatingText(e.x,e.y,"CRUSH!",'#ef4444',1000);
                             for(const _p of _aPushed){
-                                if(_p._dead||_p.hp<=0){await handleEnemyDeath(_p,true);continue;} // BOAR巻き込み = プレイヤー討伐扱い
+                                if(_p._dead||_p.hp<=0){if(e.isAlly)_p._killedByAlly=e; await handleEnemyDeath(_p,true);continue;} // BOAR巻き込み = プレイヤー討伐扱い
                                 _p.offsetY=-Math.round(TILE_SIZE/2);draw();await _w(130);
                                 let _land=null;
                                 for(const[_px,_py]of _aPerp){const lx=e.x+_px,ly=e.y+_py;if(lx<1||lx>=COLS-1||ly<1||ly>=ROWS-1)continue;if(map[ly][lx]!==SYMBOLS.FLOOR&&!isRealHole(lx,ly))continue;if(_aUsed.some(s=>s.x===lx&&s.y===ly))continue;if(enemies.some(oe=>oe!==_p&&!oe._dead&&oe.hp>0&&oe.x===lx&&oe.y===ly))continue;_land={x:lx,y:ly};break;}
@@ -45735,18 +45736,19 @@ async function applyLaserDamage() {
                             if (oe.type === 'BOMBER') {
                                 oe.hp = 0; oe.flashUntil = performance.now() + 100;
                                 spawnFloatingText(oe.x, oe.y, "ZAP!", "#f87171");
+                                if (e.isAlly) oe._killedByAlly = e;
                                 handleEnemyDeath(oe);
                             } else {
                                 oe.hp -= enemyLaserDmg; oe.flashUntil = performance.now() + 100;
                                 spawnDamageText(oe.x, oe.y, enemyLaserDmg, '#f87171');
                                 SOUNDS.DAMAGE();
-                                if (oe.hp <= 0) handleEnemyDeath(oe);
+                                if (oe.hp <= 0) { if (e.isAlly) oe._killedByAlly = e; handleEnemyDeath(oe); }
                             }
                         } else if ((oe.type === 'SNAKE' || oe.type === 'SUMMONER') && oe.body && oe.body.some(s => s.x === lx && s.y === ly)) {
                             oe.hp -= enemyLaserDmg; oe.flashUntil = performance.now() + 100;
                             spawnDamageText(lx, ly, enemyLaserDmg, '#f87171');
                             SOUNDS.DAMAGE();
-                            if (oe.hp <= 0) handleEnemyDeath(oe);
+                            if (oe.hp <= 0) { if (e.isAlly) oe._killedByAlly = e; handleEnemyDeath(oe); }
                         }
                     }
                 });
