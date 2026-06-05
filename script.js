@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v617';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v618';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -42059,8 +42059,8 @@ async function enemyTurn() {
                                 spawnDamageText(e.x, e.y, _cDmg, '#ef4444');
                                 SOUNDS.DAMAGE();
                             } else {
-                                if (_p.type === 'NORMAL') {
-                                    // E は即死
+                                if (_p.type === 'NORMAL' && !_p.isAlly) {
+                                    // E は即死（仲間Eは除外）
                                     const _killDmg = _p.hp;
                                     _p.hp = 0; _p.flashUntil = performance.now() + 400;
                                     spawnDamageText(e.x, e.y, _killDmg, '#ef4444');
