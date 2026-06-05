@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v601';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v602';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -37275,7 +37275,7 @@ async function enemyTurn() {
         // 毒沼（溶岩はプレパスで処理済み）
         const tile = map[e.y][e.x];
         if (tile === SYMBOLS.POISON) {
-            if (e.type !== 'KEY_RUNNER' && e.type !== 'MIASMA') { // KEY_RUNNER/MIASMAは毒免疫
+            if (e.type !== 'KEY_RUNNER' && e.type !== 'MIASMA' && !(e.isAlly && hasRing('POISON_RING'))) { // KEY_RUNNER/MIASMA・POISON_RING装備中の仲間は毒免疫
                 const damage = 1;
                 e.hp -= damage; e.flashUntil = performance.now() + 100;
                 spawnDamageText(e.x, e.y, damage, '#a855f7');
