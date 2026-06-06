@@ -5,37 +5,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     <title>Minimal Rogue</title>
-    <link rel="stylesheet" href="style.css">
+    <style>
+:root { --bg-color: #0a0a0a; --border-color: #333333; }
+body { margin: 0; padding: 0; background-color: var(--bg-color); display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; user-select: none; -webkit-user-select: none; cursor: default; }
+.game-wrapper { display: flex; flex-direction: column; border: 1px solid var(--border-color); padding: 20px; }
+#game-canvas { border: 1px solid var(--border-color); background-color: #000; cursor: default; display: block; }
+    </style>
 </head>
 
 <body>
     <div class="game-wrapper">
-        <div class="stats-bar">
-            <div class="stats-group">
-                <span>LV: <span id="lv">1</span></span>
-                <span>HP: <span id="hp">20/20</span></span>
-                <div class="stamina-container">STAMINA: <span class="stamina-gauge-bg"><span id="stamina-bar"></span></span>
-                </div>
-            </div>
-            <div class="stats-center">
-                <div id="minimap"></div>
-            </div>
-            <div class="stats-group stats-group-right">
-                <span><span id="floor-prefix">FLOOR </span><span id="floor">1/100</span></span>
-                <span class="equip-row"><span id="key-status"></span> <span id="sword-status"></span> <span id="armor-status"></span> <span id="fairy-status"></span> <span id="gold-status" style="color: #fff;"></span></span>
-                <span id="ring-status" style="color: #aaa; font-size: 11px;"></span>
-            </div>
-        </div>
         <canvas id="game-canvas"></canvas>
-        <div class="log-row">
-            <div id="log" class="game-log">
-                <div>Welcome to the Depths.</div>
-            </div>
-            <div id="room-type-label"></div>
-            <div class="best-floor-panel">BEST<br><span id="best-floor">B1F</span></div>
-        </div>
     </div>
-    <script src="script.js?v=623"></script>
+    <script src="script.js?v=624"></script>
 </body>
 
 </html>

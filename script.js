@@ -183,16 +183,16 @@ function safeStorageGetInt(key, fallback, min = -Infinity, max = Infinity) {
 // ===== SECTION: CONSTANTS & CANVAS SETUP =====
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
-const logElement = document.getElementById('log');
-const hpElement = document.getElementById('hp');
-const lvElement = document.getElementById('lv');
-const staminaBar = document.getElementById('stamina-bar');
-const floorElement = document.getElementById('floor');
-const statsBar = document.querySelector('.stats-bar');
-const logRow = document.querySelector('.log-row');
 const gameWrapper = document.querySelector('.game-wrapper');
-statsBar.style.display = 'none';
-logRow.style.display = 'none';
+// ===== CANVAS HUD STATE =====
+let _hudLV = 1, _hudHP = '20/20', _hudHPColor = '#ededed';
+let _hudStamina = 100, _hudStaminaInfinite = false;
+let _hudFloor = '1/100', _hudFloorPrefix = 'FLOOR ';
+let _hudHasKey = false, _hudSwordCount = 0, _hudArmorCount = 0;
+let _hudGold = 0, _hudRingNames = [];
+let _hudBestFloor = 1;
+let _hudMinimapData = null;
+let _logLines = [];
 
 // 設定
 const TILE_SIZE = 20;
@@ -203,12 +203,15 @@ const COLS = 40;
 const DEEP_ENDING_FLOOR = Number.MAX_SAFE_INTEGER;
 const CANVAS_W = COLS * TILE_SIZE;
 const CANVAS_H = ROWS * TILE_SIZE + 2; // +2: 描画オフセット分を確保
+const HUD_TOP_H = 55;
+const HUD_BOT_H = 95;
+const CANVAS_H_FULL = HUD_TOP_H + CANVAS_H + HUD_BOT_H;
 const dpr = window.devicePixelRatio || 1;
 canvas.width  = CANVAS_W * dpr;
-canvas.height = CANVAS_H * dpr;
+canvas.height = CANVAS_H_FULL * dpr;
 // CSSのflexストレッチでcanvasが引き伸ばされないよう明示的にサイズを固定
 canvas.style.width  = CANVAS_W + 'px';
-canvas.style.height = CANVAS_H + 'px';
+canvas.style.height = CANVAS_H_FULL + 'px';
 ctx.scale(dpr, dpr);
 
 const SYMBOLS = {
@@ -3714,170 +3717,64 @@ function updateUI() {
         if (windTimer === 4) addLog("The wind is picking up...");
     }
     isPlayerVisible = true; // 確実に表示状態にする
-    hpElement.innerText = `${player.hp}/${getPlayerMaxHp()}`;
-    if (player.isShielded) {
-        hpElement.style.color = '#4ade80'; // 守護状態は緑色に
-    } else if (player.isBreaker) {
-        hpElement.style.color = '#f59e0b'; // 壁破壊状態はオレンジに
-    } else {
-        hpElement.style.color = '#ededed';
-    }
-
-    const bar = document.getElementById('stamina-bar');
-    if (bar) {
-        if (player.isInfiniteStamina) {
-            bar.style.width = '100%';
-            bar.style.backgroundColor = '#fbbf24'; // 金色
-            bar.classList.add('stamina-glow-active');
-        } else {
-            bar.style.width = `${player.stamina}%`;
-            bar.style.backgroundColor = player.stamina < 30 ? '#f87171' : '#38bdf8';
-            bar.classList.remove('stamina-glow-active');
-        }
-    }
-    lvElement.innerText = player.level;
-    lvElement.style.color = '#ededed';
-    const bestFloorEl = document.getElementById('best-floor');
-    if (bestFloorEl) bestFloorEl.innerText = `B${formatFloor(maxReachedFloor)}F`;
-    const rtlEl = document.getElementById('room-type-label');
-    if (rtlEl) {
-        rtlEl.innerHTML = '';
-        rtlEl.style.display = 'none';
-    }
-    const _floorPfx = document.getElementById('floor-prefix');
-    if (_floorPfx) _floorPfx.style.display = isInEscapeRoom ? 'none' : '';
+    _hudHP = `${player.hp}/${getPlayerMaxHp()}`;
+    _hudHPColor = player.isShielded ? '#4ade80' : player.isBreaker ? '#f59e0b' : '#ededed';
+    _hudStamina = player.stamina;
+    _hudStaminaInfinite = player.isInfiniteStamina;
+    _hudLV = player.level;
+    _hudBestFloor = maxReachedFloor;
+    _hudHasKey = player.hasKey;
+    _hudSwordCount = player.swordCount;
+    _hudArmorCount = player.armorCount;
+    _hudGold = player.gold;
+    _hudRingNames = player.equippedRings
+        .map(id => id ? (RINGS.find(r => r.id === id)?.name || '') : '')
+        .filter(n => n);
     if (isInEscapeRoom) {
-        floorElement.innerText = 'LIMINAL SPACE';
+        _hudFloorPrefix = '';
+        _hudFloor = 'LIMINAL SPACE';
     } else if (floorLevel === -1) {
-        floorElement.innerText = 'END CREDITS';
+        _hudFloorPrefix = '';
+        _hudFloor = 'END CREDITS';
     } else if (floorLevel === 100) {
-        floorElement.innerText = "LAST FLOOR";
+        _hudFloorPrefix = 'FLOOR ';
+        _hudFloor = 'LAST FLOOR';
     } else if (floorLevel >= 101) {
-        floorElement.innerText = floorLevel === DEEP_ENDING_FLOOR ? 'TRUE BOTTOM' : `DEEP ${formatFloor(floorLevel)} [${currentScreen.x+1},${currentScreen.y+1}]`;
-    } else if (multiScreenMode) {
-        floorElement.innerText = `${floorLevel}/100`;
+        _hudFloorPrefix = '';
+        _hudFloor = floorLevel === DEEP_ENDING_FLOOR ? 'TRUE BOTTOM' : `DEEP ${formatFloor(floorLevel)} [${currentScreen.x+1},${currentScreen.y+1}]`;
     } else {
-        floorElement.innerText = `${floorLevel}/100`;
+        _hudFloorPrefix = 'FLOOR ';
+        _hudFloor = `${floorLevel}/100`;
     }
-
-    // スタイル定義 (記号用)
-    const symbolStyle = 'style="color: #38bdf8; font-weight: bold;"';
-
-    // 鍵の表示 (所持中のみ)
-    const keyNode = document.getElementById('key-status');
-    if (keyNode) {
-        keyNode.innerHTML = player.hasKey
-            ? `<span style="color: #fbbf24; font-weight: bold;">${SYMBOLS.KEY}</span>`
-            : '';
-    }
-
-    // 剣の表示 (常に表示)
-    const swordNode = document.getElementById('sword-status');
-    if (swordNode) {
-        swordNode.innerHTML = `<span ${symbolStyle}>${SYMBOLS.SWORD}</span>x${player.swordCount}`;
-    }
-
-    // 防具の表示 (常に表示)
-    const armorNode = document.getElementById('armor-status');
-    if (armorNode) {
-        armorNode.innerHTML = `<span ${symbolStyle}>${SYMBOLS.ARMOR}</span>x${player.armorCount}`;
-    }
-
-    // 妖精はインベントリ表示に移動したためstats-barには表示しない
-    const fairyNode = document.getElementById('fairy-status');
-    if (fairyNode) fairyNode.innerHTML = "";
-
-    // ゴールド表示
-    const goldNode = document.getElementById('gold-status');
-    if (goldNode) {
-        goldNode.innerText = `${player.gold}G`;
-    }
-    // 装備指輪表示
-    const ringNode = document.getElementById('ring-status');
-    if (ringNode) {
-        const names = player.equippedRings
-            .map(id => id ? (RINGS.find(r => r.id === id)?.name || '') : '')
-            .filter(n => n);
-        ringNode.innerText = names.length ? names.join('  /  ') : '';
-    }
-
-
-    updateMinimap();
+    _updateMinimapData();
 }
 
-function updateMinimap() {
-    const el = document.getElementById('minimap');
-    const _zmEl = document.getElementById('zoom-minimap');
-    if (!el) return;
+function _updateMinimapData() {
     if (isInEscapeRoom) {
-        el.style.display = 'block';
-        let html = '';
-        for (let r = 0; r < 2; r++) {
-            html += '<div class="minimap-row">';
-            for (let c = 0; c < 5; c++) {
-                const p = r * 5 + c;
-                const isCur = (p === _escapeRoomPage);
-                html += `<span style="color:#ededed">${isCur ? '■' : '□'}</span>`;
-            }
-            html += '</div>';
-        }
-        el.innerHTML = html;
-        if (_zmEl) { _zmEl.innerHTML = html; _zmEl.style.display = 'block'; }
+        _hudMinimapData = { type: 'escape', total: 10, current: _escapeRoomPage };
         return;
     }
     if (floorLevel === 1 || !multiScreenMode || !visitedScreens) {
-        el.style.display = 'none';
-        el.innerHTML = '';
-        if (_zmEl) { _zmEl.innerHTML = ''; _zmEl.style.display = 'none'; }
-        return;
+        _hudMinimapData = null; return;
     }
-    el.style.display = 'block';
-    let html = '';
-    // NOVEL_CORRIDOR: compact progress bar (100 cells would overflow)
     if (isRoomTestMode && forcedLayoutType === 'NOVEL_CORRIDOR') {
-        const cur = currentScreen.x;
-        const total = screenGridCols;
-        const winHalf = 9;
-        const winStart = Math.max(0, cur - winHalf);
-        const winEnd = Math.min(total - 1, cur + winHalf);
-        html += '<div class="minimap-row" style="white-space:nowrap">';
-        if (winStart > 0) html += '<span style="color:#555">…</span>';
-        for (let sx = winStart; sx <= winEnd; sx++) {
-            const isCurrent = (sx === cur);
-            const isVisited = visitedScreens[0][sx];
-            if (isCurrent) html += '<span style="color:#ededed">■</span>';
-            else if (isVisited) html += '<span style="color:#666">■</span>';
-            else html += '<span style="color:#ededed">□</span>';
-        }
-        if (winEnd < total - 1) html += '<span style="color:#555">…</span>';
-        html += `<span style="color:#888;font-size:0.85em;margin-left:6px">Room ${cur + 1}/${total}</span>`;
-        html += '</div>';
-        el.innerHTML = html;
+        _hudMinimapData = {
+            type: 'corridor',
+            current: currentScreen.x, total: screenGridCols,
+            winStart: Math.max(0, currentScreen.x - 9),
+            winEnd: Math.min(screenGridCols - 1, currentScreen.x + 9),
+            visited: visitedScreens
+        };
         return;
     }
-    for (let sy = 0; sy < screenGridRows; sy++) {
-        html += '<div class="minimap-row">';
-        for (let sx = 0; sx < screenGridCols; sx++) {
-            const _mmActive = !screenGrid || !screenGrid.active || screenGrid.active[sy][sx];
-            if (!_mmActive) {
-                html += '<span style="color:#222">　</span>';
-                continue;
-            }
-            const isCurrent = (sx === currentScreen.x && sy === currentScreen.y);
-            const isVisited = visitedScreens[sy][sx];
-            if (isCurrent) {
-                html += '<span style="color:#ededed">■</span>';
-            } else if (isVisited) {
-                html += '<span style="color:#666">■</span>';
-            } else {
-                html += '<span style="color:#ededed">□</span>';
-            }
-        }
-        html += '</div>';
-    }
-    el.innerHTML = html;
-    if (_zmEl) { _zmEl.innerHTML = html; _zmEl.style.display = 'block'; }
+    _hudMinimapData = {
+        type: 'grid',
+        rows: screenGridRows, cols: screenGridCols,
+        current: { x: currentScreen.x, y: currentScreen.y },
+        active: screenGrid?.active, visited: visitedScreens
+    };
 }
+function updateMinimap() { _updateMinimapData(); }
 
 // ===== SECTION: MAP GENERATION =====
 // Fixed floor blocks are inside initMap() as: if (floorLevel === N) { ... return; }
@@ -24694,7 +24591,7 @@ async function playOpeningSequence() {
 
 // ===== SECTION: OPENING ANIMATION =====
 function drawOpening(now) {
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
@@ -24734,10 +24631,6 @@ function drawOpening(now) {
 
 // ===== SECTION: GAME LOOP =====
 function gameLoop(now) {
-    const hideStates = ['TITLE', 'LANG_SELECT', 'FIXED_STAGE_SELECT', 'ROOM_TYPE_SELECT', 'OPENING', 'GAMEOVER', 'GAMEOVER_SEQ', 'ENDING', 'ENDING_SEQ'];
-    const _hideHUD = hideStates.includes(gameState) || floorLevel === -1;
-    statsBar.style.display = _hideHUD ? 'none' : '';
-    logRow.style.display = _hideHUD ? 'none' : '';
     const _creditsMode = floorLevel === -1 && gameState === 'PLAYING';
     if (gameWrapper) gameWrapper.style.border = _creditsMode ? 'none' : '';
     canvas.style.border = _creditsMode ? 'none' : '';
@@ -24792,7 +24685,7 @@ function gameLoop(now) {
 
 // ===== SECTION: TITLE / GAMEOVER RENDERING =====
 function drawTitle() {
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.textAlign = 'center';
     const deepUnlocked = localStorage.getItem('deep_unlocked') === '1';
 
@@ -24915,7 +24808,7 @@ function drawTitle() {
 }
 
 function drawLangSelect() {
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.textAlign = 'center';
@@ -24945,7 +24838,7 @@ function drawLangSelect() {
 }
 
 function drawFixedStageSelect() {
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.textAlign = 'center';
 
     ctx.fillStyle = '#ededed';
@@ -24990,7 +24883,7 @@ function drawFixedStageSelect() {
 }
 
 function drawRoomTypeSelect() {
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ededed';
     ctx.font = "bold 26px 'Courier New', Courier, monospace";
@@ -25040,7 +24933,7 @@ function drawRoomTypeSelect() {
 
 function drawGameOver() {
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.textAlign = 'center';
 
     ctx.fillStyle = '#ff0000';
@@ -26611,6 +26504,210 @@ function _applyCrumbleAura(px, py, ox, oy) {
     }
 }
 
+// ===== CANVAS HUD DRAWING =====
+function _drawCanvasHUDTop() {
+    // Draws stats bar at y=0..HUD_TOP_H in current translate context
+    // (Called from within translate(0, HUD_TOP_H), so draw at y = -HUD_TOP_H)
+    const Y0 = -HUD_TOP_H;
+    const H = HUD_TOP_H;
+    ctx.save();
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, Y0, CANVAS_W, H);
+    // Bottom border
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, Y0 + H - 0.5);
+    ctx.lineTo(CANVAS_W, Y0 + H - 0.5);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const FONT = "14px 'Courier New', Courier, monospace";
+    const FONT_SM = "11px 'Courier New', Courier, monospace";
+    ctx.font = FONT;
+
+    // === LEFT COLUMN: LV / HP / STAMINA ===
+    const lx = 20, ly1 = Y0 + 13, ly2 = Y0 + 29, ly3 = Y0 + 43;
+
+    // LV
+    ctx.fillStyle = '#888'; ctx.fillText('LV: ', lx, ly1);
+    const lvW = ctx.measureText('LV: ').width;
+    ctx.fillStyle = '#fbbf24'; ctx.fillText(String(_hudLV), lx + lvW, ly1);
+
+    // HP
+    ctx.fillStyle = '#888'; ctx.fillText('HP: ', lx, ly2);
+    const hpW = ctx.measureText('HP: ').width;
+    ctx.fillStyle = _hudHPColor; ctx.fillText(_hudHP, lx + hpW, ly2);
+
+    // STAMINA
+    ctx.fillStyle = '#888'; ctx.font = FONT_SM;
+    ctx.fillText('STAMINA', lx, ly3);
+    // Gauge
+    const gx = lx + ctx.measureText('STAMINA ').width + 2;
+    const gw = 60, gh = 6, gy = ly3 - gh / 2;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(gx, gy, gw, gh);
+    const barW = Math.round((_hudStaminaInfinite ? 100 : _hudStamina) / 100 * gw);
+    ctx.fillStyle = _hudStaminaInfinite ? '#fbbf24' : (_hudStamina < 30 ? '#f87171' : '#38bdf8');
+    ctx.fillRect(gx, gy, barW, gh);
+    if (_hudStaminaInfinite) {
+        ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 6;
+        ctx.fillRect(gx, gy, barW, gh);
+        ctx.shadowBlur = 0;
+    }
+
+    // === MINIMAP CENTER ===
+    if (_hudMinimapData) {
+        _drawCanvasHUDMinimap(Y0, H);
+    }
+
+    // === RIGHT COLUMN: FLOOR / EQUIPMENT / RINGS ===
+    const rx = CANVAS_W - 20;
+    ctx.textAlign = 'right';
+    ctx.font = FONT;
+
+    // Floor
+    ctx.fillStyle = '#888';
+    if (_hudFloorPrefix) {
+        const floorTextW = ctx.measureText(_hudFloor).width;
+        ctx.fillText(_hudFloorPrefix, rx - floorTextW, ly1);
+    }
+    ctx.fillStyle = '#fff'; ctx.font = "12px 'Courier New', Courier, monospace";
+    ctx.fillText(_hudFloor, rx, ly1);
+
+    // Ring names
+    if (_hudRingNames.length > 0) {
+        ctx.font = "11px 'Courier New', Courier, monospace";
+        ctx.fillStyle = '#aaa';
+        ctx.fillText(_hudRingNames.join('  /  '), rx, ly3);
+    }
+
+    // Equipment row: key + sword + armor + gold (draw right-to-left)
+    ctx.font = FONT;
+    const eq = [];
+    if (_hudHasKey) eq.push({ text: 'k', color: '#fbbf24' });
+    if (_hudSwordCount > 0) eq.push({ text: '†', color: '#38bdf8' }, { text: `x${_hudSwordCount}`, color: '#ededed' });
+    if (_hudArmorCount > 0) eq.push({ text: '▼', color: '#38bdf8' }, { text: `x${_hudArmorCount}`, color: '#ededed' });
+    if (_hudGold > 0) eq.push({ text: `${_hudGold}G`, color: '#fff' });
+    let eDrawX = rx;
+    for (let i = eq.length - 1; i >= 0; i--) {
+        const seg = eq[i];
+        const w = ctx.measureText(seg.text).width;
+        ctx.fillStyle = seg.color;
+        ctx.fillText(seg.text, eDrawX, ly2);
+        eDrawX -= w + 5;
+    }
+
+    // Best floor (small, bottom right)
+    ctx.font = "11px 'Courier New', Courier, monospace";
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'right';
+    ctx.fillText(`BEST B${formatFloor(_hudBestFloor)}F`, rx, ly3 + 2);
+
+    ctx.restore();
+}
+
+function _drawCanvasHUDMinimap(Y0, H) {
+    const mm = _hudMinimapData;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const CX = CANVAS_W / 2;
+
+    if (mm.type === 'escape') {
+        // 2x5 escape room minimap
+        const CW = 16, CH = 9;
+        const startX = CX - 5 * CW / 2;
+        for (let r = 0; r < 2; r++) {
+            for (let c = 0; c < 5; c++) {
+                const p = r * 5 + c;
+                ctx.font = "8px 'Courier New', Courier, monospace";
+                ctx.fillStyle = '#ededed';
+                ctx.fillText(p === mm.current ? '■' : '□', startX + c * CW + CW / 2, Y0 + r * CH + (H - CH * 2) / 2 + CH / 2 + 4);
+            }
+        }
+    } else if (mm.type === 'corridor') {
+        const CW = 16;
+        const startX = CX - (mm.winEnd - mm.winStart + 1) * CW / 2;
+        ctx.font = "8px 'Courier New', Courier, monospace";
+        let dx = 0;
+        if (mm.winStart > 0) {
+            ctx.fillStyle = '#555'; ctx.fillText('…', startX - CW / 2, Y0 + H / 2);
+        }
+        for (let sx = mm.winStart; sx <= mm.winEnd; sx++) {
+            const isCurrent = sx === mm.current;
+            const isVisited = mm.visited[0][sx];
+            ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#ededed');
+            ctx.fillText(isCurrent ? '■' : (isVisited ? '■' : '□'), startX + dx * CW + CW / 2, Y0 + H / 2);
+            dx++;
+        }
+        if (mm.winEnd < mm.total - 1) {
+            ctx.fillStyle = '#555'; ctx.fillText('…', startX + dx * CW + CW / 2, Y0 + H / 2);
+        }
+    } else if (mm.type === 'grid') {
+        const CW = 16, CH = 9;
+        const startX = CX - mm.cols * CW / 2;
+        const startY = Y0 + (H - mm.rows * CH) / 2;
+        ctx.font = "8px 'Courier New', Courier, monospace";
+        for (let sy = 0; sy < mm.rows; sy++) {
+            for (let sx = 0; sx < mm.cols; sx++) {
+                const active = !mm.active || mm.active[sy][sx];
+                if (!active) continue;
+                const isCurrent = sx === mm.current.x && sy === mm.current.y;
+                const isVisited = mm.visited[sy][sx];
+                ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#ededed');
+                ctx.fillText(isCurrent ? '■' : (isVisited ? '■' : '□'), startX + sx * CW + CW / 2, startY + sy * CH + CH / 2);
+            }
+        }
+    }
+    ctx.restore();
+}
+
+function _drawCanvasHUDBot() {
+    // Draw log area below game canvas (at y = CANVAS_H..CANVAS_H+HUD_BOT_H in current translate)
+    const Y0 = CANVAS_H;
+    const H = HUD_BOT_H;
+    ctx.save();
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, Y0, CANVAS_W, H);
+    // Top border
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, Y0 + 0.5);
+    ctx.lineTo(CANVAS_W, Y0 + 0.5);
+    ctx.stroke();
+
+    // Log lines (last 5, fading gradient)
+    const FONT = "12px 'Courier New', Courier, monospace";
+    const LH = 16;
+    const show = _logLines.slice(-5);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    for (let i = 0; i < show.length; i++) {
+        const entry = show[i];
+        const fy = Y0 + 10 + i * LH;
+        const alpha = i === show.length - 1 ? 1 : 0.3 + (i / show.length) * 0.5;
+        ctx.globalAlpha = alpha;
+        if (entry.segments) {
+            let sx = 20;
+            ctx.font = FONT;
+            for (const seg of entry.segments) {
+                ctx.fillStyle = seg.color;
+                ctx.fillText(seg.text + ' ', sx, fy);
+                sx += ctx.measureText(seg.text + ' ').width;
+            }
+        } else {
+            ctx.fillStyle = i === show.length - 1 ? '#e0e0e0' : '#888';
+            ctx.font = FONT;
+            ctx.fillText(entry.text, 20, fy);
+        }
+        ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+}
+
 // Main canvas render loop. Draws tiles, enemies, player, effects, and overlays
 // for the current screen. Called from the game loop on every animation frame.
 function draw(now) {
@@ -26646,7 +26743,13 @@ function draw(now) {
     }
     // 期限切れの爆風エフェクトを除去
     blastEffects = blastEffects.filter(b => now < b.endTime);
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
+
+    // ===== CANVAS HUD: persistent Y-offset so game tiles appear below the stats bar =====
+    ctx.save(); // [HUD-A] — wraps entire game draw + post-shake overlays
+    ctx.translate(0, HUD_TOP_H);
+    const _hudVisible = !['TITLE','LANG_SELECT','FIXED_STAGE_SELECT','ROOM_TYPE_SELECT','OPENING','GAMEOVER','GAMEOVER_SEQ','ENDING','ENDING_SEQ'].includes(gameState) && floorLevel !== -1;
+    if (_hudVisible) { _drawCanvasHUDTop(); _drawCanvasHUDBot(); }
 
     ctx.save();
     ctx.shadowBlur = 0;
@@ -28515,7 +28618,7 @@ function draw(now) {
     });
 
     // ゲームオーバーの赤色オーバーレイ
-    if (gameOverAlpha > 0) { ctx.fillStyle = `rgba(255, 0, 0, ${gameOverAlpha})`; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H); }
+    if (gameOverAlpha > 0) { ctx.fillStyle = `rgba(255, 0, 0, ${gameOverAlpha})`; ctx.fillRect(0, -HUD_TOP_H, CANVAS_W, CANVAS_H_FULL); }
 
     // トランジション（ホワイトアウト、暗転、星空、落下）
     if (transition.active) {
@@ -28527,7 +28630,7 @@ function draw(now) {
         } else {
             ctx.fillStyle = isWhiteTr ? '#ededed' : transition.mode === 'RED_OUT' ? '#b00' : '#000';
         }
-        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        ctx.fillRect(0, -HUD_TOP_H, CANVAS_W, CANVAS_H_FULL);
 
         if (transition.mode === 'FALLING') {
             transition.particles.forEach(p => { ctx.fillStyle = '#444'; ctx.beginPath(); ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2); ctx.fill(); });
@@ -28557,7 +28660,7 @@ function draw(now) {
         ctx.save();
         ctx.globalAlpha = transition.flashAlpha;
         ctx.fillStyle = transition.flashColor || '#ededed';
-        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        ctx.fillRect(0, -HUD_TOP_H, CANVAS_W, CANVAS_H_FULL);
         ctx.restore();
     }
 
@@ -28666,7 +28769,7 @@ function draw(now) {
 
     // エンドクレジット画面
     if (gameState === 'ENDING') {
-        ctx.save(); ctx.fillStyle = 'black'; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        ctx.save(); ctx.fillStyle = 'black'; ctx.fillRect(0, -HUD_TOP_H, CANVAS_W, CANVAS_H_FULL);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         const credits = ["STAFF", "", "GAME DESIGN", "HIROTAKA ADACHI", "", "PROGRAMMING", "Claude Code", "", "GRAPHICS", "HIROTAKA ADACHI", "", "MUSIC", "SUNO AI", "", "SPECIAL THANKS", "YOU", "", "THANK YOU FOR PLAYING!", "", "THE END"];
         credits.forEach((txt, i) => {
@@ -28677,19 +28780,27 @@ function draw(now) {
         ctx.fillStyle = '#888'; ctx.font = "12px 'Courier New'"; ctx.fillText("Press [Enter] to return to Title", CANVAS_W / 2, CANVAS_H / 2 + 220);
         ctx.restore();
     }
+    ctx.restore(); // [HUD-A] — close HUD offset
 }
 
 // ===== SECTION: LOGGING & BOMB SYSTEM =====
 function addLog(msg) { /* suppressed — use addKeyLog for important messages */ }
 function addKeyLog(msg) {
-    const div = document.createElement('div'); div.innerText = msg; logElement.appendChild(div);
-    while (logElement.childNodes.length > 10) { logElement.removeChild(logElement.firstChild); }
-    logElement.scrollTop = logElement.scrollHeight;
+    _logLines.push({ text: String(msg) });
+    if (_logLines.length > 10) _logLines.shift();
 }
 function addLogHTML(html) {
-    const div = document.createElement('div'); div.innerHTML = html; logElement.appendChild(div);
-    while (logElement.childNodes.length > 10) { logElement.removeChild(logElement.firstChild); }
-    logElement.scrollTop = logElement.scrollHeight;
+    const segs = [];
+    const re = /<span[^>]*color:\s*([^;'">\s]+)[^>]*>([^<]*)<\/span>/g;
+    let last = 0, m;
+    while ((m = re.exec(html)) !== null) {
+        if (m.index > last) segs.push({ text: html.slice(last, m.index).replace(/<[^>]+>/g, '').trim(), color: '#888' });
+        segs.push({ text: m[2], color: m[1] });
+        last = re.lastIndex;
+    }
+    if (last < html.length) segs.push({ text: html.slice(last).replace(/<[^>]+>/g, '').trim(), color: '#888' });
+    _logLines.push({ text: '', segments: segs.filter(s => s.text) });
+    if (_logLines.length > 10) _logLines.shift();
 }
 function _showRouletteLog(cycle) {
     const _cyc = cycle || _SUMMON_COLOR_CYCLE;
@@ -47355,14 +47466,10 @@ window.addEventListener('keydown', async e => {
                     }
                 }
                 // 装備変更後すぐに表示を更新
-                hpElement.innerText = `${player.hp}/${getPlayerMaxHp()}`;
-                const _ringNode = document.getElementById('ring-status');
-                if (_ringNode) {
-                    const _names = player.equippedRings
-                        .map(id => id ? (RINGS.find(r => r.id === id)?.name || '') : '')
-                        .filter(n => n);
-                    _ringNode.innerText = _names.length ? _names.join('  /  ') : '';
-                }
+                _hudHP = `${player.hp}/${getPlayerMaxHp()}`;
+                _hudRingNames = player.equippedRings
+                    .map(id => id ? (RINGS.find(r => r.id === id)?.name || '') : '')
+                    .filter(n => n);
                 // 装備変更をセーブ
                 saveGame();
                 // スロット選択に戻る
@@ -48015,7 +48122,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     const wrapper = document.querySelector('.game-wrapper');
     if (!wrapper) return;
     const baseW = COLS * TILE_SIZE + 42;
-    const baseH = ROWS * TILE_SIZE + 217;
+    const baseH = CANVAS_H_FULL + 42;
     const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     function applyScale() {
         const isPortrait = isMobile && window.innerHeight > window.innerWidth;
@@ -48291,18 +48398,18 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
 
         // HUD更新（TITLE/OPENINGはHUD非表示のためスキップ）
         if (!['TITLE','LANG_SELECT','OPENING'].includes(gameState)) {
-            const _hpEl = document.getElementById('hp');
-            const _flEl = document.getElementById('floor');
-            if (_hpEl) document.getElementById('mhud-hp').textContent = 'HP ' + _hpEl.textContent;
-            if (_flEl) document.getElementById('mhud-floor').textContent = 'F' + _flEl.textContent;
+            const _mhHp = document.getElementById('mhud-hp');
+            const _mhFl = document.getElementById('mhud-floor');
+            if (_mhHp) _mhHp.textContent = 'HP ' + _hudHP;
+            if (_mhFl) _mhFl.textContent = 'F' + _hudFloor;
             const _stBar = document.getElementById('mhud-st-bar');
             if (_stBar) {
-                if (player.isInfiniteStamina) {
+                if (_hudStaminaInfinite) {
                     _stBar.style.width = '100%';
                     _stBar.style.background = '#fbbf24';
                 } else {
-                    _stBar.style.width = player.stamina + '%';
-                    _stBar.style.background = player.stamina < 30 ? '#f87171' : '#38bdf8';
+                    _stBar.style.width = _hudStamina + '%';
+                    _stBar.style.background = _hudStamina < 30 ? '#f87171' : '#38bdf8';
                 }
             }
         }
