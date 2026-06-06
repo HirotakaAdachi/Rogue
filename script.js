@@ -26559,12 +26559,12 @@ function _drawCanvasHUDTop() {
         ctx.shadowBlur = 0;
     }
 
-    // === RIGHT COLUMN: FLOOR / EQUIPMENT / RINGS ===
+    // === RIGHT COLUMN: FLOOR / GOLD+KEY / WEAPON+ARMOR / RINGS ===
     const rx = CANVAS_W - 20;
     ctx.textAlign = 'right';
     ctx.font = FONT;
 
-    // Floor
+    // Floor (ly1)
     ctx.fillStyle = '#888';
     if (_hudFloorPrefix) {
         const floorTextW = ctx.measureText(_hudFloor).width;
@@ -26573,34 +26573,46 @@ function _drawCanvasHUDTop() {
     ctx.fillStyle = '#fff'; ctx.font = "12px 'Courier New', Courier, monospace";
     ctx.fillText(_hudFloor, rx, ly1);
 
-    // Ring names
+    // ly2: key + gold (right-to-left)
+    ctx.font = FONT;
+    const eqTop = [];
+    if (_hudHasKey) eqTop.push({ text: 'k', color: '#fbbf24' });
+    if (_hudGold > 0) eqTop.push({ text: `${_hudGold}G`, color: '#fff' });
+    let eTopX = rx;
+    for (let i = eqTop.length - 1; i >= 0; i--) {
+        const seg = eqTop[i];
+        const w = ctx.measureText(seg.text).width;
+        ctx.fillStyle = seg.color;
+        ctx.fillText(seg.text, eTopX, ly2);
+        eTopX -= w + 5;
+    }
+
+    // ly3: 武器・防具（sword + armor、right-to-left）
+    const eqBot = [];
+    if (_hudSwordCount > 0) eqBot.push({ text: '†', color: '#38bdf8' }, { text: `x${_hudSwordCount}`, color: '#ededed' });
+    if (_hudArmorCount > 0) eqBot.push({ text: '▼', color: '#38bdf8' }, { text: `x${_hudArmorCount}`, color: '#ededed' });
+    let eBotX = rx;
+    for (let i = eqBot.length - 1; i >= 0; i--) {
+        const seg = eqBot[i];
+        const w = ctx.measureText(seg.text).width;
+        ctx.fillStyle = seg.color;
+        ctx.fillText(seg.text, eBotX, ly3);
+        eBotX -= w + 5;
+    }
+
+    // Ring names (bottom-right, small)
+    const lyBot = Y0 + H - 7;
     if (_hudRingNames.length > 0) {
         ctx.font = "11px 'Courier New', Courier, monospace";
         ctx.fillStyle = '#aaa';
-        ctx.fillText(_hudRingNames.join('  /  '), rx, ly3);
+        ctx.fillText(_hudRingNames.join('  /  '), rx, lyBot);
     }
 
-    // Equipment row: key + sword + armor + gold (draw right-to-left)
-    ctx.font = FONT;
-    const eq = [];
-    if (_hudHasKey) eq.push({ text: 'k', color: '#fbbf24' });
-    if (_hudSwordCount > 0) eq.push({ text: '†', color: '#38bdf8' }, { text: `x${_hudSwordCount}`, color: '#ededed' });
-    if (_hudArmorCount > 0) eq.push({ text: '▼', color: '#38bdf8' }, { text: `x${_hudArmorCount}`, color: '#ededed' });
-    if (_hudGold > 0) eq.push({ text: `${_hudGold}G`, color: '#fff' });
-    let eDrawX = rx;
-    for (let i = eq.length - 1; i >= 0; i--) {
-        const seg = eq[i];
-        const w = ctx.measureText(seg.text).width;
-        ctx.fillStyle = seg.color;
-        ctx.fillText(seg.text, eDrawX, ly2);
-        eDrawX -= w + 5;
-    }
-
-    // Best floor (small, bottom right)
+    // BEST（左下へ移動）
     ctx.font = "11px 'Courier New', Courier, monospace";
     ctx.fillStyle = '#555';
-    ctx.textAlign = 'right';
-    ctx.fillText(`BEST B${formatFloor(_hudBestFloor)}F`, rx, ly3 + 2);
+    ctx.textAlign = 'left';
+    ctx.fillText(`BEST B${formatFloor(_hudBestFloor)}F`, lx, lyBot);
 
     ctx.restore();
 }
