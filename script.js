@@ -26689,14 +26689,11 @@ function _drawCanvasMinimapOverlay() {
     const totalW = cols * CW + PAD * 2;
     const totalH = rows * CH + PAD * 2;
     const bgX = CX - totalW / 2;
-    const bgY = 4;
+    const bgY = -HUD_TOP_H + 4;
 
     ctx.save();
     ctx.fillStyle = 'rgba(10,10,10,0.82)';
     ctx.fillRect(bgX, bgY, totalW, totalH);
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(bgX + 0.5, bgY + 0.5, totalW - 1, totalH - 1);
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
