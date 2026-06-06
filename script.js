@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v622';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v623';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -19913,8 +19913,6 @@ function initMap() {
     }
 
     // 通常ダンジョン型（部屋+廊下）: 0.80〜1.00 = 20%
-    // 大広間フロアのモディファイア（ICE / WIND / WISP）は無効化
-    let greatHallModifier = null;
 
     // ----- FLOOR 80: THE FROZEN FURNACE -----
     if (floorLevel === 80) {
@@ -21376,16 +21374,7 @@ function initMap() {
     }
     if (isIceFloor && !isDenseMazeFloor) addLog(floorLevel >= 50 ? "🌌 CHAOS FLOOR: Ice and Lava collide!" : "❄️ WARNING: This floor is completely FROZEN! (Slippery)");
 
-    // 大広間(ICEモディファイア): フロア全体を氷に変換
-    if (greatHallModifier === 'ICE') {
-        isIceFloor = true;
-        for (let _gy = 1; _gy < ROWS - 1; _gy++) {
-            for (let _gx = 1; _gx < COLS - 1; _gx++) {
-                if (map[_gy][_gx] === SYMBOLS.FLOOR) map[_gy][_gx] = SYMBOLS.ICE;
-            }
-        }
-        addLog("❄️ FROZEN HALL: The entire hall is a sheet of ice!");
-    }
+
 
     // 溶岩の床の生成
     // B8-24F: 30%で小パッチ1つ / B25-49F: 氷なし時80% / B50F+: 確定・大量
@@ -21548,13 +21537,6 @@ function initMap() {
         windTimer = 4;
         addKeyLog("💨 FLOOR 45: Violent gales tear through this labyrinth!");
     }
-    // 大広間(WINDモディファイア): 確定で突風
-    if (greatHallModifier === 'WIND' && !isWindFloor) {
-        isWindFloor = true;
-        windTimer = 4;
-        addLog("💨 GUST HALL: A violent tempest rages through this vast chamber!");
-    }
-
     // モンスターROOM (5階以降、固定ステージ除く、15%の確率)
     if (floorLevel >= 5 && !fixedStages.includes(floorLevel) && rooms.length > 2 && Math.random() < 0.15) {
         // スタート・最終部屋を除いた中から、ある程度広い部屋を優先して選ぶ
@@ -22771,32 +22753,6 @@ function initMap() {
             }
         }
         if (actualSpawned > 0) addLog("Beware of the Wisps (※) following the walls!");
-    }
-
-    // 大広間(WISPモディファイア): 各柱に隣接してウィスプを1体配置
-    if (greatHallModifier === 'WISP') {
-        const _ghDirs = [{dx:0,dy:-1},{dx:1,dy:0},{dx:0,dy:1},{dx:-1,dy:0}];
-        const _usedWispTiles = new Set();
-        for (let _wy = 1; _wy < ROWS - 1; _wy++) {
-            for (let _wx = 1; _wx < COLS - 1; _wx++) {
-                if (map[_wy][_wx] !== SYMBOLS.WALL) continue;
-                // 周囲に通行可能タイルがある（柱らしい）壁のみ対象
-                for (const _d of _ghDirs) {
-                    const _nx = _wx + _d.dx, _ny = _wy + _d.dy;
-                    if (_nx < 1 || _nx >= COLS - 1 || _ny < 1 || _ny >= ROWS - 1) continue;
-                    const _t = map[_ny][_nx];
-                    if (_t === SYMBOLS.WALL || _t === SYMBOLS.STAIRS) continue;
-                    if (_nx === player.x && _ny === player.y) continue;
-                    const _key = `${_nx},${_ny}`;
-                    if (_usedWispTiles.has(_key)) continue;
-                    if (wisps.some(w => w.x === _nx && w.y === _ny)) continue;
-                    _usedWispTiles.add(_key);
-                    wisps.push({ x: _nx, y: _ny, dir: Math.floor(Math.random() * 4), mode: 'FOLLOW' });
-                    break;
-                }
-            }
-        }
-        if (_usedWispTiles.size > 0) addLog("👻 HAUNTED HALL: Every pillar is haunted by a Wisp!");
     }
 
     // 50階以降：NORMAL敵に溶岩/氷サブタイプを付与
