@@ -203,8 +203,8 @@ const COLS = 40;
 const DEEP_ENDING_FLOOR = Number.MAX_SAFE_INTEGER;
 const CANVAS_W = COLS * TILE_SIZE;
 const CANVAS_H = ROWS * TILE_SIZE + 2; // +2: 描画オフセット分を確保
-const HUD_TOP_H = 55;
-const HUD_BOT_H = 95;
+const HUD_TOP_H = 90;
+const HUD_BOT_H = 60;
 const CANVAS_H_FULL = HUD_TOP_H + CANVAS_H + HUD_BOT_H;
 const dpr = window.devicePixelRatio || 1;
 canvas.width  = CANVAS_W * dpr;
@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v626';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v627';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -26676,7 +26676,6 @@ function _drawCanvasHUDMinimap(Y0, H) {
 function _drawCanvasMinimapOverlay() {
     if (!_hudMinimapData) return;
     const mm = _hudMinimapData;
-    const CW = 16, CH = 9;
     const CX = CANVAS_W / 2;
     const PAD = 8;
 
@@ -26685,6 +26684,10 @@ function _drawCanvasMinimapOverlay() {
     else if (mm.type === 'corridor') { cols = (mm.winEnd - mm.winStart + 1) + (mm.winStart > 0 ? 1 : 0) + (mm.winEnd < mm.total - 1 ? 1 : 0); rows = 1; }
     else if (mm.type === 'grid') { cols = mm.cols; rows = mm.rows; }
     else return;
+
+    const maxDim = Math.max(cols, rows);
+    const CW = maxDim <= 5 ? 16 : maxDim <= 7 ? 12 : 10;
+    const CH = maxDim <= 5 ? 9  : maxDim <= 7 ? 8  : 7;
 
     const totalW = cols * CW + PAD * 2;
     const totalH = rows * CH + PAD * 2;
@@ -26755,10 +26758,10 @@ function _drawCanvasHUDBot() {
     ctx.lineTo(CANVAS_W, Y0 + 0.5);
     ctx.stroke();
 
-    // Log lines (last 5, fading gradient)
+    // Log lines (last 3, fading gradient)
     const FONT = "12px 'Courier New', Courier, monospace";
     const LH = 16;
-    const show = _logLines.slice(-5);
+    const show = _logLines.slice(-3);
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     for (let i = 0; i < show.length; i++) {
