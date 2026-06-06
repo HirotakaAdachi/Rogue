@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v621';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v622';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -21537,9 +21537,7 @@ function initMap() {
         }
     }
 
-    // 風フロアのランダム発生 (36階以降、3%の確率。固定ステージには発生しない)
     const fixedStages = FIXED_WIND_SUPPRESS_FLOORS;
-    // floorLevel === 33 の風は廃止
     if (floorLevel === 25 && !isWindFloor) {
         isWindFloor = true;
         windTimer = 4;
@@ -21547,14 +21545,8 @@ function initMap() {
     }
     if (floorLevel === 45 && !isWindFloor) {
         isWindFloor = true;
-        windTimer = 4; // 1ターン目で即発動
+        windTimer = 4;
         addKeyLog("💨 FLOOR 45: Violent gales tear through this labyrinth!");
-    }
-    const windChance = 0.015;
-    if (floorLevel >= 10 && !isWindFloor && !fixedStages.includes(floorLevel) && floorLevel !== 37 && floorLevel !== 50 && !isRoomTestMode && Math.random() < windChance) {
-        isWindFloor = true;
-        windTimer = 4; // 1ターン目で即発動
-        addKeyLog("💨 WARNING: Strong winds blow through this floor!");
     }
     // 大広間(WINDモディファイア): 確定で突風
     if (greatHallModifier === 'WIND' && !isWindFloor) {
