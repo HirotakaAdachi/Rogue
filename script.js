@@ -24802,6 +24802,8 @@ function drawTitle() {
     // バージョン表示（右下）
     ctx.textAlign = 'right';
     ctx.font = "11px 'Courier New', Courier, monospace";
+    ctx.fillStyle = '#666';
+    ctx.fillText('freem', CANVAS_W - 8, CANVAS_H - 23);
     ctx.fillStyle = '#444';
     ctx.fillText(_GAME_VERSION, CANVAS_W - 8, CANVAS_H - 8);
     ctx.textAlign = 'center';
@@ -26533,7 +26535,7 @@ function _drawCanvasHUDTop() {
     // LV
     ctx.fillStyle = '#888'; ctx.fillText('LV: ', lx, ly1);
     const lvW = ctx.measureText('LV: ').width;
-    ctx.fillStyle = '#fbbf24'; ctx.fillText(String(_hudLV), lx + lvW, ly1);
+    ctx.fillStyle = '#ededed'; ctx.fillText(String(_hudLV), lx + lvW, ly1);
 
     // HP
     ctx.fillStyle = '#888'; ctx.fillText('HP: ', lx, ly2);
@@ -26555,11 +26557,6 @@ function _drawCanvasHUDTop() {
         ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 6;
         ctx.fillRect(gx, gy, barW, gh);
         ctx.shadowBlur = 0;
-    }
-
-    // === MINIMAP CENTER ===
-    if (_hudMinimapData) {
-        _drawCanvasHUDMinimap(Y0, H);
     }
 
     // === RIGHT COLUMN: FLOOR / EQUIPMENT / RINGS ===
@@ -26658,6 +26655,76 @@ function _drawCanvasHUDMinimap(Y0, H) {
                 const isVisited = mm.visited[sy][sx];
                 ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#ededed');
                 ctx.fillText(isCurrent ? '■' : (isVisited ? '■' : '□'), startX + sx * CW + CW / 2, startY + sy * CH + CH / 2);
+            }
+        }
+    }
+    ctx.restore();
+}
+
+function _drawCanvasMinimapOverlay() {
+    if (!_hudMinimapData) return;
+    const mm = _hudMinimapData;
+    const CW = 16, CH = 9;
+    const CX = CANVAS_W / 2;
+    const PAD = 8;
+
+    let cols, rows;
+    if (mm.type === 'escape') { cols = 5; rows = 2; }
+    else if (mm.type === 'corridor') { cols = (mm.winEnd - mm.winStart + 1) + (mm.winStart > 0 ? 1 : 0) + (mm.winEnd < mm.total - 1 ? 1 : 0); rows = 1; }
+    else if (mm.type === 'grid') { cols = mm.cols; rows = mm.rows; }
+    else return;
+
+    const totalW = cols * CW + PAD * 2;
+    const totalH = rows * CH + PAD * 2;
+    const bgX = CX - totalW / 2;
+    const bgY = 4;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(10,10,10,0.82)';
+    ctx.fillRect(bgX, bgY, totalW, totalH);
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bgX + 0.5, bgY + 0.5, totalW - 1, totalH - 1);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = "8px 'Courier New', Courier, monospace";
+
+    if (mm.type === 'escape') {
+        const sx = CX - cols * CW / 2;
+        for (let r = 0; r < 2; r++) {
+            for (let c = 0; c < 5; c++) {
+                const p = r * 5 + c;
+                const isCurrent = p === mm.current;
+                ctx.fillStyle = isCurrent ? '#ededed' : '#555';
+                ctx.fillText(isCurrent ? '■' : '□', sx + c * CW + CW / 2, bgY + PAD + r * CH + CH / 2);
+            }
+        }
+    } else if (mm.type === 'corridor') {
+        let drawX = bgX + PAD;
+        if (mm.winStart > 0) {
+            ctx.fillStyle = '#555'; ctx.fillText('…', drawX + CW / 2, bgY + PAD + CH / 2); drawX += CW;
+        }
+        for (let s = mm.winStart; s <= mm.winEnd; s++) {
+            const isCurrent = s === mm.current;
+            const isVisited = mm.visited[0][s];
+            ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#ededed');
+            ctx.fillText(isCurrent ? '■' : (isVisited ? '■' : '□'), drawX + CW / 2, bgY + PAD + CH / 2);
+            drawX += CW;
+        }
+        if (mm.winEnd < mm.total - 1) {
+            ctx.fillStyle = '#555'; ctx.fillText('…', drawX + CW / 2, bgY + PAD + CH / 2);
+        }
+    } else if (mm.type === 'grid') {
+        const sx = CX - mm.cols * CW / 2;
+        for (let sy = 0; sy < mm.rows; sy++) {
+            for (let sc = 0; sc < mm.cols; sc++) {
+                const active = !mm.active || mm.active[sy][sc];
+                if (!active) continue;
+                const isCurrent = sc === mm.current.x && sy === mm.current.y;
+                const isVisited = mm.visited[sy][sc];
+                ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#ededed');
+                ctx.fillText(isCurrent ? '■' : (isVisited ? '■' : '□'), sx + sc * CW + CW / 2, bgY + PAD + sy * CH + CH / 2);
             }
         }
     }
@@ -28780,6 +28847,9 @@ function draw(now) {
         ctx.fillStyle = '#888'; ctx.font = "12px 'Courier New'"; ctx.fillText("Press [Enter] to return to Title", CANVAS_W / 2, CANVAS_H / 2 + 220);
         ctx.restore();
     }
+    // ミニマップをゲームタイル上に重ねて描画
+    if (_hudVisible && _hudMinimapData) _drawCanvasMinimapOverlay();
+
     ctx.restore(); // [HUD-A] — close HUD offset
 }
 
