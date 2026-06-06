@@ -1663,7 +1663,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v618';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v619';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -16648,8 +16648,8 @@ function initMap() {
                     if (Math.abs(cx - stairsX) <= 2 && Math.abs(wy - stairsY) <= 1) { blocked = true; break; }
                     // プレイヤー開始位置の周囲2マス以内は避ける
                     if (Math.abs(cx - player.x) <= 2 && Math.abs(wy - player.y) <= 2) { blocked = true; break; }
-                    // 縦壁の隙間を塞がない（隙間の上下1マスも含めて保護）
-                    if (cx === vertWallX && Math.abs(wy - gapY) <= 1) { blocked = true; break; }
+                    // 縦壁の隙間とその左右1マスを保護（左右アプローチタイルが塞がれると詰む）
+                    if (Math.abs(cx - vertWallX) <= 1 && wy === gapY) { blocked = true; break; }
                 }
                 if (blocked) continue;
                 break;
@@ -16680,6 +16680,11 @@ function initMap() {
                 }
             }
         }
+
+        // ギャップ通路の確実な開通（水平壁配置後に強制クリア）
+        if (vertWallX - 1 >= 1) map[gapY][vertWallX - 1] = SYMBOLS.FLOOR;
+        map[gapY][vertWallX] = SYMBOLS.FLOOR;
+        if (vertWallX + 1 < COLS - 1) map[gapY][vertWallX + 1] = SYMBOLS.FLOOR;
 
         // タレット: 上向き（dir:0）を3体配置（風で一緒に流される）
         for (let i = 0; i < 3; i++) {
@@ -43051,6 +43056,14 @@ async function enemyTurn() {
                         const fallbacks = [[sx, 0], [0, sy], [-sy, sx], [sy, -sx]].filter(([fx, fy]) => fx !== 0 || fy !== 0);
                         for (const [fx, fy] of fallbacks) {
                             if (tryFollowMove(e.x + fx, e.y + fy)) { e.x += fx; e.y += fy; moved = true; break; }
+                        }
+                    }
+                    // BFS fallback: 欲張り法で全方向詰まった場合、BFSで壁を迂回する経路を探す
+                    if (!moved) {
+                        const bfsStep = enemyGroundBFS(e.x, e.y, player.x, player.y);
+                        if (bfsStep.dx !== 0 || bfsStep.dy !== 0) {
+                            const bnx = e.x + bfsStep.dx, bny = e.y + bfsStep.dy;
+                            if (tryFollowMove(bnx, bny)) { e.x = bnx; e.y = bny; moved = true; }
                         }
                     }
                     if (moved) {
