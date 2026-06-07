@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v635';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v636';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -45623,12 +45623,15 @@ async function enemyTurn() {
     }
 
     // 罠の進行処理
+    let _trapPlayerHit = false;
+    let _trapAnyFired = false;
     for (let i = dragonTraps.length - 1; i >= 0; i--) {
         const trap = dragonTraps[i];
         if (trap.stage === 'CIRCLE') {
             trap.stage = 'READY';
         } else if (trap.stage === 'READY') {
             dragonTraps.splice(i, 1);
+            _trapAnyFired = true;
 
             let hitTarget = false;
             if (player.x === trap.x && player.y === trap.y) {
@@ -45637,9 +45640,8 @@ async function enemyTurn() {
                 player.flashUntil = performance.now() + 200;
                 if (player.hp > 0) animateBounce(player); // ダメージで跳ねる
                 spawnDamageText(player.x, player.y, dmg, '#38bdf8');
-                SOUNDS.DAMAGE();
                 addLog("Rock spikes burst from the ground! Sharp rock pierces your body!");
-                setScreenShake(15, 300);
+                _trapPlayerHit = true;
                 hitTarget = true;
                 if (player.hp <= 0) { player.hp = 0; updateUI(); triggerGameOver(); return; }
             }
@@ -45656,12 +45658,18 @@ async function enemyTurn() {
 
             if (!hitTarget) {
                 addLog("Rock spikes burst from the ground!");
-                SOUNDS.EXPLODE();
-                setScreenShake(10, 200);
             }
             // つららを耐久度2の障害物として配置
             tempWalls.push({ x: trap.x, y: trap.y, hp: 2, type: 'ICICLE' });
         }
+    }
+    // 棘の音とシェイクはループ外で1回だけ
+    if (_trapPlayerHit) {
+        SOUNDS.DAMAGE();
+        setScreenShake(15, 300);
+    } else if (_trapAnyFired) {
+        SOUNDS.EXPLODE();
+        setScreenShake(10, 200);
     }
 
     // 注: processFairyCharm() は元々あった関数だが定義が失われていたため削除
