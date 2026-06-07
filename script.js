@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v627';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v628';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -26600,19 +26600,21 @@ function _drawCanvasHUDTop() {
         eBotX -= w + 5;
     }
 
-    // Ring names (bottom-right, small)
     const lyBot = Y0 + H - 7;
+
+    // Ring names (bottom-left, small)
     if (_hudRingNames.length > 0) {
         ctx.font = "11px 'Courier New', Courier, monospace";
         ctx.fillStyle = '#aaa';
-        ctx.fillText(_hudRingNames.join('  /  '), rx, lyBot);
+        ctx.textAlign = 'left';
+        ctx.fillText(_hudRingNames.join('  /  '), lx, lyBot);
     }
 
-    // BEST（左下へ移動）
+    // BEST（右下）
     ctx.font = "11px 'Courier New', Courier, monospace";
     ctx.fillStyle = '#555';
-    ctx.textAlign = 'left';
-    ctx.fillText(`BEST B${formatFloor(_hudBestFloor)}F`, lx, lyBot);
+    ctx.textAlign = 'right';
+    ctx.fillText(`BEST B${formatFloor(_hudBestFloor)}F`, rx, lyBot);
 
     ctx.restore();
 }
@@ -26686,8 +26688,8 @@ function _drawCanvasMinimapOverlay() {
     else return;
 
     const maxDim = Math.max(cols, rows);
-    const CW = maxDim <= 5 ? 16 : maxDim <= 7 ? 12 : 10;
     const CH = maxDim <= 5 ? 9  : maxDim <= 7 ? 8  : 7;
+    const CW = Math.round(CH * 1.618); // golden ratio: 9→15, 8→13, 7→11
 
     const totalW = cols * CW + PAD * 2;
     const totalH = rows * CH + PAD * 2;
