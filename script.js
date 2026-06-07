@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v643';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v644';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -35089,7 +35089,6 @@ function _grantAllyExp(ally, exp) {
         ally.maxHp    += ally._hpGrowth;
         ally._atkBonus = (ally._atkBonus || 0) + ally._atkGrowth;
         spawnFloatingText(ally.x, ally.y, `LV UP! HP+${ally._hpGrowth} ATK+${ally._atkGrowth}`, '#fbbf24', 1400);
-        SOUNDS.LEVEL_UP();
     }
 }
 
