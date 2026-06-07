@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v638';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v639';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -26714,7 +26714,7 @@ function _drawCanvasMinimapOverlay() {
         for (let s = mm.winStart; s <= mm.winEnd; s++) {
             const isCurrent = s === mm.current;
             const isVisited = mm.visited[0][s];
-            ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#ededed');
+            ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#555');
             ctx.fillText(isCurrent ? '■' : (isVisited ? '■' : '□'), drawX + CW / 2, bgY + PAD + CH / 2);
             drawX += CW;
         }
@@ -26729,7 +26729,7 @@ function _drawCanvasMinimapOverlay() {
                 if (!active) continue;
                 const isCurrent = sc === mm.current.x && sy === mm.current.y;
                 const isVisited = mm.visited[sy][sc];
-                ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#ededed');
+                ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#555');
                 ctx.fillText(isCurrent ? '■' : (isVisited ? '■' : '□'), sx + sc * CW + CW / 2, bgY + PAD + sy * CH + CH / 2);
             }
         }
