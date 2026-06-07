@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v628';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v629';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -5931,8 +5931,8 @@ function initMap() {
 
                 }
 
-                // 商人をたまに配置（8%: フロアにまだ商人がいない場合のみ）
-                if (!merchantState && Math.random() < 0.12 && castleRooms.length > 0) {
+                // 商人をたまに配置（深層101F+は商人なし）
+                if (!merchantState && floorLevel < 101 && Math.random() < 0.12 && castleRooms.length > 0) {
                     const shuffled = castleRooms.slice().sort(() => Math.random() - 0.5);
                     for (const cr of shuffled) {
                         let placed = false;
@@ -26529,21 +26529,24 @@ function _drawCanvasHUDTop() {
     const FONT_SM = "11px 'Courier New', Courier, monospace";
     ctx.font = FONT;
 
-    // === LEFT COLUMN: LV / HP / STAMINA ===
-    const lx = 20, ly1 = Y0 + 13, ly2 = Y0 + 29, ly3 = Y0 + 43;
+    // === LEFT COLUMN: LV / HP / STAMINA (bottom-anchored) ===
+    const lx = 20;
+    const ly3 = Y0 + H - 18;  // STAMINA
+    const ly2 = ly3 - 16;     // HP
+    const ly1 = ly2 - 16;     // LV
 
     // LV
-    ctx.fillStyle = '#888'; ctx.fillText('LV: ', lx, ly1);
+    ctx.fillStyle = '#ededed'; ctx.fillText('LV: ', lx, ly1);
     const lvW = ctx.measureText('LV: ').width;
-    ctx.fillStyle = '#ededed'; ctx.fillText(String(_hudLV), lx + lvW, ly1);
+    ctx.fillText(String(_hudLV), lx + lvW, ly1);
 
     // HP
-    ctx.fillStyle = '#888'; ctx.fillText('HP: ', lx, ly2);
+    ctx.fillText('HP: ', lx, ly2);
     const hpW = ctx.measureText('HP: ').width;
     ctx.fillStyle = _hudHPColor; ctx.fillText(_hudHP, lx + hpW, ly2);
 
     // STAMINA
-    ctx.fillStyle = '#888'; ctx.font = FONT_SM;
+    ctx.fillStyle = '#ededed'; ctx.font = FONT_SM;
     ctx.fillText('STAMINA', lx, ly3);
     // Gauge
     const gx = lx + ctx.measureText('STAMINA ').width + 2;
@@ -26565,19 +26568,19 @@ function _drawCanvasHUDTop() {
     ctx.font = FONT;
 
     // Floor (ly1)
-    ctx.fillStyle = '#888';
+    ctx.fillStyle = '#ededed';
     if (_hudFloorPrefix) {
         const floorTextW = ctx.measureText(_hudFloor).width;
         ctx.fillText(_hudFloorPrefix, rx - floorTextW, ly1);
     }
-    ctx.fillStyle = '#fff'; ctx.font = "12px 'Courier New', Courier, monospace";
+    ctx.font = "12px 'Courier New', Courier, monospace";
     ctx.fillText(_hudFloor, rx, ly1);
 
     // ly2: key + gold (right-to-left)
     ctx.font = FONT;
     const eqTop = [];
     if (_hudHasKey) eqTop.push({ text: 'k', color: '#fbbf24' });
-    if (_hudGold > 0) eqTop.push({ text: `${_hudGold}G`, color: '#fff' });
+    if (_hudGold > 0) eqTop.push({ text: `${_hudGold}G`, color: '#ededed' });
     let eTopX = rx;
     for (let i = eqTop.length - 1; i >= 0; i--) {
         const seg = eqTop[i];
@@ -26600,21 +26603,14 @@ function _drawCanvasHUDTop() {
         eBotX -= w + 5;
     }
 
-    const lyBot = Y0 + H - 7;
-
     // Ring names (bottom-left, small)
+    const lyBot = Y0 + H - 7;
     if (_hudRingNames.length > 0) {
         ctx.font = "11px 'Courier New', Courier, monospace";
-        ctx.fillStyle = '#aaa';
+        ctx.fillStyle = '#ededed';
         ctx.textAlign = 'left';
         ctx.fillText(_hudRingNames.join('  /  '), lx, lyBot);
     }
-
-    // BEST（右下）
-    ctx.font = "11px 'Courier New', Courier, monospace";
-    ctx.fillStyle = '#555';
-    ctx.textAlign = 'right';
-    ctx.fillText(`BEST B${formatFloor(_hudBestFloor)}F`, rx, lyBot);
 
     ctx.restore();
 }
@@ -26688,8 +26684,8 @@ function _drawCanvasMinimapOverlay() {
     else return;
 
     const maxDim = Math.max(cols, rows);
-    const CH = maxDim <= 5 ? 9  : maxDim <= 7 ? 8  : 7;
-    const CW = Math.round(CH * 1.618); // golden ratio: 9→15, 8→13, 7→11
+    const CH = Math.round((maxDim <= 5 ? 9 : maxDim <= 7 ? 8 : 7) * 0.8); // 20% smaller: →7, 6, 6
+    const CW = Math.round(CH * 1.618); // golden ratio: →11, 10, 10
 
     const totalW = cols * CW + PAD * 2;
     const totalH = rows * CH + PAD * 2;
@@ -26697,8 +26693,6 @@ function _drawCanvasMinimapOverlay() {
     const bgY = -HUD_TOP_H + 4;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(10,10,10,0.82)';
-    ctx.fillRect(bgX, bgY, totalW, totalH);
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -26780,12 +26774,22 @@ function _drawCanvasHUDBot() {
                 sx += ctx.measureText(seg.text + ' ').width;
             }
         } else {
-            ctx.fillStyle = i === show.length - 1 ? '#e0e0e0' : '#888';
+            ctx.fillStyle = '#ededed';
             ctx.font = FONT;
             ctx.fillText(entry.text, 20, fy);
         }
         ctx.globalAlpha = 1;
     }
+
+    // BEST (bottom-right of log area)
+    ctx.font = "11px 'Courier New', Courier, monospace";
+    ctx.fillStyle = '#ededed';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.globalAlpha = 0.5;
+    ctx.fillText(`BEST B${formatFloor(_hudBestFloor)}F`, CANVAS_W - 8, Y0 + H - 4);
+    ctx.globalAlpha = 1;
+
     ctx.restore();
 }
 
