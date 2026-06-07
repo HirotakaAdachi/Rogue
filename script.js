@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v639';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v640';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -27183,7 +27183,8 @@ function draw(now) {
                     if (!(char === SYMBOLS.FLOOR && floorLevel === -1) &&
                         !(char === SYMBOLS.FLOOR && isRoomTestMode && forcedLayoutType === 'NOVEL_CORRIDOR') &&
                         char !== SYMBOLS.ICICLE) {
-                        ctx.fillStyle = tileColor; ctx.fillText(drawChar, px + TILE_SIZE / 2, py + TILE_SIZE / 2);
+                        const _dotXOff = (drawChar === SYMBOLS.FLOOR) ? -1 : 0;
+                        ctx.fillStyle = tileColor; ctx.fillText(drawChar, px + TILE_SIZE / 2 + _dotXOff, py + TILE_SIZE / 2);
                     }
                 }
 
