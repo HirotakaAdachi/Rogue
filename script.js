@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v631';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v632';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -26576,22 +26576,16 @@ function _drawCanvasHUDTop() {
     ctx.font = "12px 'Courier New', Courier, monospace";
     ctx.fillText(_hudFloor, rx, ly1);
 
-    // ly2: key + gold (right-to-left)
+    // ly2: gold
     ctx.font = FONT;
-    const eqTop = [];
-    if (_hudHasKey) eqTop.push({ text: 'k', color: '#fbbf24' });
-    if (_hudGold > 0) eqTop.push({ text: `${_hudGold}G`, color: '#ededed' });
-    let eTopX = rx;
-    for (let i = eqTop.length - 1; i >= 0; i--) {
-        const seg = eqTop[i];
-        const w = ctx.measureText(seg.text).width;
-        ctx.fillStyle = seg.color;
-        ctx.fillText(seg.text, eTopX, ly2);
-        eTopX -= w + 5;
+    if (_hudGold > 0) {
+        ctx.fillStyle = '#ededed';
+        ctx.fillText(`${_hudGold}G`, rx, ly2);
     }
 
-    // ly3: 武器・防具（sword + armor、right-to-left）
+    // ly3: 鍵・武器・防具（key + sword + armor、right-to-left）
     const eqBot = [];
+    if (_hudHasKey) eqBot.push({ text: 'k', color: '#fbbf24' });
     if (_hudSwordCount > 0) eqBot.push({ text: '†', color: '#38bdf8' }, { text: `x${_hudSwordCount}`, color: '#ededed' });
     if (_hudArmorCount > 0) eqBot.push({ text: '▼', color: '#38bdf8' }, { text: `x${_hudArmorCount}`, color: '#ededed' });
     let eBotX = rx;
@@ -26684,8 +26678,8 @@ function _drawCanvasMinimapOverlay() {
     else return;
 
     const maxDim = Math.max(cols, rows);
-    const CH = maxDim <= 5 ? 8 : 7; // ~10% smaller than v630 (was 9/8/8)
-    const CW = Math.round(CH * 1.618); // golden ratio: →13, 11
+    const CH = maxDim <= 5 ? 7 : 6;
+    const CW = Math.round(CH * (16 / 9)); // 16:9 ratio: →12, 11
 
     const totalW = cols * CW + PAD * 2;
     const totalH = rows * CH + PAD * 2;
