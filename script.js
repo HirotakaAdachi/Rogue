@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v637';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v638';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -26586,17 +26586,20 @@ function _drawCanvasHUDTop() {
     // ly3: 鍵・武器・防具（key + sword + armor、right-to-left）
     const eqBot = [];
     if (_hudHasKey) eqBot.push({ text: 'k', color: '#fbbf24', preGap: 6 });
-    if (_hudSwordCount > 0) eqBot.push({ text: '†', color: '#38bdf8' }, { text: `×${_hudSwordCount}`, color: '#ededed' });
-    if (_hudArmorCount > 0) eqBot.push({ text: '▼', color: '#38bdf8' }, { text: `×${_hudArmorCount}`, color: '#ededed' });
+    const FONT_ICON = "16px 'Courier New', Courier, monospace";
+    if (_hudSwordCount > 0) eqBot.push({ text: '†', color: '#38bdf8', font: FONT_ICON }, { text: `×${_hudSwordCount}`, color: '#ededed' });
+    if (_hudArmorCount > 0) eqBot.push({ text: '▼', color: '#38bdf8', font: FONT_ICON }, { text: `×${_hudArmorCount}`, color: '#ededed' });
     let eBotX = rx;
     for (let i = eqBot.length - 1; i >= 0; i--) {
         const seg = eqBot[i];
+        ctx.font = seg.font || FONT;
         const w = ctx.measureText(seg.text).width;
         if (seg.preGap) eBotX -= seg.preGap;
         ctx.fillStyle = seg.color;
         ctx.fillText(seg.text, eBotX, ly3);
         eBotX -= w + 5;
     }
+    ctx.font = FONT;
 
     // Ring names (bottom-left, small)
     const lyBot = Y0 + H - 7;
