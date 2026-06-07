@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v630';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v631';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -26684,8 +26684,8 @@ function _drawCanvasMinimapOverlay() {
     else return;
 
     const maxDim = Math.max(cols, rows);
-    const CH = Math.round((maxDim <= 5 ? 9 : maxDim <= 7 ? 8 : 7) * 0.8) + 2; // +2px gap: →9, 8, 8
-    const CW = Math.round(CH * 1.618); // golden ratio: →15, 13, 13
+    const CH = maxDim <= 5 ? 8 : 7; // ~10% smaller than v630 (was 9/8/8)
+    const CW = Math.round(CH * 1.618); // golden ratio: →13, 11
 
     const totalW = cols * CW + PAD * 2;
     const totalH = rows * CH + PAD * 2;
