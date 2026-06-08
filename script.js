@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v667';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v668';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -25529,7 +25529,7 @@ function drawShopScreen() {
             symbol = SYMBOLS.ARMOR;
         } else if (item.type === 'tome') {
             name = item.name; nameJa = item.nameJa; descJa = item.descJa; desc = item.desc || item.descJa;
-            symbol = SYMBOLS.TOME;
+            symbol = item.symbol || SYMBOLS.TOME;
         } else if (item.type === 'sell_sword') {
             name = 'Fallen Blade'; nameJa = '遺品の剣'; descJa = `所持数: ${player.swordCount}個`; desc = `Owned: ${player.swordCount}`;
             symbol = SYMBOLS.SWORD;
@@ -25604,6 +25604,7 @@ function drawShopScreen() {
         }
 
         // コスト / 売値
+        ctx.font = '14px Courier New';
         ctx.textAlign = 'right';
         if (isSellItem) {
             ctx.fillStyle = isSelected ? '#ededed' : '#aaa';
