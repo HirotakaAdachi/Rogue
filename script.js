@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v650';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v651';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -25069,37 +25069,6 @@ function drawStatusScreen() {
             }
             if (!s.noAdvance) y += 24;
 
-            // KILLSの直下: 倒した敵種別チャート（2行）、その後♛王冠トロフィー
-            if (s.label === 'KILLS') {
-                ctx.textAlign = 'left';
-                // row 0: A-Z 28エントリを詰めて表示（11px/14px）、row 1: 記号4エントリ（13px/20px）
-                const _kcSteps = [14, 20];
-                const _kcFonts = [11, 13];
-                _KILL_CHART_ROWS.forEach((row, ri) => {
-                    let kx = valX;
-                    const _kcStep = _kcSteps[ri] ?? 20;
-                    const _kcSz  = _kcFonts[ri] ?? 13;
-                    row.forEach(entry => {
-                        const killed = entry.types.some(t => _killedEnemyTypes.has(t));
-                        kx += _kcStep;
-                        if (!killed) return;
-                        const _needsFallback = 'λΩφ'.includes(entry.char);
-                        ctx.font = _needsFallback
-                            ? `${_kcSz}px "Courier New", "DejaVu Sans Mono", monospace`
-                            : `${_kcSz}px "Courier New"`;
-                        ctx.fillStyle = '#ededed';
-                        ctx.fillText(entry.char, kx - _kcStep, y + ri * 20);
-                    });
-                });
-                y += _KILL_CHART_ROWS.length * 20 + 6;
-                if (kingKillCount > 0) {
-                    ctx.fillStyle = '#fbbf24';
-                    ctx.font = 'bold 14px Courier New';
-                    const _ktStr = kingKillCount <= 5 ? '♛'.repeat(kingKillCount) : `♛ ×${kingKillCount}`;
-                    ctx.fillText(_ktStr, valX, y);
-                    y += 24;
-                }
-            }
         });
 
         // ── 装備中の指輪 ────────────────────────────────────────
@@ -25148,8 +25117,43 @@ function drawStatusScreen() {
             y += ROW + 36;
         });
 
+        // ── KILLS CHART ──────────────────────────────────────
+        y += 16;
+        ctx.textAlign = 'left';
+        ctx.font = '13px Courier New';
+        ctx.fillStyle = '#aaa';
+        ctx.fillText('KILLS', sx, y);
+        ctx.fillText(`${player.totalKills}`, valX, y);
+        y += 24;
+        const _kcSteps = [14, 20];
+        const _kcFonts = [11, 13];
+        _KILL_CHART_ROWS.forEach((row, ri) => {
+            let kx = valX;
+            const _kcStep = _kcSteps[ri] ?? 20;
+            const _kcSz  = _kcFonts[ri] ?? 13;
+            row.forEach(entry => {
+                const killed = entry.types.some(t => _killedEnemyTypes.has(t));
+                kx += _kcStep;
+                if (!killed) return;
+                const _needsFallback = 'λΩφ'.includes(entry.char);
+                ctx.font = _needsFallback
+                    ? `${_kcSz}px "Courier New", "DejaVu Sans Mono", monospace`
+                    : `${_kcSz}px "Courier New"`;
+                ctx.fillStyle = '#ededed';
+                ctx.fillText(entry.char, kx - _kcStep, y + ri * 20);
+            });
+        });
+        y += _KILL_CHART_ROWS.length * 20 + 6;
+        if (kingKillCount > 0) {
+            ctx.fillStyle = '#fbbf24';
+            ctx.font = 'bold 14px Courier New';
+            const _ktStr = kingKillCount <= 5 ? '♛'.repeat(kingKillCount) : `♛ ×${kingKillCount}`;
+            ctx.fillText(_ktStr, valX, y);
+            y += 24;
+        }
+
         // ── BESTIARY ─────────────────────────────────────────
-        y += 80;
+        y += 16;
         const _bColW = 48;
         const _bDrawRow = (defs, killMap, cols) => {
             defs.forEach((g, i) => {
