@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v661';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v662';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -25576,7 +25576,9 @@ function drawShopScreen() {
         ctx.font = 'bold 14px Courier New';
         let _iconColor;
         if (!canAfford) _iconColor = '#555';
-        else if (isSellItem) _iconColor = '#38bdf8';  // 売り: 水色
+        else if (item.type === 'sell_ring') _iconColor = RINGS[item.ringIndex].color;
+        else if (item.type === 'sell_tome') _iconColor = _TOME_BUY_COLORS[item.sym] || '#fbbf24';
+        else if (isSellItem) _iconColor = '#38bdf8';  // 売り(剣・鎧・妖精): 水色
         else if (symbol === SYMBOLS.SWORD || symbol === SYMBOLS.ARMOR) _iconColor = '#38bdf8'; // 遺品の剣・鎧: 水色
         else if (item.type === 'ring') _iconColor = RINGS[item.ringIndex].color;
         else if (item.type === 'tome') _iconColor = _TOME_BUY_COLORS[item.symbol] || '#fbbf24';
