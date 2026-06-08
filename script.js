@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v670';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v671';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -25440,7 +25440,7 @@ function drawShopScreen() {
         return;
     }
 
-    const pad = 30;
+    const pad = 15;
     const w = CANVAS_W - pad * 2;
     const h = CANVAS_H - pad * 2;
     ctx.fillStyle = '#000';
