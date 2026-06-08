@@ -25175,10 +25175,10 @@ function drawStatusScreen() {
 
     } else {
         // ── Page 3: Settings ───────────────────────────────────
-        const optY = CY + 40;
-        const opt2Y = CY + 75;
-        const opt3Y = CY + 110;
-        const opt4Y = CY + 145;
+        const optY = CY + 76;
+        const opt2Y = CY + 111;
+        const opt3Y = CY + 146;
+        const opt4Y = CY + 181;
         ctx.textAlign = 'left';
 
         // BGM ON/OFF row
