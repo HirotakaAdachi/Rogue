@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v659';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v660';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -26613,13 +26613,13 @@ function _drawCanvasHUDTop() {
     }
     ctx.font = FONT;
 
-    // Ring names (bottom-left, small)
+    // Ring names (bottom-right, small)
     const lyBot = Y0 + H - 7;
     if (_hudRingNames.length > 0) {
         ctx.font = "11px 'Courier New', Courier, monospace";
         ctx.fillStyle = '#ededed';
-        ctx.textAlign = 'left';
-        ctx.fillText(_hudRingNames.join('  /  '), lx, lyBot);
+        ctx.textAlign = 'right';
+        ctx.fillText(_hudRingNames.join('  /  '), rx, lyBot);
     }
 
     ctx.restore();
