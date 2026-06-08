@@ -303,7 +303,7 @@ const RINGS = [
   { id: 'TERRAIN_RING',  name: 'Terrain Ring',    nameJa: '地形の指輪',   desc: 'Cannot place or destroy walls, but can change floor terrain.\nIncompatible with some rings.', descJa: '壁の作成・破壊はできないが、地形を変更できる。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#84cc16' },
   { id: 'SUMMON_RING',  name: 'Summon Ring',     nameJa: '召喚の指輪',   desc: 'Block action summons an ally (defeated enemy types only).\nNormal dungeon: costs 10% MaxHP.\nLiminal Space: no HP cost.\nIncompatible with some rings.', descJa: '体力を消費し、討伐済みの敵を召喚。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#a78bfa' },
   { id: 'PUSH_RING',    name: 'Push Ring',       nameJa: '壁押しの指輪', desc: 'Can push a small section of wall.', descJa: 'すこしの壁を押すことができる。', cost: 1000, symbol: '◎', color: '#78716c' },
-  { id: 'WALL_RING',    name: 'Wall Ring',        nameJa: '壁の指輪',     desc: 'Place normal indestructible walls instead of blocks.\nFace a wall + place action to remove it.', descJa: '設置ブロックの代わりに破壊不能の壁を置く。\n壁に向けて設置操作すると消せる。', cost: 2000, symbol: '◎', color: '#a3a3a3' },
+  { id: 'WALL_RING',    name: 'Room Builder Ring', nameJa: '部屋作りの指輪', desc: 'Place normal indestructible walls instead of blocks.\nFace a wall + place action to remove it.', descJa: '設置ブロックの代わりに破壊不能の壁を置く。\n壁に向けて設置操作すると消せる。', cost: 2000, symbol: '◎', color: '#2dd4bf' },
 ];
 
 // 同時装備不可の指輪ペア（片方を装備すると他方を弾く）
@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v671';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v679';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -25410,7 +25410,7 @@ function drawShopScreen() {
     if (shopMode === 'SELECT') {
         const sw = 280, sh = 120;
         const sx = (CANVAS_W - sw) / 2, sy = (CANVAS_H - sh) / 2;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.90)';
+        ctx.fillStyle = '#000';
         ctx.fillRect(sx, sy, sw, sh);
         ctx.strokeStyle = '#ededed';
         ctx.lineWidth = 2;
@@ -25442,7 +25442,7 @@ function drawShopScreen() {
 
     const pad = 15;
     const w = CANVAS_W - pad * 2;
-    const h = CANVAS_H - pad * 2;
+    const h = CANVAS_H_FULL - HUD_BOT_H - pad * 2;
     ctx.fillStyle = '#000';
     ctx.fillRect(pad, pad, w, h);
     ctx.strokeStyle = '#ededed';
@@ -25464,7 +25464,7 @@ function drawShopScreen() {
     const startY = pad + 100;
     const lineH = 45;
     const GAP_H = 12;
-    const maxVisible = 8;
+    const maxVisible = Math.max(1, Math.floor((h - 150) / lineH));
     const listAreaH = maxVisible * lineH;
 
     // スクロール位置を選択に合わせてクランプ
@@ -25482,6 +25482,7 @@ function drawShopScreen() {
 
     const visibleItems = shopStock.slice(shopScrollOffset, shopScrollOffset + maxVisible);
     let cumOffsetY = 0;
+    let lastItemYPos = -1;
     // 買いアイテムのアイコン色: 指輪はRINGS定義の色、魔導書は取得時の色に対応
     const _TOME_BUY_COLORS = {
         [SYMBOLS.HEAL_TOME]:    '#4ade80',
@@ -25502,6 +25503,7 @@ function drawShopScreen() {
             return;
         }
 
+        lastItemYPos = yPos;
         cumOffsetY += lineH;
         const isSelected = shopSelection === i;
         const isSellItem = item.type === 'sell_sword' || item.type === 'sell_armor' || item.type === 'sell_ring' || item.type === 'sell_tome' || item.type === 'sell_fairy';
@@ -25560,14 +25562,14 @@ function drawShopScreen() {
             ? ((boughtTome || boughtRing) ? '  ×0' : '  ×1') : '';
 
         // アイコン + 名前（売りは全アイコン水色、買いは全アイコン黄色）
-        ctx.font = '14px Courier New';
+        ctx.font = '12px Courier New';
         const _nameColor = isSelected ? '#ededed' : '#ccc';
         const _nc = !canAfford ? '#555' : _nameColor;
         const _pfxW = ctx.measureText('  ').width;
         const _symW = ctx.measureText(symbol).width;
         ctx.fillStyle = _nc;
         ctx.fillText('  ', pad + 30, yPos + 5);
-        ctx.font = 'bold 14px Courier New';
+        ctx.font = 'bold 12px Courier New';
         let _iconColor;
         if (!canAfford) _iconColor = '#555';
         else if (item.type === 'sell_ring') _iconColor = RINGS[item.ringIndex].color;
@@ -25580,31 +25582,31 @@ function drawShopScreen() {
         ctx.fillStyle = _iconColor;
         ctx.fillText(symbol, pad + 30 + _pfxW, yPos + 5);
         if (_gameLang === 'en') {
-            ctx.font = '14px Courier New';
+            ctx.font = '12px Courier New';
             ctx.fillStyle = _nc;
             const _nameStr = ` ${name}`;
             ctx.fillText(_nameStr, pad + 30 + _pfxW + _symW, yPos + 5);
             if (countStr) {
                 const _nameStrW = ctx.measureText(_nameStr).width;
-                ctx.font = '12px Courier New';
+                ctx.font = '11px Courier New';
                 ctx.fillStyle = '#888';
                 ctx.fillText(countStr, pad + 30 + _pfxW + _symW + _nameStrW, yPos + 5);
             }
         } else {
-            ctx.font = `14px ${MINCHO}`;
+            ctx.font = `12px ${MINCHO}`;
             ctx.fillStyle = _nc;
             const _jaNameStr = ` ${nameJa}`;
             ctx.fillText(_jaNameStr, pad + 30 + _pfxW + _symW, yPos + 5);
             if (countStr) {
                 const _jaNameStrW = ctx.measureText(_jaNameStr).width;
-                ctx.font = '12px Courier New';
+                ctx.font = '11px Courier New';
                 ctx.fillStyle = '#888';
                 ctx.fillText(countStr, pad + 30 + _pfxW + _symW + _jaNameStrW, yPos + 5);
             }
         }
 
         // コスト / 売値
-        ctx.font = '14px Courier New';
+        ctx.font = '12px Courier New';
         ctx.textAlign = 'right';
         if (isSellItem) {
             ctx.fillStyle = isSelected ? '#ededed' : '#aaa';
@@ -25639,10 +25641,10 @@ function drawShopScreen() {
         }
     });
 
-    // 下に続きがある場合: 最後の可視アイテム行をフェード（下から2番目）
-    if (hasBelow && cumOffsetY >= lineH) {
+    // 下に続きがある場合: 最後の実アイテム行をフェード
+    if (hasBelow && lastItemYPos >= 0) {
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(pad + 1, startY + cumOffsetY - lineH - 12, w - 2, lineH);
+        ctx.fillRect(pad + 1, lastItemYPos - 12, w - 2, lineH);
     }
 
     // 下に続きがある場合、ギャップを飛ばして最初の実アイテムを薄く表示
@@ -25673,16 +25675,17 @@ function drawShopScreen() {
 
     ctx.restore();
 
-    // スクロールインジケーター
+    // スクロールインジケーター（リスト中央上下に配置）
     ctx.font = '11px Courier New';
     ctx.textAlign = 'center';
+    const _indX = pad + w / 2;
     if (shopScrollOffset > 0) {
         ctx.fillStyle = '#888';
-        ctx.fillText('▲', pad + w - 20, startY + 4);
+        ctx.fillText('▲', _indX, startY - 6);
     }
     if (shopScrollOffset + maxVisible < shopStock.length) {
         ctx.fillStyle = '#888';
-        ctx.fillText('▼', pad + w - 20, startY + listAreaH - 4);
+        ctx.fillText('▼', _indX, startY + listAreaH + 14);
     }
 
     // 操作ガイド
@@ -26538,33 +26541,33 @@ function _drawCanvasHUDTop() {
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    const FONT = "14px 'Courier New', Courier, monospace";
-    const FONT_SM = "11px 'Courier New', Courier, monospace";
+    const FONT = "12px 'Courier New', Courier, monospace";
     ctx.font = FONT;
 
-    // === LEFT COLUMN: LV / HP / STAMINA (bottom-anchored, 4行構成) ===
+    // y-positions (absolute within HUD_TOP_H=55, 12px uniform gap):
+    //   ly1=5(floor), ly2=17(gold/LV), ly3=29(equip/HP), lyR=41(rings/STAMINA)
     const lx = 20;
-    const lyR = Y0 + H - 14;  // RINGS (right side only)
-    const ly3 = lyR - 18;     // STAMINA
-    const ly2 = ly3 - 18;     // HP
-    const ly1 = ly2 - 18;     // LV
+    const lyR = Y0 + H - 14;  // bottom row: rings (right) + STAMINA (left)
+    const ly3 = lyR - 12;     // equipment (right) + HP (left)
+    const ly2 = lyR - 24;     // gold (right) + LV (left)
+    const ly1 = lyR - 36;     // floor (right)
 
-    // LV
-    ctx.fillStyle = '#ededed'; ctx.fillText('LV: ', lx, ly1);
+    // === LEFT COLUMN: LV / HP / STAMINA ===
+    // LV (at ly2, same row as gold)
+    ctx.fillStyle = '#ededed'; ctx.fillText('LV: ', lx, ly2);
     const lvW = ctx.measureText('LV: ').width;
-    ctx.fillText(String(_hudLV), lx + lvW, ly1);
+    ctx.fillText(String(_hudLV), lx + lvW, ly2);
 
-    // HP
-    ctx.fillText('HP: ', lx, ly2);
+    // HP (at ly3, same row as equipment)
+    ctx.fillStyle = '#ededed'; ctx.fillText('HP: ', lx, ly3);
     const hpW = ctx.measureText('HP: ').width;
-    ctx.fillStyle = _hudHPColor; ctx.fillText(_hudHP, lx + hpW, ly2);
+    ctx.fillStyle = _hudHPColor; ctx.fillText(_hudHP, lx + hpW, ly3);
 
-    // STAMINA
-    ctx.fillStyle = '#ededed'; ctx.font = FONT_SM;
-    ctx.fillText('STAMINA', lx, ly3);
-    // Gauge
+    // STAMINA (at lyR, same row as ring names)
+    ctx.fillStyle = '#ededed';
+    ctx.fillText('STAMINA', lx, lyR);
     const gx = lx + ctx.measureText('STAMINA ').width + 2;
-    const gw = 60, gh = 6, gy = ly3 - gh / 2;
+    const gw = 55, gh = 5, gy = lyR - gh / 2;
     ctx.fillStyle = '#333';
     ctx.fillRect(gx, gy, gw, gh);
     const barW = Math.round((_hudStaminaInfinite ? 100 : _hudStamina) / 100 * gw);
@@ -26576,7 +26579,7 @@ function _drawCanvasHUDTop() {
         ctx.shadowBlur = 0;
     }
 
-    // === RIGHT COLUMN: FLOOR / GOLD+KEY / WEAPON+ARMOR / RINGS ===
+    // === RIGHT COLUMN: FLOOR / GOLD / WEAPON+ARMOR / RINGS ===
     const rx = CANVAS_W - 20;
     ctx.textAlign = 'right';
     ctx.font = FONT;
@@ -26587,37 +26590,31 @@ function _drawCanvasHUDTop() {
         const floorTextW = ctx.measureText(_hudFloor).width;
         ctx.fillText(_hudFloorPrefix, rx - floorTextW, ly1);
     }
-    ctx.font = "12px 'Courier New', Courier, monospace";
     ctx.fillText(_hudFloor, rx, ly1);
 
-    // ly2: gold
-    ctx.font = FONT;
+    // Gold (ly2)
     if (_hudGold > 0) {
         ctx.fillStyle = '#ededed';
         ctx.fillText(`${_hudGold}G`, rx, ly2);
     }
 
-    // ly3: 鍵・武器・防具（key + sword + armor、right-to-left）
+    // Equipment: key / sword / armor (ly3, right-to-left)
     const eqBot = [];
     if (_hudHasKey) eqBot.push({ text: 'k', color: '#fbbf24', preGap: 6 });
-    const FONT_ICON = "16px 'Courier New', Courier, monospace";
-    if (_hudSwordCount > 0) eqBot.push({ text: '†', color: '#38bdf8', font: FONT_ICON }, { text: `×${_hudSwordCount}`, color: '#ededed' });
-    if (_hudArmorCount > 0) eqBot.push({ text: '▼', color: '#38bdf8', font: FONT_ICON }, { text: `×${_hudArmorCount}`, color: '#ededed' });
+    if (_hudSwordCount > 0) eqBot.push({ text: '†', color: '#38bdf8' }, { text: `×${_hudSwordCount}`, color: '#ededed' });
+    if (_hudArmorCount > 0) eqBot.push({ text: '▼', color: '#38bdf8' }, { text: `×${_hudArmorCount}`, color: '#ededed' });
     let eBotX = rx;
     for (let i = eqBot.length - 1; i >= 0; i--) {
         const seg = eqBot[i];
-        ctx.font = seg.font || FONT;
         const w = ctx.measureText(seg.text).width;
         if (seg.preGap) eBotX -= seg.preGap;
         ctx.fillStyle = seg.color;
         ctx.fillText(seg.text, eBotX, ly3);
         eBotX -= w + 5;
     }
-    ctx.font = FONT;
 
-    // Ring names (bottom-right)
+    // Ring names (lyR)
     if (_hudRingNames.length > 0) {
-        ctx.font = FONT;
         ctx.fillStyle = '#ededed';
         ctx.textAlign = 'right';
         ctx.fillText(_hudRingNames.join('  /  '), rx, lyR);
@@ -26793,7 +26790,7 @@ function _drawCanvasHUDBot() {
     }
 
     // BEST (bottom-right of log area)
-    ctx.font = "11px 'Courier New', Courier, monospace";
+    ctx.font = "12px 'Courier New', Courier, monospace";
     ctx.fillStyle = '#ededed';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'bottom';
@@ -29219,7 +29216,7 @@ function tryPlaceBlock(dx, dy) {
     const bx = player.x + dx, by = player.y + dy;
     if (bx < 0 || bx >= COLS || by < 0 || by >= ROWS) return false;
 
-    // 壁の指輪: 向いた先の通常WALLを消す / 床に通常WALLを設置する
+    // 部屋作りの指輪: 向いた先の通常WALLを消す / 床に通常WALLを設置する
     if (hasRing('WALL_RING')) {
         const _wrt = map[by][bx];
         // 通常WALL → 除去（外周は除く。BLUE_BLOCKや設置ブロックは除去不可）
@@ -32140,7 +32137,7 @@ async function handleAction(dx, dy) {
                     moveMadmen();
                     isProcessing = false;
                 }
-                // 壁の指輪で壁削除後: 直後に1マス前進（敵がいなければ）
+                // 部屋作りの指輪で壁削除後: 直後に1マス前進（敵がいなければ）
                 if (_wrTargetIsWall) {
                     const _wrAdvX = player.x + dx, _wrAdvY = player.y + dy;
                     if (!enemies.some(e => !e._dead && e.hp > 0 && e.x === _wrAdvX && e.y === _wrAdvY)) {
@@ -33024,7 +33021,7 @@ async function handleAction(dx, dy) {
                     { tomeType: 'charmTomes',   symbol: SYMBOLS.CHARM,        name: 'Charm Tome',   nameJa: '魅了の魔導書',   desc: 'Tame enemies within 5 tiles.',            descJa: '周囲の敵を仲間にする',       cost: 105 },
                 ];
                 const shuffledTomes = cheapTomePool.slice().sort(() => Math.random() - 0.5);
-                const tomeItems = shuffledTomes.slice(0, 2).map(t => ({ type: 'tome', ...t }));
+                const tomeItems = shuffledTomes.slice(0, 3).map(t => ({ type: 'tome', ...t }));
                 shopBuyStock = [
                     ...ringItems,
                     { type: 'gap' },
@@ -47279,7 +47276,7 @@ window.addEventListener('keydown', async e => {
         if (gameState === 'SHOP') {
             if (shopMode === 'SELECT') { shopModeSelection = shopModeSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
             { let _ns = shopSelection; do { _ns--; } while (_ns >= 0 && shopStock[_ns]?.type === 'gap'); if (_ns >= 0) shopSelection = _ns; }
-            { const _mv = 7; if (shopSelection < shopScrollOffset) shopScrollOffset = shopSelection; if (shopSelection >= shopScrollOffset + _mv) shopScrollOffset = shopSelection - _mv + 1; }
+            { const _mv = Math.max(1, Math.floor((CANVAS_H_FULL - HUD_BOT_H - 180) / 45)); if (shopSelection < shopScrollOffset) shopScrollOffset = shopSelection; if (shopSelection >= shopScrollOffset + _mv) shopScrollOffset = shopSelection - _mv + 1; }
             SOUNDS.SELECT(); return;
         }
         if (gameState === 'RINGS') {
@@ -47330,7 +47327,7 @@ window.addEventListener('keydown', async e => {
         if (gameState === 'SHOP') {
             if (shopMode === 'SELECT') { shopModeSelection = shopModeSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
             { let _ns = shopSelection; do { _ns++; } while (_ns < shopStock.length && shopStock[_ns]?.type === 'gap'); if (_ns < shopStock.length) shopSelection = _ns; }
-            { const _mv = 7; if (shopSelection < shopScrollOffset) shopScrollOffset = shopSelection; if (shopSelection >= shopScrollOffset + _mv) shopScrollOffset = shopSelection - _mv + 1; }
+            { const _mv = Math.max(1, Math.floor((CANVAS_H_FULL - HUD_BOT_H - 180) / 45)); if (shopSelection < shopScrollOffset) shopScrollOffset = shopSelection; if (shopSelection >= shopScrollOffset + _mv) shopScrollOffset = shopSelection - _mv + 1; }
             SOUNDS.SELECT(); return;
         }
         if (gameState === 'RINGS') {
