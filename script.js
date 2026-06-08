@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v669';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v670';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -25638,6 +25638,12 @@ function drawShopScreen() {
             }
         }
     });
+
+    // 下に続きがある場合: 最後の可視アイテム行をフェード（下から2番目）
+    if (hasBelow && cumOffsetY >= lineH) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(pad + 1, startY + cumOffsetY - lineH - 12, w - 2, lineH);
+    }
 
     // 下に続きがある場合、ギャップを飛ばして最初の実アイテムを薄く表示
     if (hasBelow) {
