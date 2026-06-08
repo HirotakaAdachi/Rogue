@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v652';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v653';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -25119,13 +25119,10 @@ function drawStatusScreen() {
 
         // ── KILLS CHART ──────────────────────────────────────
         y += 16;
-        const _kcTotal = _KILL_CHART_ROWS.flat().length;
-        const _kcHunted = _KILL_CHART_ROWS.flat().filter(e => e.types.some(t => _killedEnemyTypes.has(t))).length;
         ctx.textAlign = 'left';
         ctx.font = '13px Courier New';
         ctx.fillStyle = '#aaa';
         ctx.fillText('HUNTED', sx, y);
-        ctx.fillText(`${_kcHunted} / ${_kcTotal}`, valX, y);
         y += 24;
         const _kcSteps = [14, 20];
         const _kcFonts = [11, 13];
