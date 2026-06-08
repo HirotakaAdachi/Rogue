@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v644';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v650';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -24322,17 +24322,10 @@ async function showStoryPages(pages, useMiddlePos = false, useTopPos = false, au
     }
 }
 
-// 商人用: EN→ログ出力、JP→オーバーレイ表示
+// 商人用: 両言語対応オーバーレイ表示
 async function showMerchantStory(pages, showOnTop) {
     for (let pi = 0; pi < pages.length; pi++) {
-        const page = pages[pi];
-        page.forEach(line => {
-            if (typeof line === 'object' && line.en) {
-                line.en.split('\n').forEach(l => { if (l.trim()) addLog(l); });
-            }
-        });
-        const jpLines = page.map(line => typeof line === 'object' ? line.jp : line);
-        await showStoryPages([jpLines], false, showOnTop, 0, false, true);
+        await showStoryPages([pages[pi]], false, showOnTop, 0, false, true);
     }
 }
 
@@ -25483,6 +25476,17 @@ function drawShopScreen() {
 
     const visibleItems = shopStock.slice(shopScrollOffset, shopScrollOffset + maxVisible);
     let cumOffsetY = 0;
+    // 買いアイテムのアイコン色: 指輪はRINGS定義の色、魔導書は取得時の色に対応
+    const _TOME_BUY_COLORS = {
+        [SYMBOLS.HEAL_TOME]:    '#4ade80',
+        [SYMBOLS.SPEED]:        '#38bdf8',
+        [SYMBOLS.STEALTH]:      '#94a3b8',
+        [SYMBOLS.CHARM]:        '#60a5fa',
+        [SYMBOLS.BREAKER_TOME]: '#f59e0b',
+        [SYMBOLS.EXPLOSION]:    '#ef4444',
+        [SYMBOLS.ESCAPE]:       '#c084fc',
+        [SYMBOLS.GUARDIAN]:     '#facc15',
+    };
     visibleItems.forEach((item, vi) => {
         const i = shopScrollOffset + vi;
         const yPos = startY + cumOffsetY;
@@ -25568,6 +25572,8 @@ function drawShopScreen() {
         if (!canAfford) _iconColor = '#555';
         else if (isSellItem) _iconColor = '#38bdf8';  // 売り: 水色
         else if (symbol === SYMBOLS.SWORD || symbol === SYMBOLS.ARMOR) _iconColor = '#38bdf8'; // 遺品の剣・鎧: 水色
+        else if (item.type === 'ring') _iconColor = RINGS[item.ringIndex].color;
+        else if (item.type === 'tome') _iconColor = _TOME_BUY_COLORS[item.symbol] || '#fbbf24';
         else _iconColor = '#fbbf24';                   // 買い: 黄色
         ctx.fillStyle = _iconColor;
         ctx.fillText(symbol, pad + 30 + _pfxW, yPos + 5);
@@ -32086,12 +32092,12 @@ async function handleAction(dx, dy) {
             else if (_wallRingLockDx < 0) player.facing = 'LEFT';
             // return しない → 下の移動コードで dx/dy 方向に移動
 
-        // WALL_RING 除去ロック: ロック方向と同じ方向 → 移動先の先の壁を除去して前進
+        // WALL_RING 除去ロック: ロック方向と同じ方向 → 直前の壁を除去して前進
         } else if (_wrLocked && _wallRingMode === 'remove'
             && dx === _wallRingLockDx && dy === _wallRingLockDy) {
-            // 移動先のさらに先（player + 2*lock）の壁を先読み除去して通路を掘り続ける
-            const _wlx = player.x + dx + _wallRingLockDx;
-            const _wly = player.y + dy + _wallRingLockDy;
+            // 初回除去後にプレイヤーが1歩進んでいるため、先読みは+1でよい
+            const _wlx = player.x + dx;
+            const _wly = player.y + dy;
             if (_wlx >= 1 && _wlx < COLS - 1 && _wly >= 1 && _wly < ROWS - 1
                 && map[_wly][_wlx] === SYMBOLS.WALL) {
                 map[_wly][_wlx] = SYMBOLS.FLOOR;
@@ -32126,6 +32132,14 @@ async function handleAction(dx, dy) {
                     moveFairies();
                     moveMadmen();
                     isProcessing = false;
+                }
+                // 壁の指輪で壁削除後: 直後に1マス前進（敵がいなければ）
+                if (_wrTargetIsWall) {
+                    const _wrAdvX = player.x + dx, _wrAdvY = player.y + dy;
+                    if (!enemies.some(e => !e._dead && e.hp > 0 && e.x === _wrAdvX && e.y === _wrAdvY)) {
+                        player.x = _wrAdvX;
+                        player.y = _wrAdvY;
+                    }
                 }
                 if (isInEscapeRoom) {
                     _escapeRoomPageTempWalls[_escapeRoomPage] = [...tempWalls];
@@ -36907,9 +36921,11 @@ async function enemyTurn() {
             continue;
         }
         // 敵との衝突: 先端・胴体いずれかに重なった敵にダメージ（発射元VULCAN自身は除外）
+        // 味方VULCANの炎弾は同陣営の仲間には当たらない
         const _iHitEnemy = enemies.find(oe =>
             !oe._dead && oe.hp > 0 && oe !== _proj.owner &&
             !ALL_COLLECTOR_TYPES.has(oe.type) &&
+            !(_proj.owner?.isAlly && oe.isAlly) &&
             ((oe.x === _proj.x && oe.y === _proj.y) || (oe.x === _prevX && oe.y === _prevY))
         );
         if (_iHitEnemy) {
@@ -36962,9 +36978,9 @@ async function enemyTurn() {
             infernoProjectiles.splice(_ip, 1);
             continue;
         }
-        // プレイヤーとの衝突: 先端・胴体どちらに重なっていてもダメージ
+        // プレイヤーとの衝突: 先端・胴体どちらに重なっていてもダメージ（味方VULCANの炎弾は除外）
         const _playerHit =
-            (!player.isShielded && !hasRing('FIRE_RING')) &&
+            (!player.isShielded && !hasRing('FIRE_RING') && !_proj.owner?.isAlly) &&
             ((_proj.x === player.x && _proj.y === player.y) ||
              (_prevX === player.x && _prevY === player.y));
         if (_playerHit) {
@@ -37038,6 +37054,26 @@ async function enemyTurn() {
             addKeyLog("🔥 VULCAN launches a fireball!");
             _ie._shotFlash = 2; // 今ターン+次ターンまで白（1ターン継続）
             _ie._infRestLeft = 5;
+        }
+    }
+
+    // 味方VULCAN: 同じ行または列に敵がいれば炎弾発射
+    for (const _ie of enemies) {
+        if (_ie.type !== 'VULCAN' || !_ie.isAlly || _ie._dead || _ie.hp <= 0 || _ie.stunTurns > 0) continue;
+        if ((_ie._infRestLeft || 0) > 0) continue;
+        for (const _tgt of enemies) {
+            if (_tgt === _ie || _tgt._dead || _tgt.hp <= 0 || _tgt.isAlly) continue;
+            const _iaOnRow = _tgt.y === _ie.y, _iaOnCol = _tgt.x === _ie.x;
+            if (!_iaOnRow && !_iaOnCol) continue;
+            const _iaDx = _iaOnRow ? Math.sign(_tgt.x - _ie.x) : 0;
+            const _iaDy = _iaOnCol ? Math.sign(_tgt.y - _ie.y) : 0;
+            if (_iaDx === 0 && _iaDy === 0) continue;
+            infernoProjectiles.push({ x: _ie.x, y: _ie.y, dx: _iaDx, dy: _iaDy, life: 40, owner: _ie });
+            SOUNDS.IGNITE();
+            addKeyLog('🔥 Ally V fires a fireball!');
+            _ie._shotFlash = 2;
+            _ie._infRestLeft = 5;
+            break;
         }
     }
 
@@ -42468,6 +42504,13 @@ async function enemyTurn() {
                 // 周囲が安全な時だけ治療対象へ近づく
                 sx = e.x < healTarget.x ? 1 : (e.x > healTarget.x ? -1 : 0);
                 sy = e.y < healTarget.y ? 1 : (e.y > healTarget.y ? -1 : 0);
+            } else if (e.isAlly) {
+                // 敵なし・治療対象なし → 主人公に追従
+                const _hpd = Math.max(Math.abs(player.x - e.x), Math.abs(player.y - e.y));
+                if (_hpd > 1) {
+                    sx = e.x < player.x ? 1 : (e.x > player.x ? -1 : 0);
+                    sy = e.y < player.y ? 1 : (e.y > player.y ? -1 : 0);
+                }
             }
 
             // --- 移動適用 ---
@@ -43370,7 +43413,30 @@ async function enemyTurn() {
         if (e.type === 'VULCAN' && !_factionIgnorePlayer && !e._betrayed) {
             if (e._moveTick === undefined) { e._moveTick = 0; e._infRestLeft = 0; e._shotFlash = 0; }
             if (e._shotFlash > 0) e._shotFlash--;
-            e._moveTick--; // カウントダウン式: 0以下になったら移動し次のインターバルをランダム設定
+            e._moveTick--;
+
+            // 味方VULCAN: 主人公に追従（溶岩制限なし・炎弾発射は別ブロックで処理済み）
+            if (e.isAlly) {
+                const _vaCheb = Math.max(Math.abs(player.x - e.x), Math.abs(player.y - e.y));
+                if (_vaCheb > 1) {
+                    const _vaDirs = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
+                        ? [{dx:Math.sign(player.x-e.x),dy:0},{dx:0,dy:Math.sign(player.y-e.y)}]
+                        : [{dx:0,dy:Math.sign(player.y-e.y)},{dx:Math.sign(player.x-e.x),dy:0}];
+                    // lavaBoundを無視して通常フロアも移動可能にする
+                    const _vaCanStep = (nx, ny) =>
+                        nx >= 1 && nx < COLS-1 && ny >= 1 && ny < ROWS-1 &&
+                        !isRealHole(nx, ny) &&
+                        map[ny][nx] !== SYMBOLS.WALL && map[ny][nx] !== SYMBOLS.DOOR &&
+                        map[ny][nx] !== SYMBOLS.BLOCK && map[ny][nx] !== SYMBOLS.BLOCK_CRACKED &&
+                        !(nx === player.x && ny === player.y) &&
+                        !enemies.some(oe => oe !== e && !oe._dead && oe.hp > 0 && oe.x === nx && oe.y === ny);
+                    for (const {dx, dy} of _vaDirs) {
+                        const _nx = e.x + dx, _ny = e.y + dy;
+                        if (_vaCanStep(_nx, _ny)) { e.x = _nx; e.y = _ny; break; }
+                    }
+                }
+                continue;
+            }
 
             // 溶岩の外にいる場合は即死（全VULCAN共通）
             if (map[e.y][e.x] !== SYMBOLS.LAVA) {
@@ -43989,6 +44055,97 @@ async function enemyTurn() {
                 }
             }
             if (isRealHole(e.x, e.y)) { scheduleEnemyFall(e, "R fell into the hole!"); continue; }
+            continue;
+        }
+
+        // ===== AI: YONDER (ally) — 8方向移動で敵を追跡・攻撃、敵がいなければ主人公に追従 =====
+        if (e.isAlly && e.type === 'YONDER') {
+            if (e._ydRandMove) {
+                e._ydRandMove = false;
+                const _yaRPreX = e.x, _yaRPreY = e.y;
+                const _yaRDirs = [
+                    [1,0],[-1,0],[0,1],[0,-1],
+                    [1,1],[-1,1],[1,-1],[-1,-1]
+                ].sort(() => Math.random() - 0.5);
+                for (const [mx, my] of _yaRDirs) {
+                    const nx = e.x + mx, ny = e.y + my;
+                    if (nx < 1 || nx >= COLS - 1 || ny < 1 || ny >= ROWS - 1) continue;
+                    if (!canEnemyMove(nx, ny, e)) continue;
+                    if (nx === player.x && ny === player.y) continue;
+                    if (enemies.some(oe => oe !== e && oe.hp > 0 && !oe._dead && oe.x === nx && oe.y === ny)) continue;
+                    if (mx !== 0 && my !== 0) { e.offsetY = -12; await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); e.offsetY = 0; }
+                    e.x = nx; e.y = ny; break;
+                }
+                await _iceSlide(e, _yaRPreX, _yaRPreY);
+                if (isRealHole(e.x, e.y)) scheduleEnemyFall(e, "Y stumbled into a hole!");
+                continue;
+            }
+            // 最も近い敵（非味方・非死亡）を探す
+            let _yaTarget = null, _yaTargetDist = Infinity;
+            for (const o of enemies) {
+                if (o === e || o._dead || o.hp <= 0 || o.isAlly) continue;
+                const d = Math.max(Math.abs(o.x - e.x), Math.abs(o.y - e.y));
+                if (d < _yaTargetDist) { _yaTargetDist = d; _yaTarget = o; }
+            }
+            if (_yaTarget) {
+                const _yaDx = _yaTarget.x - e.x, _yaDy = _yaTarget.y - e.y;
+                const _yaCheb = Math.max(Math.abs(_yaDx), Math.abs(_yaDy));
+                if (_yaCheb === 1) {
+                    const _yaDmg = Math.max(1, Math.floor(floorLevel / 3) + 2 + (e._atkBonus || 0));
+                    e.offsetX = _yaDx * 8; e.offsetY = _yaDy * 8;
+                    spawnSlash(_yaTarget.x, _yaTarget.y);
+                    SOUNDS.ENEMY_ATTACK();
+                    _yaTarget.hp -= _yaDmg;
+                    spawnDamageText(_yaTarget.x, _yaTarget.y, _yaDmg, '#86efac');
+                    _yaTarget.flashUntil = performance.now() + 200;
+                    addKeyLog(`Ally Y strikes diagonally! (-${_yaDmg})`);
+                    attackOccurred = true;
+                    await _w(150); e.offsetX = 0; e.offsetY = 0;
+                    if (_yaTarget.hp <= 0) { _yaTarget._killedByAlly = e; handleEnemyDeath(_yaTarget, false); }
+                    continue;
+                }
+                // 敵に向かって8方向移動（斜め優先）
+                const _yamx = Math.sign(_yaDx), _yamy = Math.sign(_yaDy);
+                const _yaMvDirs = [];
+                if (_yamx !== 0 && _yamy !== 0) _yaMvDirs.push([_yamx, _yamy]);
+                if (_yamx !== 0) _yaMvDirs.push([_yamx, 0]);
+                if (_yamy !== 0) _yaMvDirs.push([0, _yamy]);
+                const _yaPreX = e.x, _yaPreY = e.y;
+                for (const [mx, my] of _yaMvDirs) {
+                    const nx = e.x + mx, ny = e.y + my;
+                    if (nx < 1 || nx >= COLS - 1 || ny < 1 || ny >= ROWS - 1) continue;
+                    if (!canEnemyMove(nx, ny, e)) continue;
+                    if (nx === player.x && ny === player.y) continue;
+                    if (enemies.some(oe => oe !== e && oe.hp > 0 && !oe._dead && oe.x === nx && oe.y === ny)) continue;
+                    if (mx !== 0 && my !== 0) { e.offsetY = -12; await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); e.offsetY = 0; }
+                    e.x = nx; e.y = ny; break;
+                }
+                await _iceSlide(e, _yaPreX, _yaPreY);
+                if (isRealHole(e.x, e.y)) { scheduleEnemyFall(e, "Y fell into a hole!"); }
+            } else {
+                // 敵がいない → 主人公に8方向で追従
+                const _yapDx = player.x - e.x, _yapDy = player.y - e.y;
+                const _yapCheb = Math.max(Math.abs(_yapDx), Math.abs(_yapDy));
+                if (_yapCheb > 1) {
+                    const _yapmx = Math.sign(_yapDx), _yapmy = Math.sign(_yapDy);
+                    const _yapDirs = [];
+                    if (_yapmx !== 0 && _yapmy !== 0) _yapDirs.push([_yapmx, _yapmy]);
+                    if (_yapmx !== 0) _yapDirs.push([_yapmx, 0]);
+                    if (_yapmy !== 0) _yapDirs.push([0, _yapmy]);
+                    const _yapPreX = e.x, _yapPreY = e.y;
+                    for (const [mx, my] of _yapDirs) {
+                        const nx = e.x + mx, ny = e.y + my;
+                        if (nx < 1 || nx >= COLS - 1 || ny < 1 || ny >= ROWS - 1) continue;
+                        if (!canEnemyMove(nx, ny, e)) continue;
+                        if (nx === player.x && ny === player.y) continue;
+                        if (enemies.some(oe => oe !== e && oe.hp > 0 && !oe._dead && oe.x === nx && oe.y === ny)) continue;
+                        if (mx !== 0 && my !== 0) { e.offsetY = -12; await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); e.offsetY = 0; }
+                        e.x = nx; e.y = ny; break;
+                    }
+                    await _iceSlide(e, _yapPreX, _yapPreY);
+                    if (isRealHole(e.x, e.y)) { scheduleEnemyFall(e, "Y fell into a hole!"); }
+                }
+            }
             continue;
         }
 
@@ -47924,6 +48081,7 @@ async function tryCharmEnemy() {
                     enemy._solarFree = true;
                 }
                 enemy.isAlly = true;
+                if (enemy.lavaBound) enemy.lavaBound = false; // 仲間になったら溶岩拘束を解除
                 // 擬態中のミミックをチャームした場合、擬態解除してSTAIRSタイルを除去
                 if (enemy.type === 'MIMIC' && enemy.disguised) {
                     enemy.disguised = false;
