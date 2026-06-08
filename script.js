@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v664';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v665';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -25420,15 +25420,15 @@ function drawShopScreen() {
         ctx.font = 'bold 12px Courier New';
         ctx.fillText('-- Stranded Adventurer --', CANVAS_W / 2, sy + 20);
         const midX = CANVAS_W / 2;
-        const midY = sy + 58;
+        const midY = sy + sh / 2;
         if (_gameLang === 'en') {
-            ctx.font = 'bold 16px Courier New';
+            ctx.font = 'bold 14px Courier New';
             ctx.fillStyle = shopModeSelection === 0 ? '#ededed' : '#444';
             ctx.fillText(shopModeSelection === 0 ? '> BUY <' : '  BUY  ', midX - 68, midY);
             ctx.fillStyle = shopModeSelection === 1 ? '#ededed' : '#444';
             ctx.fillText(shopModeSelection === 1 ? '> SELL <' : '  SELL  ', midX + 68, midY);
         } else {
-            ctx.font = `bold 14px ${MINCHO}`;
+            ctx.font = `bold 12px ${MINCHO}`;
             ctx.fillStyle = shopModeSelection === 0 ? '#ededed' : '#444';
             ctx.fillText(shopModeSelection === 0 ? '＞ 買う ＜' : '　買う　', midX - 68, midY);
             ctx.fillStyle = shopModeSelection === 1 ? '#ededed' : '#444';
