@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v657';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v658';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -25118,36 +25118,39 @@ function drawStatusScreen() {
         });
 
         // ── KILLS CHART ──────────────────────────────────────
+        const _kcCx = WX + WW / 2;
         y += 16;
-        ctx.textAlign = 'left';
+        ctx.textAlign = 'center';
         ctx.font = 'bold 14px Courier New';
         ctx.fillStyle = '#ededed';
-        ctx.fillText('Hunted Typography', sx + 68, y);
+        ctx.fillText('Hunted Typography', _kcCx, y);
         y += 14;
         const _kcSteps = [14, 20];
         const _kcFonts = [11, 13];
         _KILL_CHART_ROWS.forEach((row, ri) => {
-            let kx = sx + 68;
             const _kcStep = _kcSteps[ri] ?? 20;
             const _kcSz  = _kcFonts[ri] ?? 13;
+            let kx = _kcCx - (row.length * _kcStep) / 2;
             row.forEach(entry => {
                 const killed = entry.types.some(t => _killedEnemyTypes.has(t));
-                kx += _kcStep;
-                if (!killed) return;
+                if (!killed) { kx += _kcStep; return; }
                 const _needsFallback = 'λΩφ'.includes(entry.char);
                 ctx.font = _needsFallback
                     ? `${_kcSz}px "Courier New", "DejaVu Sans Mono", monospace`
                     : `${_kcSz}px "Courier New"`;
+                ctx.textAlign = 'left';
                 ctx.fillStyle = '#ededed';
-                ctx.fillText(entry.char, kx - _kcStep, y + ri * 20);
+                ctx.fillText(entry.char, kx, y + ri * 20);
+                kx += _kcStep;
             });
         });
         y += _KILL_CHART_ROWS.length * 20 + 6;
         if (kingKillCount > 0) {
             ctx.fillStyle = '#fbbf24';
             ctx.font = 'bold 14px Courier New';
+            ctx.textAlign = 'center';
             const _ktStr = kingKillCount <= 5 ? '♛'.repeat(kingKillCount) : `♛ ×${kingKillCount}`;
-            ctx.fillText(_ktStr, valX, y);
+            ctx.fillText(_ktStr, _kcCx, y);
             y += 24;
         }
 
