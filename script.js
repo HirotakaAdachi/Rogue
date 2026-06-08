@@ -287,7 +287,7 @@ const ITEM_MIMIC_META = {
 const RINGS = [
   { id: 'FIRE_RING',     name: 'Fire Ring',     nameJa: '炎の指輪',     desc: 'Nullify lava, fire & Blaze attacks',   descJa: '溶岩・炎床・Fの攻撃を無効化',       cost: 700, symbol: '◎', color: '#ef4444' },
   { id: 'POISON_RING',   name: 'Poison Ring',   nameJa: '毒の指輪',     desc: 'Nullifies all poison swamp effects',   descJa: '毒沼の効果を完全に無効化する',           cost: 700, symbol: '◎', color: '#a855f7' },
-  { id: 'CRITICAL_RING', name: 'Critical Ring', nameJa: '会心の指輪',   desc: 'Critical hit chance 10% -> 20%',       descJa: '会心の一撃の確率が2倍に',             cost: 500, symbol: '◎', color: '#fbbf24' },
+  { id: 'CRITICAL_RING', name: 'Fatal Ring',    nameJa: '致命の指輪',   desc: 'Critical hit chance doubled.',          descJa: 'クリティカルダメージの確率が２倍になる。', cost: 500, symbol: '◎', color: '#fbbf24' },
   { id: 'STAMINA_RING',  name: 'Stamina Ring',  nameJa: '活力の指輪',   desc: 'Attack stamina cost 20 -> 12',         descJa: '攻撃時のスタミナ消費を軽減',         cost: 500, symbol: '◎', color: '#f97316' },
   { id: 'LIFE_RING',     name: 'Life Ring',     nameJa: '生命の指輪',   desc: 'Max HP +50%',                           descJa: '最大HPが50%上昇する',                     cost: 500, symbol: '◎', color: '#4ade80' },
   { id: 'TOUGH_RING',    name: 'Tough Ring',    nameJa: '堅守の指輪',   desc: 'Reduces all damage taken by 25%',       descJa: '被ダメージを25%軽減する',          cost: 500, symbol: '◎', color: '#94a3b8' },
@@ -396,7 +396,7 @@ const _SUMMON_CYCLE = [
 const RING_DOUBLED_DESC = {
     FIRE_RING:      { ja: '攻撃に炎ダメージを追加（+floor/3+4）＋30%でスタン', en: 'Bonus fire damage + 30% chance to stun' },
     POISON_RING:    { ja: '攻撃に毒ダメ追加 + 敵を5ターン鈍化',               en: 'Poison damage + slow enemy for 5 turns' },
-    CRITICAL_RING:  { ja: '会心率20% ＋ 二重装備で会心時即死',                  en: 'Critical rate 20%; double equip = instant kill on critical' },
+    CRITICAL_RING:  { ja: 'クリティカルの確率が２倍。二重装備でクリティカル時に即死。', en: 'Critical chance doubled. Double equip: instant kill on critical.' },
     STAMINA_RING:   { ja: '攻撃時のスタミナ消費 12 → 6',                      en: 'Attack stamina cost 12 → 6' },
     LIFE_RING:      { ja: '最大HP +50% → +100%',                             en: 'Max HP bonus 50% → 100%' },
     TOUGH_RING:     { ja: '被ダメージ -25% → -50%',                          en: 'Damage reduction 25% → 50%' },
@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v679';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v681';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -25727,9 +25727,9 @@ function drawRingsScreen() {
             ctx.textAlign = 'left';
             ctx.font = 'bold 13px Courier New';
             ctx.fillStyle = isSel ? '#ededed' : '#666';
-            ctx.fillText('Slot ' + (s + 1), SX + 30, sy + 16);
+            ctx.fillText('Slot ' + (s + 1), SX + 30, sy + 20);
 
-            const boxX = SX + 86, boxY = sy - 2;
+            const boxX = SX + 110, boxY = sy - 2;
 
             const RX = SX + SW - 20; // 右端基準
             if (ring) {
@@ -25816,9 +25816,9 @@ function drawRingsScreen() {
             ctx.textAlign = 'left';
             ctx.font = 'bold 13px Courier New';
             ctx.fillStyle = isSel ? 'rgba(237,237,237,0.45)' : 'rgba(237,237,237,0.18)';
-            ctx.fillText('Slot ' + (s + 1), SL_X + 30, sy + 16);
+            ctx.fillText('Slot ' + (s + 1), SL_X + 30, sy + 20);
 
-            const boxX = SL_X + 86, boxY = sy - 2, boxW = SL_W - 100, boxH = ROW_H_SLOT - 8;
+            const boxX = SL_X + 110, boxY = sy - 2, boxW = SL_W - 124, boxH = ROW_H_SLOT - 8;
             ctx.fillStyle = 'rgba(0,0,0,0.5)';
             ctx.fillRect(boxX, boxY, boxW, boxH);
             ctx.strokeStyle = isSel ? 'rgba(237,237,237,0.22)' : 'rgba(237,237,237,0.07)';
@@ -28885,6 +28885,32 @@ function addLog(msg) { /* suppressed — use addKeyLog for important messages */
 function addKeyLog(msg) {
     _logLines.push({ text: String(msg) });
     if (_logLines.length > 10) _logLines.shift();
+}
+function _getEnemyCharForLog(type) {
+    for (const row of _KILL_CHART_ROWS) {
+        for (const entry of row) {
+            if (entry.types.includes(type)) return entry.char;
+        }
+    }
+    return type[0] || '?';
+}
+function _addAllyStatusLog() {
+    const allies = enemies.filter(e => e.isAlly && e.hp > 0 && !e._dead);
+    if (allies.length === 0) return;
+    const shown = allies.slice(0, 8);
+    for (let line = 0; line < 2; line++) {
+        const chunk = shown.slice(line * 4, (line + 1) * 4);
+        if (chunk.length === 0) break;
+        const segs = [];
+        for (let i = 0; i < chunk.length; i++) {
+            const a = chunk[i];
+            if (i > 0) segs.push({ text: ' · ', color: '#555' });
+            segs.push({ text: _getEnemyCharForLog(a.type), color: '#60a5fa' });
+            segs.push({ text: ` Lv${a.level || 1}  ${a.hp}/${a.maxHp}`, color: '#bfdbfe' });
+        }
+        _logLines.push({ text: '', segments: segs });
+        if (_logLines.length > 10) _logLines.shift();
+    }
 }
 function addLogHTML(html) {
     const segs = [];
@@ -47880,7 +47906,7 @@ window.addEventListener('keydown', async e => {
     }
 
     if (e.key.toLowerCase() === 'x' || e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'i') {
-        if (gameState === 'PLAYING' && !isProcessing) { gameState = 'MENU'; menuSelection = 0; SOUNDS.SELECT(); }
+        if (gameState === 'PLAYING' && !isProcessing) { gameState = 'MENU'; menuSelection = 0; SOUNDS.SELECT(); _addAllyStatusLog(); }
         else if (gameState === 'MENU') { gameState = 'PLAYING'; SOUNDS.SELECT(); }
         else if (gameState === 'STATUS' || gameState === 'INVENTORY') { gameState = 'MENU'; SOUNDS.SELECT(); }
         else if (gameState === 'SHOP') {
