@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v660';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v661';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -26541,11 +26541,12 @@ function _drawCanvasHUDTop() {
     const FONT_SM = "11px 'Courier New', Courier, monospace";
     ctx.font = FONT;
 
-    // === LEFT COLUMN: LV / HP / STAMINA (bottom-anchored) ===
+    // === LEFT COLUMN: LV / HP / STAMINA (bottom-anchored, 4行構成) ===
     const lx = 20;
-    const ly3 = Y0 + H - 18;  // STAMINA
-    const ly2 = ly3 - 16;     // HP
-    const ly1 = ly2 - 16;     // LV
+    const lyR = Y0 + H - 14;  // RINGS (right side only)
+    const ly3 = lyR - 18;     // STAMINA
+    const ly2 = ly3 - 18;     // HP
+    const ly1 = ly2 - 18;     // LV
 
     // LV
     ctx.fillStyle = '#ededed'; ctx.fillText('LV: ', lx, ly1);
@@ -26613,13 +26614,12 @@ function _drawCanvasHUDTop() {
     }
     ctx.font = FONT;
 
-    // Ring names (bottom-right, small)
-    const lyBot = Y0 + H - 7;
+    // Ring names (bottom-right)
     if (_hudRingNames.length > 0) {
-        ctx.font = "11px 'Courier New', Courier, monospace";
+        ctx.font = FONT;
         ctx.fillStyle = '#ededed';
         ctx.textAlign = 'right';
-        ctx.fillText(_hudRingNames.join('  /  '), rx, lyBot);
+        ctx.fillText(_hudRingNames.join('  /  '), rx, lyR);
     }
 
     ctx.restore();
