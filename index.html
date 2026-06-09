@@ -17,11 +17,15 @@ body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidde
     <div class="game-wrapper">
         <canvas id="game-canvas"></canvas>
     </div>
-    <script src="script.js?v=701"></script>
+    <script src="script.js?v=702"></script>
     <script>
 (function(){
-    // initScale() in script.js applies transform:scale to .game-wrapper which conflicts
-    // with our CSS-size approach — disable it.
+    // タッチデバイス（スマホ）のみカスタムfit()を適用。
+    // PCはscript.js内のinitScale()がそのまま機能する。
+    var isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (!isMobile) return;
+
+    // initScale() の transform と resize リスナーを無効化（モバイルのみ）
     if (typeof window._applyGameScale === 'function') {
         window.removeEventListener('resize', window._applyGameScale);
     }
@@ -35,23 +39,20 @@ body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidde
     function fit(){
         var vw = window.innerWidth;
         var vh = window.innerHeight;
-        var isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-        var portrait = isMobile && (vh > vw);
+        var portrait = vh > vw;
 
-        // Portrait mobile: measure D-pad area and center canvas between screen top and D-pad top
+        // 縦持ちのときDパッド分の高さを計測してその上にキャンバスを収める
         var dpadH = 0;
         if (portrait) {
             var tc = document.getElementById('tc-wrap');
             if (tc) {
                 var r = tc.getBoundingClientRect();
-                // vh - r.top = height from D-pad top to screen bottom (the area to reserve)
                 dpadH = r.height > 0 ? (vh - r.top) : 220;
             } else {
                 dpadH = 220;
             }
         }
 
-        // Scale canvas to fit within the area above the D-pad
         var availH = dpadH > 0 ? (vh - dpadH) : vh;
         var s = Math.min(1, vw / CANVAS_W, availH / CANVAS_H_FULL);
         var cw = Math.floor(CANVAS_W * s);
@@ -59,17 +60,16 @@ body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidde
         c.style.width  = cw + 'px';
         c.style.height = ch + 'px';
 
-        // Add padding-bottom so flex center aligns canvas to midpoint between screen top and D-pad top
+        // Dパッドの上端とスクリーン上端の中間にキャンバスを配置
         if (gw) gw.style.paddingBottom = dpadH > 0 ? dpadH + 'px' : '';
 
-        // Also resize canvas-viewport wrapper added by _initTouchControls on mobile
+        // _initTouchControls が追加する canvas-viewport にも同じサイズを適用
         var vp = document.getElementById('canvas-viewport');
         if (vp) { vp.style.width = cw + 'px'; vp.style.height = ch + 'px'; }
     }
 
     fit();
-    // Re-measure after first layout so getBoundingClientRect returns real D-pad dimensions
-    requestAnimationFrame(fit);
+    requestAnimationFrame(fit); // 初回レイアウト後に再測定
 
     window.addEventListener('resize', fit);
     window.addEventListener('orientationchange', function(){ setTimeout(fit, 300); });
