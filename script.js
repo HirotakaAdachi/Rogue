@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v705';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v706';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -49184,16 +49184,79 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     }, { passive: false });
 
     // MENU ボタン
+    // MENUボタン長押しでテストモード解放 / 階数入力
+    let _menuLongTimer = null;
+    let _menuLongFired = false;
+
+    function _showMobileFloorInput(isDeep) {
+        const _curF = isDeep ? deepTestFloor : testFloor;
+        const _min  = isDeep ? 101 : 1;
+        const _max  = isDeep ? 999 : 100;
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:3000;display:flex;align-items:center;justify-content:center;';
+        const box = document.createElement('div');
+        box.style.cssText = 'background:#111;border:2px solid #fff;padding:20px 24px;text-align:center;color:#fff;font-family:"Courier New",monospace;min-width:220px;';
+        const lbl = document.createElement('div');
+        lbl.textContent = isDeep ? 'DEEP TEST FLOOR (101-999)' : 'TEST FLOOR (1-100)';
+        lbl.style.marginBottom = '12px';
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.min = _min; inp.max = _max; inp.value = _curF;
+        inp.style.cssText = 'font-size:26px;width:110px;text-align:center;background:#000;color:#fff;border:1px solid #666;padding:4px;';
+        const btn = document.createElement('button');
+        btn.textContent = 'START';
+        btn.style.cssText = 'display:block;margin:14px auto 0;padding:10px 24px;font-size:18px;font-family:"Courier New",monospace;background:#222;color:#fff;border:1px solid #aaa;cursor:pointer;';
+        btn.addEventListener('click', () => {
+            const val = parseInt(inp.value, 10);
+            if (!isNaN(val)) {
+                if (isDeep) { deepTestFloor = Math.max(101, Math.min(999, val)); startGame(deepTestFloor, true); }
+                else        { testFloor     = Math.max(1,   Math.min(100,  val)); startGame(testFloor,     true); }
+            }
+            document.body.removeChild(overlay);
+        });
+        box.appendChild(lbl); box.appendChild(inp); box.appendChild(btn);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        setTimeout(() => inp.focus(), 80);
+    }
+
     document.getElementById('tc-menu').addEventListener('touchstart', e => {
         e.preventDefault();
+        _menuLongFired = false;
         if (gameState === 'OPENING') {
-            // オープニング中はMENUボタンで全スキップ
             _openingSkipRequested = true;
             isTutorialInputActive = false;
             return;
         }
+        // 長押し判定 (800ms)
+        _menuLongTimer = setTimeout(() => {
+            _menuLongFired = true;
+            if (gameState === 'TITLE') {
+                if (!testModeVisible && !_ITCH_RELEASE) {
+                    testModeVisible = true;
+                    SOUNDS.SELECT();
+                } else if (testModeVisible) {
+                    const _duLT = localStorage.getItem('deep_unlocked') === '1';
+                    const _tpiLT = _duLT ? 3 : 2;
+                    const _dtiLT = _duLT ? 4 : 3;
+                    if (titleSelection === _tpiLT) _showMobileFloorInput(false);
+                    else if (titleSelection === _dtiLT) _showMobileFloorInput(true);
+                }
+            }
+        }, 800);
+    }, { passive: false });
+
+    document.getElementById('tc-menu').addEventListener('touchend', e => {
+        clearTimeout(_menuLongTimer);
+        if (_menuLongFired) return;
+        if (gameState === 'OPENING') return;
         _tcResetBlock();
         _tcSimKey('x');
+    }, { passive: false });
+
+    document.getElementById('tc-menu').addEventListener('touchcancel', () => {
+        clearTimeout(_menuLongTimer);
+        _menuLongFired = false;
     }, { passive: false });
 
 
