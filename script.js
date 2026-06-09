@@ -24973,7 +24973,7 @@ function drawStatusScreen() {
             { label: 'ATTACK',  val: `${atk}`,  sub: `(+${player.swordCount})` },
             { label: 'DEFENSE', val: `${def}`,   sub: `(+${player.armorCount})` },
         ];
-        let y = CY + 50;
+        let y = CY + 86;
         main.forEach(s => {
             ctx.textAlign = 'left';
             ctx.fillStyle = '#ededed';
