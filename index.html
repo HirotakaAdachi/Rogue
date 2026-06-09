@@ -17,7 +17,7 @@ body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidde
     <div class="game-wrapper">
         <canvas id="game-canvas"></canvas>
     </div>
-    <script src="script.js?v=696"></script>
+    <script src="script.js?v=697"></script>
     <script>
 (function(){
     // initScale() in script.js applies transform:scale to .game-wrapper which conflicts
@@ -25,27 +25,54 @@ body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidde
     if (typeof window._applyGameScale === 'function') {
         window.removeEventListener('resize', window._applyGameScale);
     }
-    var wrapper = document.querySelector('.game-wrapper');
-    if (wrapper) { wrapper.style.transform = 'none'; wrapper.style.transformOrigin = ''; }
+    var gw = document.querySelector('.game-wrapper');
+    if (gw) { gw.style.transform = 'none'; gw.style.transformOrigin = ''; }
     document.body.style.paddingTop = '';
     document.body.style.alignItems = '';
 
     var c = document.getElementById('game-canvas');
+
     function fit(){
         var vw = window.innerWidth;
         var vh = window.innerHeight;
-        var s = Math.min(1, vw / CANVAS_W, vh / CANVAS_H_FULL);
-        var cw = Math.floor(CANVAS_W      * s);
+        var isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        var portrait = isMobile && (vh > vw);
+
+        // Portrait mobile: measure D-pad area and center canvas between screen top and D-pad top
+        var dpadH = 0;
+        if (portrait) {
+            var tc = document.getElementById('tc-wrap');
+            if (tc) {
+                var r = tc.getBoundingClientRect();
+                // vh - r.top = height from D-pad top to screen bottom (the area to reserve)
+                dpadH = r.height > 0 ? (vh - r.top) : 220;
+            } else {
+                dpadH = 220;
+            }
+        }
+
+        // Scale canvas to fit within the area above the D-pad
+        var availH = dpadH > 0 ? (vh - dpadH) : vh;
+        var s = Math.min(1, vw / CANVAS_W, availH / CANVAS_H_FULL);
+        var cw = Math.floor(CANVAS_W * s);
         var ch = Math.floor(CANVAS_H_FULL * s);
         c.style.width  = cw + 'px';
         c.style.height = ch + 'px';
+
+        // Add padding-bottom so flex center aligns canvas to midpoint between screen top and D-pad top
+        if (gw) gw.style.paddingBottom = dpadH > 0 ? dpadH + 'px' : '';
+
         // Also resize canvas-viewport wrapper added by _initTouchControls on mobile
         var vp = document.getElementById('canvas-viewport');
         if (vp) { vp.style.width = cw + 'px'; vp.style.height = ch + 'px'; }
     }
+
     fit();
+    // Re-measure after first layout so getBoundingClientRect returns real D-pad dimensions
+    requestAnimationFrame(fit);
+
     window.addEventListener('resize', fit);
-    window.addEventListener('orientationchange', function(){ setTimeout(fit, 150); });
+    window.addEventListener('orientationchange', function(){ setTimeout(fit, 300); });
 })();
     </script>
 </body>

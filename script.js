@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v696';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v697';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48664,6 +48664,10 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
                 // canvas-viewport を body直下に移動（game-wrapperのtransformの影響を受けないように）
                 document.body.insertBefore(_zoomVP, _mHud);
                 _zoomVP.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;overflow:hidden;background:#000;`;
+                // ズーム中はキャンバスをネイティブサイズ(800×652)に戻す
+                // （fit()によるCSS縮小が translate 座標系をずらすのを防ぐ）
+                _zoomCanvas.style.width  = CANVAS_W + 'px';
+                _zoomCanvas.style.height = CANVAS_H_FULL + 'px';
                 // TITLE/OPENING はゲームプレイHUDを非表示（HPや階層を表示しない）
                 const _isGameplayState = !['TITLE','LANG_SELECT','OPENING'].includes(gameState);
                 _mHud.style.display = _isGameplayState ? 'flex' : 'none';
