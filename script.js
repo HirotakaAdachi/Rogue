@@ -25123,7 +25123,7 @@ function drawStatusScreen() {
         y += ROW + 36;
 
         // ── KILLS CHART ──────────────────────────────────────
-        const _kcCx = WX + WW / 2 - 25;
+        const _kcCx = WX + WW / 2;
         y += 32;
         ctx.textAlign = 'center';
         ctx.font = 'bold 14px Courier New';
