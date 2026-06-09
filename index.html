@@ -7,8 +7,8 @@
     <title>Minimal Rogue</title>
     <style>
 :root { --bg-color: #0a0a0a; --border-color: #333333; }
-body { margin: 0; padding: 0; background-color: var(--bg-color); display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; min-height: 100svh; overflow: hidden; user-select: none; -webkit-user-select: none; cursor: default; }
-.game-wrapper { display: flex; flex-direction: column; border: 1px solid var(--border-color); padding: 20px; transform-origin: top center; }
+body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidden; user-select: none; -webkit-user-select: none; cursor: default; }
+.game-wrapper { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
 #game-canvas { border: 1px solid var(--border-color); background-color: #000; cursor: default; display: block; }
     </style>
 </head>
@@ -17,19 +17,16 @@ body { margin: 0; padding: 0; background-color: var(--bg-color); display: flex; 
     <div class="game-wrapper">
         <canvas id="game-canvas"></canvas>
     </div>
-    <script src="script.js?v=693"></script>
+    <script src="script.js?v=694"></script>
     <script>
 (function(){
+    var c = document.getElementById('game-canvas');
     function fit(){
-        var pad = 42;
-        var totalW = CANVAS_W + pad;
-        var totalH = CANVAS_H_FULL + pad;
-        var s = Math.min(1, window.innerWidth / totalW, window.innerHeight / totalH);
-        var scaledH = totalH * s;
-        var marginTop = Math.max(0, (window.innerHeight - scaledH) / 2);
-        var w = document.querySelector('.game-wrapper');
-        w.style.zoom = s;
-        w.style.marginTop = marginTop + 'px';
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        var s = Math.min(1, vw / CANVAS_W, vh / CANVAS_H_FULL);
+        c.style.width  = Math.floor(CANVAS_W      * s) + 'px';
+        c.style.height = Math.floor(CANVAS_H_FULL * s) + 'px';
     }
     fit();
     window.addEventListener('resize', fit);

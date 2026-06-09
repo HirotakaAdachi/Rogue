@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v693';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v694';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -28751,7 +28751,7 @@ function draw(now) {
             const _tFontSz = transition.fontSize || ((transition.mode === 'BLACK_OUT' || transition.mode === 'STARS' || transition.mode === 'RED_OUT') ? '48px' : '32px');
             ctx.font = `bold ${_tFontSz} 'Courier New', Courier, monospace`;
             ctx.textAlign = 'center';
-            ctx.fillText(transition.text, CANVAS_W / 2, CANVAS_H / 2);
+            ctx.fillText(transition.text, CANVAS_W / 2, CANVAS_H_FULL / 2 - HUD_TOP_H);
         }
         ctx.restore();
     }
