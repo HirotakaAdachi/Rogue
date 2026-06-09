@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v697';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v698';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48652,7 +48652,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     let _manualTx = 0, _manualTy = 0; // 自由パン時のカメラ位置
     let _lastTx = 0, _lastTy = 0;    // _applyZoom が最後に計算した実際のカメラ位置
     let _zoomModeActive = false;  // 実際に全画面になっているか
-    const _ZOOM_SCALE = 2.0;
+    const _ZOOM_SCALE = 1.75;
 
     function _applyZoom() {
         const shouldZoom = _tcZoomMode && ['PLAYING','MENU','STATUS','INVENTORY','SHOP','CONFIRM_BUY','RINGS','CONFIRM_ESCAPE','TITLE','LANG_SELECT','OPENING'].includes(gameState);
