@@ -17,16 +17,31 @@ body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidde
     <div class="game-wrapper">
         <canvas id="game-canvas"></canvas>
     </div>
-    <script src="script.js?v=694"></script>
+    <script src="script.js?v=695"></script>
     <script>
 (function(){
+    // initScale() in script.js applies transform:scale to .game-wrapper which conflicts
+    // with our CSS-size approach — disable it.
+    if (typeof window._applyGameScale === 'function') {
+        window.removeEventListener('resize', window._applyGameScale);
+    }
+    var wrapper = document.querySelector('.game-wrapper');
+    if (wrapper) { wrapper.style.transform = 'none'; wrapper.style.transformOrigin = ''; }
+    document.body.style.paddingTop = '';
+    document.body.style.alignItems = '';
+
     var c = document.getElementById('game-canvas');
     function fit(){
         var vw = window.innerWidth;
         var vh = window.innerHeight;
         var s = Math.min(1, vw / CANVAS_W, vh / CANVAS_H_FULL);
-        c.style.width  = Math.floor(CANVAS_W      * s) + 'px';
-        c.style.height = Math.floor(CANVAS_H_FULL * s) + 'px';
+        var cw = Math.floor(CANVAS_W      * s);
+        var ch = Math.floor(CANVAS_H_FULL * s);
+        c.style.width  = cw + 'px';
+        c.style.height = ch + 'px';
+        // Also resize canvas-viewport wrapper added by _initTouchControls on mobile
+        var vp = document.getElementById('canvas-viewport');
+        if (vp) { vp.style.width = cw + 'px'; vp.style.height = ch + 'px'; }
     }
     fit();
     window.addEventListener('resize', fit);

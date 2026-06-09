@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v694';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v695';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48449,7 +48449,6 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     document.head.insertAdjacentHTML('beforeend', `<style id="tc-style">
 /* ── キャンバスビューポート（ズームclip用） ── */
 #canvas-viewport {
-    overflow: hidden;
     border: 1px solid var(--border-color);
     background: #000;
     display: block;
@@ -48629,7 +48628,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     const _zoomVP = document.createElement('div');
     _zoomVP.id = 'canvas-viewport';
     _zoomVP.style.width  = CANVAS_W + 'px';
-    _zoomVP.style.height = CANVAS_H + 'px';
+    _zoomVP.style.height = CANVAS_H_FULL + 'px';
     _zoomCanvas.parentNode.insertBefore(_zoomVP, _zoomCanvas);
     _zoomVP.appendChild(_zoomCanvas);
     // ズームOFF時にviewportを元の場所に戻すための参照
@@ -48672,7 +48671,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             } else {
                 // canvas-viewport を元の位置（log-rowの前）に戻す
                 _zoomVPOrigParent.insertBefore(_zoomVP, _zoomVPOrigSibling);
-                _zoomVP.style.cssText = `width:${CANVAS_W}px;height:${CANVAS_H}px;overflow:hidden;border:1px solid var(--border-color);background:#000;display:block;`;
+                _zoomVP.style.cssText = `width:${CANVAS_W}px;height:${CANVAS_H_FULL}px;overflow:hidden;border:1px solid var(--border-color);background:#000;display:block;`;
                 _mHud.style.display = 'none';
                 _zoomMinimap.style.display = 'none';
                 _zoomCanvas.style.transform = '';
