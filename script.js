@@ -25096,26 +25096,28 @@ function drawStatusScreen() {
               subDesc: _gameLang === 'en' ? '+1 DEF per armor'           : '1個取得ごとに 防御力 +1' },
         ];
 
-        let y = CY + 50;
-        equip.forEach(e => {
+        let y = CY + 86;
+        const _eqRightX = WX + Math.floor(WW / 2) + 10;
+        equip.forEach((e, i) => {
+            const ex = i === 0 ? sx : _eqRightX;
             ctx.textAlign = 'left';
             // アイコン（水色・太字）
             ctx.font = 'bold 14px Courier New';
             ctx.fillStyle = '#38bdf8';
-            ctx.fillText(e.symbol, sx, y);
+            ctx.fillText(e.symbol, ex, y);
             const _symW = ctx.measureText(e.symbol).width;
             // 名前（通常の白）
             ctx.font = '14px Courier New';
             ctx.fillStyle = '#ededed';
-            ctx.fillText('  ' + e.name, sx + _symW, y);
-            // 詳細（同じ明るさ）
+            ctx.fillText('  ' + e.name, ex + _symW, y);
+            // 詳細
             ctx.font = '12px Courier New';
             ctx.fillStyle = '#ededed';
-            ctx.fillText(e.level !== null ? `Lv ${e.level}  ${e.desc}` : e.desc, sx + 16, y + 16);
+            ctx.fillText(e.level !== null ? `Lv ${e.level}  ${e.desc}` : e.desc, ex + 16, y + 16);
             ctx.fillStyle = '#bbb';
-            ctx.fillText(e.subDesc, sx + 16, y + 30);
-            y += ROW + 36;
+            ctx.fillText(e.subDesc, ex + 16, y + 30);
         });
+        y += ROW + 36;
 
         // ── KILLS CHART ──────────────────────────────────────
         const _kcCx = WX + WW / 2;
