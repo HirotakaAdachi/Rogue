@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v700';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v701';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48601,15 +48601,15 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
 .tc-act:active { background: #2e2e2e; color: #fff; }
 /* ── ズームモード ストーリーダイアログ オーバーレイ（スマホ専用） ── */
 #zoom-dialog {
-    position: fixed; left: 0; right: 0; top: 0; z-index: 1100;
+    position: fixed; left: 5%; right: 5%; z-index: 1100;
     display: none;
-    background: rgba(0,0,0,0.88);
+    background: #000;
+    border: 2px solid #fff;
     color: #ddd;
     font: 17px 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif;
     line-height: 1.8;
     text-align: center;
-    padding: 14px 20px;
-    border-bottom: 1px solid #444;
+    padding: 12px 16px;
     pointer-events: none;
 }
 </style>`);
@@ -48878,8 +48878,18 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
         // ── ズームダイアログオーバーレイ更新 ──
         const _zdlg = document.getElementById('zoom-dialog');
         if (_zdlg) {
-            const _isJP = s => /[　-鿿＀-￯]/.test(s);
             if (_tcZoomMode && _zoomModeActive && typeof storyMessage !== 'undefined' && storyMessage && storyMessage.alpha > 0.05) {
+                // プレイヤーの画面Y座標を計算（_applyZoomと同じ _camCY ロジック）
+                const _dHud = document.getElementById('mobile-hud')?.getBoundingClientRect();
+                const _dTc  = document.getElementById('tc-wrap')?.getBoundingClientRect();
+                const _dHudBot = _dHud ? _dHud.bottom : 0;
+                const _dTcTop  = _dTc  ? _dTc.top    : window.innerHeight;
+                const _dCamCY  = (_dTcTop > window.innerHeight * 0.3)
+                    ? (_dHudBot + _dTcTop) / 2
+                    : window.innerHeight / 2;
+                // 2タイル分下 = プレイヤー中心Y + (0.5 + 2) × TILE_SIZE × zoom
+                const _dlgTop = _dCamCY + 2.5 * TILE_SIZE * _ZOOM_SCALE;
+
                 const _lines = storyMessage.lines || [];
                 const _parts = [];
                 _lines.forEach(line => {
@@ -48891,6 +48901,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
                     }
                 });
                 _zdlg.innerHTML = _parts.map(l => `<div>${l || '&nbsp;'}</div>`).join('');
+                _zdlg.style.top = Math.round(_dlgTop) + 'px';
                 _zdlg.style.opacity = storyMessage.alpha;
                 _zdlg.style.display = 'block';
             } else {
