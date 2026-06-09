@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v695';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v696';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48652,7 +48652,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     let _manualTx = 0, _manualTy = 0; // 自由パン時のカメラ位置
     let _lastTx = 0, _lastTy = 0;    // _applyZoom が最後に計算した実際のカメラ位置
     let _zoomModeActive = false;  // 実際に全画面になっているか
-    const _ZOOM_SCALE = 1.5;
+    const _ZOOM_SCALE = 2.0;
 
     function _applyZoom() {
         const shouldZoom = _tcZoomMode && ['PLAYING','MENU','STATUS','INVENTORY','SHOP','CONFIRM_BUY','RINGS','CONFIRM_ESCAPE','TITLE','LANG_SELECT','OPENING'].includes(gameState);
@@ -48711,8 +48711,9 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             ty = _manualTy;
         } else if (typeof transition !== 'undefined' && transition.active && transition.mode === 'FALLING') {
             // 落下カットシーン中: キャンバス中央を構図中心に（フロア文字が見えるように）
+            // フロアテキストはキャンバス絶対座標 y=CANVAS_H_FULL/2 に描画される
             tx = CANVAS_W / 2 - vpW / (_ZOOM_SCALE * 2);
-            ty = CANVAS_H / 2 - vpH / (_ZOOM_SCALE * 2);
+            ty = CANVAS_H_FULL / 2 - vpH / (_ZOOM_SCALE * 2);
         } else if (gameState !== 'PLAYING') {
             // メニュー中心モード：最前面ウィンドウのキャンバス座標を中心に
             let focusX, focusY;
@@ -48747,7 +48748,8 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
         } else if (storyMessage && storyMessage.alpha > 0.05) {
             // ダイアログ表示中: プレイヤー追従を基本にしつつ、コントローラー/HUDに隠れないよう ty をずらす
             const _smPx = (player.x + 0.5) * TILE_SIZE;
-            const _smPy = (player.y + 0.5) * TILE_SIZE;
+            // キャンバス絶対Y座標（HUD_TOP_H分を加算）
+            const _smPy = (player.y + 0.5) * TILE_SIZE + HUD_TOP_H;
             const _hudRectSM = document.getElementById('mobile-hud')?.getBoundingClientRect();
             const _tcRectSM  = document.getElementById('tc-wrap')?.getBoundingClientRect();
             const _hudBotSM  = _hudRectSM ? _hudRectSM.bottom : 0;
@@ -48761,16 +48763,17 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
                 ty = _tyBase;
             } else {
                 const _smDlgH = 170;
-                const _smAtTop = storyMessage.useTopPos || (_smPy > CANVAS_H - _smDlgH - 30);
+                // ダイアログが画面下寄りかの判定（ダンジョン座標で比較）
+                const _smAtTop = storyMessage.useTopPos || ((player.y + 0.5) * TILE_SIZE > CANVAS_H - _smDlgH - 30);
                 // 縦持ち（コントローラーが下部）のみずらす。横持ち（tc全画面）は追従維持
                 if (_tcTopSM > vpH * 0.3) {
                     if (_smAtTop) {
                         // 上端ダイアログ: HUD直下にダイアログ上端が来るよう ty を小さくする（カメラを上へ）
-                        const _tyMaxForDlg = 15 - (_hudBotSM + 8) / _ZOOM_SCALE;
+                        const _tyMaxForDlg = (HUD_TOP_H + 15) - (_hudBotSM + 8) / _ZOOM_SCALE;
                         ty = Math.min(_tyBase, _tyMaxForDlg);
                     } else {
                         // 下端ダイアログ: コントローラー直上にダイアログ下端が来るよう ty を大きくする（カメラを下へ）
-                        const _tyMinForDlg = (CANVAS_H - 15) - (_tcTopSM - 8) / _ZOOM_SCALE;
+                        const _tyMinForDlg = (CANVAS_H + HUD_TOP_H - 15) - (_tcTopSM - 8) / _ZOOM_SCALE;
                         ty = Math.max(_tyBase, _tyMinForDlg);
                     }
                 } else {
@@ -48781,15 +48784,18 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
         } else {
             // プレイヤー追従モード：HUD下端とコントローラー上端の中間を構図中心にする
             const px = (player.x + 0.5) * TILE_SIZE;
-            const py = (player.y + 0.5) * TILE_SIZE;
+            // キャンバス絶対Y座標（HUD_TOP_H分を加算してズーム中心を正確に＠に合わせる）
+            const py = (player.y + 0.5) * TILE_SIZE + HUD_TOP_H;
             const _hudRect  = document.getElementById('mobile-hud')?.getBoundingClientRect();
             const _tcRect   = document.getElementById('tc-wrap')?.getBoundingClientRect();
             const _hudBottom = _hudRect ? _hudRect.bottom : 0;
             const _tcTop     = _tcRect  ? _tcRect.top    : vpH;
             // 横持ちはtc-wrapが全画面（tcTop≈0）のためvpH/2を使用
             const _camCY = (_tcTop > vpH * 0.3) ? (_hudBottom + _tcTop) / 2 : vpH / 2;
-            tx = px - vpW / (_ZOOM_SCALE * 2);
-            ty = py - _camCY / _ZOOM_SCALE;
+            const _maxTx = Math.max(0, CANVAS_W      - vpW / _ZOOM_SCALE);
+            const _maxTy = Math.max(0, CANVAS_H_FULL - vpH / _ZOOM_SCALE);
+            tx = Math.max(0, Math.min(px - vpW / (_ZOOM_SCALE * 2), _maxTx));
+            ty = Math.max(0, Math.min(py - _camCY / _ZOOM_SCALE, _maxTy));
         }
         _lastTx = tx;
         _lastTy = ty;
