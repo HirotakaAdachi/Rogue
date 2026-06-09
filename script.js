@@ -25097,9 +25097,12 @@ function drawStatusScreen() {
         ];
 
         let y = CY + 86;
-        const _eqRightX = WX + Math.floor(WW / 2) + 10;
+        const _eqItemW = 140;
+        const _eqGap = Math.floor((WW - _eqItemW * 2) / 3);
+        const _eqLeftX  = WX + _eqGap;
+        const _eqRightX = WX + _eqGap + _eqItemW + _eqGap;
         equip.forEach((e, i) => {
-            const ex = i === 0 ? sx : _eqRightX;
+            const ex = i === 0 ? _eqLeftX : _eqRightX;
             ctx.textAlign = 'left';
             // アイコン（水色・太字）
             ctx.font = 'bold 14px Courier New';
@@ -25120,8 +25123,8 @@ function drawStatusScreen() {
         y += ROW + 36;
 
         // ── KILLS CHART ──────────────────────────────────────
-        const _kcCx = WX + WW / 2;
-        y += 16;
+        const _kcCx = WX + WW / 2 - 25;
+        y += 32;
         ctx.textAlign = 'center';
         ctx.font = 'bold 14px Courier New';
         ctx.fillStyle = '#ededed';
