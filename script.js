@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v699';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v700';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48599,23 +48599,18 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     -webkit-tap-highlight-color: transparent; touch-action: none;
 }
 .tc-act:active { background: #2e2e2e; color: #fff; }
-/* ── ズームモード ストーリーダイアログ オーバーレイ ── */
+/* ── ズームモード ストーリーダイアログ オーバーレイ（スマホ専用） ── */
 #zoom-dialog {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1100;
+    position: fixed; left: 0; right: 0; top: 0; z-index: 1100;
     display: none;
     background: rgba(0,0,0,0.88);
-    color: #ccc;
-    font: 14px 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif;
-    line-height: 1.7;
+    color: #ddd;
+    font: 17px 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif;
+    line-height: 1.8;
     text-align: center;
-    padding: 12px 20px env(safe-area-inset-bottom, 8px);
-    border-top: 1px solid #444;
+    padding: 14px 20px;
+    border-bottom: 1px solid #444;
     pointer-events: none;
-}
-#zoom-dialog.zdlg-top {
-    top: 0; bottom: auto;
-    border-top: none; border-bottom: 1px solid #444;
-    padding: 12px 20px;
 }
 </style>`);
 
@@ -48897,7 +48892,6 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
                 });
                 _zdlg.innerHTML = _parts.map(l => `<div>${l || '&nbsp;'}</div>`).join('');
                 _zdlg.style.opacity = storyMessage.alpha;
-                _zdlg.className = storyMessage.useTopPos ? 'zdlg-top' : '';
                 _zdlg.style.display = 'block';
             } else {
                 _zdlg.style.display = 'none';
