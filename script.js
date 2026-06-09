@@ -24964,6 +24964,7 @@ function drawStatusScreen() {
     const ROW = 28;
 
     if (statusPage === 0) {
+        const sx = WX + 55; const valX = sx + 200;
         // ── 上段: HP / ATTACK / DEFENSE ────────────────────────
         const atk = getPlayerAttack();
         const def = getPlayerDefense();
@@ -25179,6 +25180,7 @@ function drawStatusScreen() {
         _bDrawRow(LATIN_ENEMIES, latinKillCounts, 13);
 
     } else {
+        const sx = WX + 55; const valX = sx + 200;
         // ── Page 3: Settings ───────────────────────────────────
         const optY = CY + 76;
         const opt2Y = CY + 111;
