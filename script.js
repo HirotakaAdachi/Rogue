@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v703';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v704';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -24295,11 +24295,8 @@ async function showStoryPages(pages, useMiddlePos = false, useTopPos = false, au
             solidWindow: solidWindow
         };
 
-        // フェードイン
-        for (let a = 0; a <= 1; a += 0.05) {
-            storyMessage.alpha = a;
-            await new Promise(r => setTimeout(r, 20));
-        }
+        // 即時表示（フェードなし）
+        storyMessage.alpha = 1;
 
         if (autoAdvanceMs > 0) {
             // 自動進行モード: 指定ミリ秒後に次へ
@@ -24312,11 +24309,7 @@ async function showStoryPages(pages, useMiddlePos = false, useTopPos = false, au
             }
         }
 
-        // フェードアウト
-        for (let a = 1; a >= 0; a -= 0.05) {
-            storyMessage.alpha = a;
-            await new Promise(r => setTimeout(r, 20));
-        }
+        // 即時消去（フェードなし）
         storyMessage = null;
         await new Promise(r => setTimeout(r, 1000));
     }
