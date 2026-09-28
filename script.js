@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v718';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v719';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -24802,8 +24802,6 @@ function drawTitle() {
     // バージョン表示（右下）
     ctx.textAlign = 'right';
     ctx.font = "11px 'Courier New', Courier, monospace";
-    ctx.fillStyle = '#666';
-    ctx.fillText('freem', CANVAS_W - 8, CANVAS_H - 23);
     ctx.fillStyle = '#444';
     ctx.fillText(_GAME_VERSION, CANVAS_W - 8, CANVAS_H - 8);
     ctx.textAlign = 'center';
