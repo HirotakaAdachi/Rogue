@@ -19,7 +19,7 @@ body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidde
     <div class="game-wrapper">
         <canvas id="game-canvas"></canvas>
     </div>
-    <script src="script.js?v=706"></script>
+    <script src="script.js?v=707"></script>
     <script>
 (function(){
     // タッチデバイス（スマホ）のみカスタムfit()を適用。
@@ -70,11 +70,58 @@ body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidde
         if (vp) { vp.style.width = cw + 'px'; vp.style.height = ch + 'px'; }
     }
 
+    // ── スマホは縦持ちのみ対応：横持ち時は「縦にしてください」画面で全体を覆う ──
+    var rot = document.createElement('div');
+    rot.id = 'rotate-overlay';
+    rot.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#0a0a0a;color:#ddd;' +
+        'display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;' +
+        'font-family:"Courier New",monospace;text-align:center;padding:16px;box-sizing:border-box;';
+    rot.innerHTML = '<div style="font-size:48px;line-height:1;">&#x21BB;</div>' +
+        '<div style="font-size:18px;">スマホを縦向きにしてください</div>' +
+        '<div style="font-size:14px;color:#888;">Please rotate your device to portrait</div>';
+    // 覆っている間はゲームへのタッチを通さない（document の touchend でストーリーが進むのも防ぐ）
+    ['touchstart', 'touchmove', 'touchend'].forEach(function(t){
+        rot.addEventListener(t, function(e){ e.stopPropagation(); e.preventDefault(); }, { passive: false });
+    });
+    document.body.appendChild(rot);
+
+    function isLandscape(){
+        // 数字入力中（ソフトキーボードで画面の高さが縮む）は横持ち扱いしない
+        var ae = document.activeElement;
+        if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return false;
+        // 端末の向きを優先（キーボード表示の影響を受けない）
+        if (screen.orientation && typeof screen.orientation.type === 'string') {
+            return screen.orientation.type.indexOf('landscape') === 0;
+        }
+        if (typeof window.orientation === 'number') {
+            return Math.abs(window.orientation) === 90;
+        }
+        return window.innerWidth > window.innerHeight;
+    }
+
+    // タッチ対応PC（主な操作がマウス）では出さない
+    var isPhoneLike = !window.matchMedia || window.matchMedia('(pointer: coarse)').matches;
+
+    function checkOrientation(){
+        rot.style.display = (isPhoneLike && isLandscape()) ? 'flex' : 'none';
+    }
+
+    // 対応ブラウザ（全画面時のAndroidなど）では縦向きに固定を試みる。失敗しても何もしない
+    try {
+        if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('portrait').catch(function(){});
+        }
+    } catch (e) {}
+
     fit();
+    checkOrientation();
     requestAnimationFrame(fit); // 初回レイアウト後に再測定
 
-    window.addEventListener('resize', fit);
-    window.addEventListener('orientationchange', function(){ setTimeout(fit, 300); });
+    window.addEventListener('resize', function(){ fit(); checkOrientation(); });
+    window.addEventListener('orientationchange', function(){ setTimeout(function(){ fit(); checkOrientation(); }, 300); });
+    if (screen.orientation && screen.orientation.addEventListener) {
+        screen.orientation.addEventListener('change', checkOrientation);
+    }
 })();
     </script>
 </body>
