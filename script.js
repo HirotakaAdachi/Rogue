@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v717';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v718';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -47203,6 +47203,13 @@ async function startDeepRun() {
 // ===== SECTION: INPUT HANDLING =====
 // Prevent accidental browser zoom (Ctrl+wheel / pinch) from changing the game layout
 window.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+
+// オープニング中: マウスの左クリックで1行進める（キー入力と同じ扱い。全スキップは従来どおり Escape）
+// ※スマホのタップは document の touchend で既に進む
+window.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (gameState === 'OPENING' && isTutorialInputActive) isTutorialInputActive = false;
+});
 
 window.addEventListener('keydown', async e => {
     // エンディング演出中は全入力をブロック
