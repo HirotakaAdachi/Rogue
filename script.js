@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v706';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v707';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48429,7 +48429,8 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     const baseH = CANVAS_H_FULL + 42;
     const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     function applyScale() {
-        const isPortrait = isMobile && window.innerHeight > window.innerWidth;
+        // スマホは縦持ちのみ対応：横にしても縦持ちレイアウトを使う
+        const isPortrait = isMobile;
         const MARGIN_V = isMobile ? 8 : 50;
         const MARGIN_H = isMobile ? 4 : 20;
         const scale = Math.min(
@@ -48502,26 +48503,6 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     pointer-events: none;
 }
 #tc-wrap > * { pointer-events: auto; }
-/* ── 横向き: 全画面overlay・Dパッド左下・その他ボタン右側 ── */
-@media (orientation: landscape) {
-    #tc-wrap {
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: transparent;
-        display: block; padding: 0;
-    }
-    #tc-dpad {
-        position: absolute; bottom: 12px; left: 12px;
-    }
-    #tc-actions {
-        position: absolute; right: 12px; top: 50%;
-        transform: translateY(-50%);
-        display: flex; flex-direction: column; gap: 8px;
-    }
-    #tc-block-btn {
-        position: absolute; bottom: 12px; right: 12px;
-    }
-    .tc-act { width: 50px; height: 50px; font-size: 11px; }
-}
 #tc-dpad {
     display: grid;
     grid-template-columns: repeat(3, 64px);
@@ -48529,13 +48510,12 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     gap: 3px;
     padding: 18px 20px; margin: -18px -20px;
 }
-@media (orientation: portrait) {
-    #tc-wrap { justify-content: center; }
-    #tc-dpad { position: relative; z-index: 10; margin-right: 16px; }
-    #tc-block-btn {
-        position: absolute; right: 16px;
-        top: 50%; transform: translateY(-50%);
-    }
+/* 縦持ちレイアウト（スマホは横にしてもこのレイアウトのまま） */
+#tc-wrap { justify-content: center; }
+#tc-dpad { position: relative; z-index: 10; margin-right: 16px; }
+#tc-block-btn {
+    position: absolute; right: 16px;
+    top: 50%; transform: translateY(-50%);
 }
 .tc-btn {
     background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
@@ -48953,15 +48933,8 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             if (totalDx * totalDx + totalDy * totalDy > 100) {
                 e.preventDefault();
                 _zoomIsPanning = true;
-                if (window.innerHeight > window.innerWidth) {
-                    // 縦持ち
-                    _portraitOffsetY = Math.max(-30, Math.min(window.innerHeight * 0.45,
-                        _portraitOffsetY + (cy - _zoomLastY)));
-                } else {
-                    // 横持ち
-                    _landscapeOffsetY = Math.max(-150, Math.min(150,
-                        _landscapeOffsetY + (cy - _zoomLastY)));
-                }
+                _portraitOffsetY = Math.max(-30, Math.min(window.innerHeight * 0.45,
+                    _portraitOffsetY + (cy - _zoomLastY)));
                 if (window._applyGameScale) window._applyGameScale();
             }
             _zoomLastX = cx; _zoomLastY = cy;
@@ -48991,11 +48964,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             _zoomIsPanning = false;
             // 画面位置をlocalStorageに保存
             if (!_tcZoomMode) {
-                if (window.innerHeight > window.innerWidth) {
-                    localStorage.setItem('portrait_offset_y', String(Math.round(_portraitOffsetY)));
-                } else {
-                    localStorage.setItem('landscape_offset_y', String(Math.round(_landscapeOffsetY)));
-                }
+                localStorage.setItem('portrait_offset_y', String(Math.round(_portraitOffsetY)));
             }
             return;
         }
@@ -49014,24 +48983,17 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
         if (isTutorialInputActive) isTutorialInputActive = false;
     });
 
-    // 縦持ち時にMENUをGuardボタン右上に配置
+    // MENUをGuardボタン右上に配置（スマホは横持ちでも縦持ちレイアウト）
     function _applyPortraitMenu() {
         const _act = document.getElementById('tc-actions');
         const _blk = document.getElementById('tc-block-btn');
         if (!_act || !_blk) return;
-        if (window.innerHeight > window.innerWidth) {
-            const r = _blk.getBoundingClientRect();
-            _act.style.position = 'fixed';
-            _act.style.right = '12px';
-            // MENUをGuardボタン上端より60px+12px上に配置
-            _act.style.top  = Math.max(4, r.top - 72) + 'px';
-            _act.style.transform = '';
-        } else {
-            _act.style.position = '';
-            _act.style.right = '';
-            _act.style.top = '';
-            _act.style.transform = '';
-        }
+        const r = _blk.getBoundingClientRect();
+        _act.style.position = 'fixed';
+        _act.style.right = '12px';
+        // MENUをGuardボタン上端より60px+12px上に配置
+        _act.style.top  = Math.max(4, r.top - 72) + 'px';
+        _act.style.transform = '';
     }
     requestAnimationFrame(_applyPortraitMenu);
     window.addEventListener('resize', _applyPortraitMenu);

@@ -19,7 +19,7 @@ body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidde
     <div class="game-wrapper">
         <canvas id="game-canvas"></canvas>
     </div>
-    <script src="script.js?v=706"></script>
+    <script src="script.js?v=707"></script>
     <script>
 (function(){
     // タッチデバイス（スマホ）のみカスタムfit()を適用。
@@ -41,18 +41,14 @@ body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidde
     function fit(){
         var vw = window.innerWidth;
         var vh = window.innerHeight;
-        var portrait = vh > vw;
 
-        // 縦持ちのときDパッド分の高さを計測してその上にキャンバスを収める
-        var dpadH = 0;
-        if (portrait) {
-            var tc = document.getElementById('tc-wrap');
-            if (tc) {
-                var r = tc.getBoundingClientRect();
-                dpadH = r.height > 0 ? (vh - r.top) : 220;
-            } else {
-                dpadH = 220;
-            }
+        // Dパッド分の高さを計測してその上にキャンバスを収める
+        // （スマホは縦持ちのみ対応：横にしても縦持ちレイアウトのまま）
+        var dpadH = 220;
+        var tc = document.getElementById('tc-wrap');
+        if (tc) {
+            var r = tc.getBoundingClientRect();
+            if (r.height > 0) dpadH = vh - r.top;
         }
 
         var availH = dpadH > 0 ? (vh - dpadH) : vh;
