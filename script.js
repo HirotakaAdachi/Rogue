@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v708';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v709';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48596,11 +48596,52 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
 }
 .tc-act:active { background: #2e2e2e; color: #fff; }
 /* ── ズームモード ストーリーダイアログ オーバーレイ（スマホ専用） ── */
+/* ── ズームモード用 DQ風プレート（黒地・白枠。drawDQWindow と同じ見た目） ── */
+.m-plate {
+    background: #000; color: #ededed;
+    border: 3px solid #ededed; border-radius: 6px;
+    box-shadow: inset 0 0 0 3px #000, inset 0 0 0 4px rgba(237,237,237,0.20);
+    font: 15px 'Courier New', monospace; line-height: 1.45;
+    box-sizing: border-box;
+}
+.m-plate.m-ja, .m-plate .m-ja { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif; }
+#m-log-plate {
+    position: fixed; left: 8px; right: 8px; z-index: 1050;
+    display: none; padding: 8px 14px; font-size: 14px;
+    pointer-events: none; transition: opacity 0.4s;
+}
+#m-log-plate div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#m-shop-plate {
+    position: fixed; left: 8px; right: 8px; z-index: 1060;
+    display: none; flex-direction: column; gap: 8px;
+    touch-action: none;
+    font-family: 'Courier New', monospace;
+    background: rgba(0,0,0,0.95); /* 後ろのズームされたキャンバス文字を隠す */
+}
+#m-shop-plate > * { flex: 0 0 auto; }
+#m-shop-plate .m-plate { padding: 10px 14px; }
+#m-shop-plate .m-head { display: flex; justify-content: space-between; align-items: baseline; }
+#m-shop-plate .m-title { font-weight: bold; font-size: 17px; }
+#m-shop-plate .m-list { flex: 1 1 auto; min-height: 0; display: flex; }
+#m-shop-plate .m-scroll { flex: 1 1 auto; overflow: hidden; position: relative; }
+#m-shop-plate .m-row { display: flex; align-items: baseline; gap: 6px; padding: 5px 0; font-size: 16px; }
+#m-shop-plate .m-row .m-cur { width: 1.1em; flex: 0 0 auto; }
+#m-shop-plate .m-row .m-name { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#m-shop-plate .m-row .m-price { flex: 0 0 auto; }
+#m-shop-plate .m-gap { height: 8px; }
+#m-shop-plate .m-desc { min-height: 3.2em; color: #bbb; white-space: pre-line; }
+#m-shop-plate .m-guide { text-align: center; font-size: 12px; color: #777; }
+#m-shop-plate .m-choice { display: flex; justify-content: space-around; font-size: 18px; padding: 10px 0 4px; }
+#m-shop-confirm {
+    position: absolute; left: 10%; right: 10%; top: 35%;
+    padding: 16px 12px 12px; text-align: center;
+}
 #zoom-dialog {
     position: fixed; left: 5%; right: 5%; z-index: 1100;
     display: none;
     background: #000;
-    border: 2px solid #fff;
+    border: 3px solid #ededed; border-radius: 6px;
+    box-shadow: inset 0 0 0 3px #000, inset 0 0 0 4px rgba(237,237,237,0.20);
     color: #ddd;
     font: 17px 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif;
     line-height: 1.8;
@@ -48659,6 +48700,173 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     const _zoomDlg = document.createElement('div');
     _zoomDlg.id = 'zoom-dialog';
     document.body.appendChild(_zoomDlg);
+
+    // ── ズームモード DQ風プレート（ログ・商人の買い物） ──
+    // ズーム中はキャンバスの一部しか見えず、文字が画面外に切れるため、
+    // 読む必要のある文字だけをHTMLのプレートに大きく出し直す（表示専用。操作は従来のボタン）
+    const _mLogPlate = document.createElement('div');
+    _mLogPlate.id = 'm-log-plate';
+    _mLogPlate.className = 'm-plate';
+    document.body.appendChild(_mLogPlate);
+
+    const _mShopPlate = document.createElement('div');
+    _mShopPlate.id = 'm-shop-plate';
+    document.body.appendChild(_mShopPlate);
+    // プレート上のタップがキャンバスに届くとズームが切り替わってしまうので止める
+    ['touchstart', 'touchmove', 'touchend'].forEach(t =>
+        _mShopPlate.addEventListener(t, e => { e.stopPropagation(); e.preventDefault(); }, { passive: false }));
+
+    // drawShopScreen() の魔導書アイコン色と同じ
+    const _M_TOME_COLORS = {
+        [SYMBOLS.HEAL_TOME]:    '#4ade80',
+        [SYMBOLS.SPEED]:        '#38bdf8',
+        [SYMBOLS.STEALTH]:      '#94a3b8',
+        [SYMBOLS.CHARM]:        '#60a5fa',
+        [SYMBOLS.BREAKER_TOME]: '#f59e0b',
+        [SYMBOLS.EXPLOSION]:    '#ef4444',
+        [SYMBOLS.ESCAPE]:       '#c084fc',
+        [SYMBOLS.GUARDIAN]:     '#facc15',
+    };
+    const _mEsc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    // 商品1行分の表示情報（drawShopScreen() と同じ判定）
+    function _mShopItemInfo(item) {
+        const isSell = item.type === 'sell_sword' || item.type === 'sell_armor' || item.type === 'sell_ring' || item.type === 'sell_tome' || item.type === 'sell_fairy';
+        const boughtTome = item.type === 'tome' && shopPurchasedTomes.has(item.tomeType);
+        const boughtRing = item.type === 'ring' && shopPurchasedRings.has(item.ringIndex);
+        let name = '', nameJa = '', desc = '', descJa = '', symbol = '', sellable = false;
+        if (item.type === 'ring' || item.type === 'sell_ring') {
+            const r = RINGS[item.ringIndex];
+            name = r.name; nameJa = r.nameJa; desc = r.desc || ''; descJa = r.descJa; symbol = r.symbol;
+            if (isSell) sellable = player.ownedRings.includes(item.ringId);
+        } else if (item.type === 'sword' || item.type === 'sell_sword') {
+            name = 'Fallen Blade'; nameJa = '遺品の剣'; symbol = SYMBOLS.SWORD;
+            if (isSell) { desc = `Owned: ${player.swordCount}`; descJa = `所持数: ${player.swordCount}個`; sellable = player.swordCount > 0; }
+            else { desc = 'ATK +1'; descJa = '攻撃力+1'; }
+        } else if (item.type === 'armor' || item.type === 'sell_armor') {
+            name = 'Fallen Mail'; nameJa = '遺品の鎧'; symbol = SYMBOLS.ARMOR;
+            if (isSell) { desc = `Owned: ${player.armorCount}`; descJa = `所持数: ${player.armorCount}個`; sellable = player.armorCount > 0; }
+            else { desc = 'DEF +1'; descJa = '防御力+1'; }
+        } else if (item.type === 'tome') {
+            name = item.name; nameJa = item.nameJa; desc = item.desc || item.descJa; descJa = item.descJa; symbol = item.symbol || SYMBOLS.TOME;
+        } else if (item.type === 'sell_tome') {
+            name = item.name; nameJa = item.nameJa; symbol = item.sym;
+            desc = `Owned: ${player[item.field]}`; descJa = `所持数: ${player[item.field]}個`; sellable = player[item.field] > 0;
+        } else if (item.type === 'sell_fairy') {
+            name = 'Fairy'; nameJa = '妖精'; symbol = SYMBOLS.FAIRY;
+            desc = `Owned: ${player.fairyCount}`; descJa = `所持数: ${player.fairyCount}匹`; sellable = player.fairyCount > 0;
+        }
+        const canAfford = isSell ? sellable : (!boughtTome && !boughtRing && player.gold >= item.cost);
+        let iconColor;
+        if (!canAfford) iconColor = '#555';
+        else if (item.type === 'sell_ring' || item.type === 'ring') iconColor = RINGS[item.ringIndex].color;
+        else if (item.type === 'sell_tome') iconColor = _M_TOME_COLORS[item.sym] || '#fbbf24';
+        else if (item.type === 'tome') iconColor = _M_TOME_COLORS[item.symbol] || '#fbbf24';
+        else iconColor = '#38bdf8'; // 剣・鎧・妖精
+        const price = isSell ? `+${item.sellPrice}G` : ((boughtTome || boughtRing) ? 'SOLD OUT' : `${item.cost}G`);
+        const count = (item.type === 'tome' || item.type === 'ring') ? ((boughtTome || boughtRing) ? '×0' : '×1') : '';
+        return { isSell, name, nameJa, desc, descJa, symbol, canAfford, iconColor, price, count };
+    }
+
+    function _mShopHTML() {
+        const ja = _gameLang !== 'en';
+        const cls = ja ? 'm-plate m-ja' : 'm-plate';
+        const guide = ja ? '▲▼ えらぶ　＠ けってい　MENU もどる' : '▲▼ Select   @ Confirm   MENU Back';
+        if (shopMode === 'SELECT') {
+            const opt = (i, en, jp) => `<span style="color:${shopModeSelection === i ? '#ededed' : '#555'}">${shopModeSelection === i ? '▶' : '　'}${ja ? jp : en}</span>`;
+            return `<div class="${cls}" style="margin-top:auto;margin-bottom:auto">`
+                + `<div style="text-align:center;color:#999;font-size:13px">${ja ? '― 遭難した冒険者 ―' : '-- Stranded Adventurer --'}</div>`
+                + `<div class="m-choice">${opt(0, 'BUY', '買う')}${opt(1, 'SELL', '売る')}</div>`
+                + `<div class="m-guide">${ja ? '◀▶ えらぶ　＠ けってい　MENU とじる' : '◀▶ Select   @ Open   MENU Close'}</div></div>`;
+        }
+        let rows = '';
+        shopStock.forEach((item, i) => {
+            if (item.type === 'gap') { rows += '<div class="m-gap"></div>'; return; }
+            const f = _mShopItemInfo(item);
+            const sel = i === shopSelection;
+            const col = !f.canAfford ? '#555' : (sel ? '#ededed' : '#bbb');
+            rows += `<div class="m-row" data-i="${i}" style="color:${col}">`
+                + `<span class="m-cur">${sel ? '▶' : ''}</span>`
+                + `<span class="m-name"><b style="color:${f.iconColor}">${_mEsc(f.symbol)}</b> ${_mEsc(ja ? f.nameJa : f.name)}`
+                + (f.count ? ` <span style="color:#777;font-size:13px">${f.count}</span>` : '') + `</span>`
+                + `<span class="m-price">${f.price}</span></div>`;
+        });
+        const cur = shopStock[shopSelection];
+        const cf = cur && cur.type !== 'gap' ? _mShopItemInfo(cur) : null;
+        const title = shopMode === 'BUY' ? (ja ? '買う' : 'BUY LIST') : (ja ? '売る' : 'SELL LIST');
+        let html = `<div class="${cls}"><div class="m-head"><span class="m-title">━ ${title} ━</span><span>${player.gold}G</span></div></div>`
+            + `<div class="${cls} m-list"><div class="m-scroll">${rows}</div></div>`
+            + `<div class="${cls} m-desc">${cf ? _mEsc(ja ? cf.descJa : cf.desc) : ''}</div>`
+            + `<div class="m-guide">${guide}</div>`;
+        if (gameState === 'CONFIRM_BUY' && cf) {
+            const q = cf.isSell ? (ja ? `${cf.nameJa}を売る？` : `Sell ${cf.name}?`) : (ja ? `${cf.nameJa}を買う？` : `Buy ${cf.name}?`);
+            const yn = (i, t) => `<span style="color:${shopConfirmSelection === i ? '#ededed' : '#555'}">${shopConfirmSelection === i ? '▶' : '　'}${t}</span>`;
+            html += `<div id="m-shop-confirm" class="${cls}"><div style="font-weight:bold;font-size:17px">${_mEsc(q)}</div>`
+                + `<div style="color:#ccc;margin-top:4px">${cf.price}</div>`
+                + `<div class="m-choice">${yn(0, ja ? 'はい' : 'YES')}${yn(1, ja ? 'いいえ' : 'NO')}</div></div>`;
+        }
+        return html;
+    }
+
+    let _mShopLastHTML = '', _mShopLastSel = -1;
+    let _mLogLastRef = null, _mLogShownAt = 0, _mLogLastHTML = '';
+    const _M_LOG_SHOW_MS = 4500;
+
+    // _zoomLoop から毎フレーム呼ぶ
+    function _updateMobilePlates(storyVisible) {
+        const zoomed = _tcZoomMode && _zoomModeActive;
+        const hudR = _mHud.getBoundingClientRect();
+        const tcR  = document.getElementById('tc-wrap')?.getBoundingClientRect();
+        const actR = document.getElementById('tc-actions')?.getBoundingClientRect(); // MENUボタン（tc-wrapより上に出ている）
+        const areaTop = (hudR.height > 0 ? hudR.bottom : 0) + 6;
+        let ctrlTop = (tcR && tcR.top > window.innerHeight * 0.3) ? tcR.top : window.innerHeight;
+        if (actR && actR.height > 0 && actR.top > window.innerHeight * 0.3) ctrlTop = Math.min(ctrlTop, actR.top);
+        const areaBottom = ctrlTop - 6;
+
+        // 商人の買い物
+        const inShop = zoomed && (gameState === 'SHOP' || gameState === 'CONFIRM_BUY');
+        if (inShop) {
+            _mShopPlate.style.top = areaTop + 'px';
+            _mShopPlate.style.height = Math.max(120, areaBottom - areaTop) + 'px';
+            const html = _mShopHTML();
+            if (html !== _mShopLastHTML) {
+                _mShopPlate.innerHTML = html;
+                _mShopLastHTML = html;
+                _mShopLastSel = -1;
+            }
+            if (_mShopLastSel !== shopSelection) {
+                _mShopLastSel = shopSelection;
+                const row = _mShopPlate.querySelector(`.m-row[data-i="${shopSelection}"]`);
+                const list = _mShopPlate.querySelector('.m-scroll');
+                if (row && list) {
+                    // 選択行がリスト内に見えるようにスクロール
+                    if (row.offsetTop < list.scrollTop + 8) list.scrollTop = Math.max(0, row.offsetTop - 8);
+                    else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight - 8)
+                        list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight + 8;
+                }
+            }
+            _mShopPlate.style.display = 'flex';
+        } else if (_mShopPlate.style.display !== 'none') {
+            _mShopPlate.style.display = 'none';
+            _mShopLastHTML = '';
+        }
+
+        // ログ（新しい行が出たら数秒だけ表示）
+        const lastLog = _logLines.length ? _logLines[_logLines.length - 1] : null;
+        if (lastLog !== _mLogLastRef) { _mLogLastRef = lastLog; if (lastLog) _mLogShownAt = performance.now(); }
+        const age = performance.now() - _mLogShownAt;
+        if (zoomed && gameState === 'PLAYING' && !storyVisible && lastLog && age < _M_LOG_SHOW_MS) {
+            const html = _logLines.slice(-3).map(l => l.segments
+                ? '<div>' + l.segments.map(s => `<span style="color:${_mEsc(s.color || '#bbb')}">${_mEsc(s.text)}</span>`).join('') + '</div>'
+                : `<div>${_mEsc(l.text)}</div>`).join('');
+            if (html !== _mLogLastHTML) { _mLogPlate.innerHTML = html; _mLogLastHTML = html; }
+            _mLogPlate.style.bottom = (window.innerHeight - areaBottom) + 'px';
+            _mLogPlate.style.opacity = age > _M_LOG_SHOW_MS - 600 ? '0' : '1';
+            _mLogPlate.style.display = 'block';
+        } else if (_mLogPlate.style.display !== 'none') {
+            _mLogPlate.style.display = 'none';
+        }
+    }
 
     // ── ズームモード ──
     let _tcZoomMode = false;      // ズームON/OFF
@@ -48904,6 +49112,7 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
                 _zdlg.style.display = 'none';
             }
         }
+        _updateMobilePlates(!!_zdlg && _zdlg.style.display === 'block');
         requestAnimationFrame(_zoomLoop);
     })();
 

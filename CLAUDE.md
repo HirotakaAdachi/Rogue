@@ -450,6 +450,7 @@ localStorage.setItem('king_kill_count', '3')     // KINGトロフィー数をセ
 ## Common Pitfalls
 
 - **Known risky spots are listed in `BUG_WATCHLIST.md`** — read it before touching those areas
+- **Mobile zoom plates duplicate shop text** — in zoom mode the shop is shown as HTML plates (`_mShopItemInfo()` / `_mShopHTML()` in the touch-controls section). If you change shop item names, descriptions, prices or colors in `drawShopScreen()`, update `_mShopItemInfo()` too
 - **Never call `localStorage.*` directly** — use `safeStorageGet/Set/Remove` (raw calls crash startup when storage is blocked, e.g. in iframes)
 - **`handleEnemyDeath` is async** — always `await` it if ordering matters
 - **`canEnemyMove` does NOT block STAIRS** — enemies can walk onto holes; use `isRealHole` separately if needed
