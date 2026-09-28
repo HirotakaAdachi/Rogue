@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v714';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v715';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -26454,6 +26454,21 @@ function spawnXFromWall(x, y) {
     setScreenShake(4, 150);
 }
 
+// 大きな数字を短く表示する（10万以上は「5.1×10⁷」のようなべき乗表記）
+// 1階の特殊個体Eのように成長が2倍ずつ続く仲間で、文字が画面からはみ出さないようにするため
+function formatBigNumber(n) {
+    if (!Number.isFinite(n)) return '∞';
+    const sign = n < 0 ? '-' : '';
+    n = Math.abs(n);
+    if (n < 100000) return sign + Math.round(n);
+    const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+    let exp = Math.floor(Math.log10(n));
+    let mant = Math.round(n / Math.pow(10, exp) * 10) / 10;
+    if (mant >= 10) { mant = 1; exp += 1; } // 9.96 → 10.0 になる丸めの補正
+    const expStr = String(exp).split('').map(d => SUP[+d]).join('');
+    return `${sign}${mant}×10${expStr}`;
+}
+
 function spawnFloatingText(x, y, text, color, duration = 400) {
     damageTexts.push({ x, y, text, color, startTime: performance.now(), duration });
 }
@@ -35144,7 +35159,7 @@ function _grantAllyExp(ally, exp) {
         ally.maxHp    += ally._hpGrowth;
         ally.hp        = Math.min(ally.maxHp, ally.hp + ally._hpGrowth); // 増えた分だけ回復（満タンにはしない）
         ally._atkBonus = (ally._atkBonus || 0) + ally._atkGrowth;
-        spawnFloatingText(ally.x, ally.y, `LV UP! HP+${ally._hpGrowth} ATK+${ally._atkGrowth}`, '#fbbf24', 1400);
+        spawnFloatingText(ally.x, ally.y, `LV UP! HP+${formatBigNumber(ally._hpGrowth)} ATK+${formatBigNumber(ally._atkGrowth)}`, '#fbbf24', 1400);
         // 1階の特殊個体E: 次のレベルアップの成長量は今回の2倍（必要経験値は他の仲間と同じ）
         if (ally._growthDoubling) {
             ally._hpGrowth  *= 2;
