@@ -449,6 +449,8 @@ localStorage.setItem('king_kill_count', '3')     // KINGトロフィー数をセ
 
 ## Common Pitfalls
 
+- **Known risky spots are listed in `BUG_WATCHLIST.md`** — read it before touching those areas
+- **Never call `localStorage.*` directly** — use `safeStorageGet/Set/Remove` (raw calls crash startup when storage is blocked, e.g. in iframes)
 - **`handleEnemyDeath` is async** — always `await` it if ordering matters
 - **`canEnemyMove` does NOT block STAIRS** — enemies can walk onto holes; use `isRealHole` separately if needed
 - **Faction floors must color ALL enemies** — any enemy without `.faction` renders red (default)

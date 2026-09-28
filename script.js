@@ -1430,7 +1430,7 @@ const SOUNDS = {
 }
 
 // ===== SECTION: BGM SYSTEM =====
-let bgmEnabled = localStorage.getItem('rogue_bgm_enabled') !== 'false'; // 保存済みミュート状態を復元
+let bgmEnabled = safeStorageGet('rogue_bgm_enabled', null) !== 'false'; // 保存済みミュート状態を復元
 let bgmVolumeLevel = safeStorageGetInt('rogue_bgm_vol', 3, 1, 5); // 1-5
 let settingsRow = 0;    // 0=BGM, 1=BGM VOLUME, 2=SFX VOLUME, 3=LANGUAGE
 let _gameLang = 'en';  // 'en' or 'ja'
@@ -1578,7 +1578,7 @@ function playBossBGM(src) {
 
 function toggleBGM() {
     bgmEnabled = !bgmEnabled;
-    localStorage.setItem('rogue_bgm_enabled', bgmEnabled);
+    safeStorageSet('rogue_bgm_enabled', bgmEnabled);
     SOUNDS.SELECT();
     if (bgmEnabled && gameState === 'PLAYING') startBGM();
     else stopBGM();
@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v707';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v708';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -4911,7 +4911,7 @@ function _initCatacombsTest() {
     const _tomePool = [SYMBOLS.HEAL_TOME, SYMBOLS.SPEED, SYMBOLS.CHARM, SYMBOLS.STEALTH, SYMBOLS.EXPLOSION, SYMBOLS.ESCAPE, SYMBOLS.BREAKER_TOME, SYMBOLS.GUARDIAN];
     for (const _t of _tomePool) if (Math.random() < 0.15) _placeItem(_t);
 
-    addLog("地下墓地 — CATACOMBS");
+    addLog("CATACOMBS");
     addLog("The air is cold and still. Something ancient rests here.");
 }
 
@@ -19736,7 +19736,7 @@ function initMap() {
 
     // ===== テストモード: 地下墓地（固定レイアウト） =====
     if (isRoomTestMode && forcedLayoutType === 'catacombs') {
-        addLog("地下墓地 — CATACOMBS");
+        addLog("CATACOMBS");
         for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) map[y][x] = SYMBOLS.WALL;
 
         const _cF = (x1, y1, x2, y2) => {
@@ -24684,7 +24684,7 @@ function gameLoop(now) {
 function drawTitle() {
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.textAlign = 'center';
-    const deepUnlocked = localStorage.getItem('deep_unlocked') === '1';
+    const deepUnlocked = safeStorageGet('deep_unlocked', null) === '1';
 
     ctx.fillStyle = '#ededed';
     ctx.font = "bold 40px 'Courier New', Courier, monospace";
@@ -27715,7 +27715,7 @@ function draw(now) {
                     eChar = 'Q';
                     // 色変更なし。グローと点滅は派閥オーバーライド後に処理
                 }
-                else if (e.type === 'TURRET') { eColor = '#ef4444'; eChar = SYMBOLS.TURRET; }
+                else if (e.type === 'TURRET') { eColor = '#f87171'; eChar = SYMBOLS.TURRET; }
                 else if (e.type === 'HOPPER_TURRET') {
                     // 移動タレット: オレンジと黄色の間で点滅
                     eChar = SYMBOLS.TURRET;
@@ -27872,8 +27872,8 @@ function draw(now) {
                                 eColor = '#94a3b8';
                                 ctx.shadowColor = '#94a3b8'; ctx.shadowBlur = 3;
                             } else {
-                                eColor = '#ef4444';
-                                ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 16;
+                                eColor = '#f87171';
+                                ctx.shadowColor = '#f87171'; ctx.shadowBlur = 16;
                             }
                         } else {
                             ctx.globalAlpha = 0.18;
@@ -31492,8 +31492,8 @@ async function triggerEnding() {
     transition.text = "";
 
     // 7. エンドクレジット部屋へ移行
-    localStorage.removeItem('floor100_story_seen');
-    localStorage.setItem('deep_unlocked', '1');
+    safeStorageRemove('floor100_story_seen');
+    safeStorageSet('deep_unlocked', '1');
     saveGame();
 
     // --- フロアをクレジット部屋にリセット ---
@@ -32618,7 +32618,7 @@ async function handleAction(dx, dy) {
 
         if (block.type === 'FIRE_BLOCK') {
             // 星ブロック: 攻撃方向に炎を発射 + HP減少（2回で破壊）
-            if (block.fired) return; // 発射済みは無反応
+            if (block.fired) { isProcessing = false; return; } // 発射済みは無反応（入力ロックは必ず解除）
             block.fired = true;
             block.hp--;
             SOUNDS.DART_FIRE();
@@ -35288,7 +35288,7 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
         const _kingTrophyTest = false;
         if (!isInEscapeRoom || _kingTrophyTest) {
             kingKillCount++;
-            localStorage.setItem('king_kill_count', kingKillCount);
+            safeStorageSet('king_kill_count', kingKillCount);
             saveGame();
             updateUI();
         }
@@ -47281,7 +47281,7 @@ window.addEventListener('keydown', async e => {
             if (testModeVisible) {
                 e.preventDefault();
                 const _num = parseInt(_dk);
-                const _duD = localStorage.getItem('deep_unlocked') === '1';
+                const _duD = safeStorageGet('deep_unlocked', null) === '1';
                 const _dtiD = _duD ? 4 : 3;
                 if (titleSelection === _dtiD) {
                     let nf = (deepTestFloor * 10) % 1000 + _num;
@@ -47302,7 +47302,7 @@ window.addEventListener('keydown', async e => {
     if (e.key === 'ArrowUp' || e.key === 'w') {
         e.preventDefault();
         if (gameState === 'TITLE') {
-            { const _duU = localStorage.getItem('deep_unlocked') === '1'; const _baseU = _duU ? 3 : 2; const count = testModeVisible ? _baseU + 4 : _baseU; titleSelection = (titleSelection + count - 1) % count; }
+            { const _duU = safeStorageGet('deep_unlocked', null) === '1'; const _baseU = _duU ? 3 : 2; const count = testModeVisible ? _baseU + 4 : _baseU; titleSelection = (titleSelection + count - 1) % count; }
             SOUNDS.SELECT(); return;
         }
         if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 3) % 4; SOUNDS.SELECT(); return; }
@@ -47353,7 +47353,7 @@ window.addEventListener('keydown', async e => {
     if (e.key === 'ArrowDown' || e.key === 's') {
         e.preventDefault();
         if (gameState === 'TITLE') {
-            { const _duD2 = localStorage.getItem('deep_unlocked') === '1'; const _baseD2 = _duD2 ? 3 : 2; const count = testModeVisible ? _baseD2 + 4 : _baseD2; titleSelection = (titleSelection + 1) % count; }
+            { const _duD2 = safeStorageGet('deep_unlocked', null) === '1'; const _baseD2 = _duD2 ? 3 : 2; const count = testModeVisible ? _baseD2 + 4 : _baseD2; titleSelection = (titleSelection + 1) % count; }
             SOUNDS.SELECT(); return;
         }
         if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 1) % 4; SOUNDS.SELECT(); return; }
@@ -47404,17 +47404,17 @@ window.addEventListener('keydown', async e => {
     if (e.key === 'ArrowLeft' || e.key === 'a') {
         if (['TITLE', 'STATUS'].includes(gameState)) e.preventDefault();
         if (gameState === 'SHOP' && shopMode === 'SELECT') { shopModeSelection = shopModeSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
-        if (gameState === 'TITLE') { const _du2 = localStorage.getItem('deep_unlocked') === '1'; const _tpi = _du2 ? 3 : 2; const _dti = _du2 ? 4 : 3;
+        if (gameState === 'TITLE') { const _du2 = safeStorageGet('deep_unlocked', null) === '1'; const _tpi = _du2 ? 3 : 2; const _dti = _du2 ? 4 : 3;
             if (titleSelection === _tpi) { testFloor = (testFloor - 2 + 100) % 100 + 1; SOUNDS.SELECT(); return; }
             if (titleSelection === _dti) { deepTestFloor = deepTestFloor > 101 ? deepTestFloor - 1 : 999; SOUNDS.SELECT(); return; }
         }
         if (gameState === 'STATUS') {
             if (statusPage === 2 && settingsRow === 1) {
-                if (bgmVolumeLevel > 1) { bgmVolumeLevel--; if (bgmActive) bgmAudio.volume = getBGMVolume(); localStorage.setItem('rogue_bgm_vol', bgmVolumeLevel); }
+                if (bgmVolumeLevel > 1) { bgmVolumeLevel--; if (bgmActive) bgmAudio.volume = getBGMVolume(); safeStorageSet('rogue_bgm_vol', bgmVolumeLevel); }
                 SOUNDS.SELECT(); return;
             }
             if (statusPage === 2 && settingsRow === 2) {
-                if (sfxVolumeLevel > 0) { sfxVolumeLevel--; sfxMasterGain.gain.value = getSFXVolume(); localStorage.setItem('rogue_sfx_vol', sfxVolumeLevel); }
+                if (sfxVolumeLevel > 0) { sfxVolumeLevel--; sfxMasterGain.gain.value = getSFXVolume(); safeStorageSet('rogue_sfx_vol', sfxVolumeLevel); }
                 SOUNDS.SELECT(); return;
             }
             if (statusPage > 0) { statusPage--; SOUNDS.SELECT(); } return;
@@ -47423,17 +47423,17 @@ window.addEventListener('keydown', async e => {
     if (e.key === 'ArrowRight' || e.key === 'd') {
         if (['TITLE', 'STATUS'].includes(gameState)) e.preventDefault();
         if (gameState === 'SHOP' && shopMode === 'SELECT') { shopModeSelection = shopModeSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
-        if (gameState === 'TITLE') { const _du3 = localStorage.getItem('deep_unlocked') === '1'; const _tpi2 = _du3 ? 3 : 2; const _dti2 = _du3 ? 4 : 3;
+        if (gameState === 'TITLE') { const _du3 = safeStorageGet('deep_unlocked', null) === '1'; const _tpi2 = _du3 ? 3 : 2; const _dti2 = _du3 ? 4 : 3;
             if (titleSelection === _tpi2) { testFloor = (testFloor % 100) + 1; SOUNDS.SELECT(); return; }
             if (titleSelection === _dti2) { deepTestFloor = deepTestFloor < 999 ? deepTestFloor + 1 : 101; SOUNDS.SELECT(); return; }
         }
         if (gameState === 'STATUS') {
             if (statusPage === 2 && settingsRow === 1) {
-                if (bgmVolumeLevel < 5) { bgmVolumeLevel++; if (bgmActive) bgmAudio.volume = getBGMVolume(); localStorage.setItem('rogue_bgm_vol', bgmVolumeLevel); }
+                if (bgmVolumeLevel < 5) { bgmVolumeLevel++; if (bgmActive) bgmAudio.volume = getBGMVolume(); safeStorageSet('rogue_bgm_vol', bgmVolumeLevel); }
                 SOUNDS.SELECT(); return;
             }
             if (statusPage === 2 && settingsRow === 2) {
-                if (sfxVolumeLevel < 5) { sfxVolumeLevel++; sfxMasterGain.gain.value = getSFXVolume(); localStorage.setItem('rogue_sfx_vol', sfxVolumeLevel); }
+                if (sfxVolumeLevel < 5) { sfxVolumeLevel++; sfxMasterGain.gain.value = getSFXVolume(); safeStorageSet('rogue_sfx_vol', sfxVolumeLevel); }
                 SOUNDS.SELECT(); return;
             }
             if (statusPage < 2) { statusPage++; SOUNDS.SELECT(); } return;
@@ -47629,7 +47629,7 @@ window.addEventListener('keydown', async e => {
         }
         if (gameState === 'TITLE') {
             const hasSave = safeStorageGet('minimal_rogue_save') !== null;
-            const _duE = localStorage.getItem('deep_unlocked') === '1';
+            const _duE = safeStorageGet('deep_unlocked', null) === '1';
             const _tpiE = _duE ? 3 : 2;
             const _dtiE = _duE ? 4 : 3;
             const _fsiE = _duE ? 5 : 4;
@@ -48417,9 +48417,9 @@ requestAnimationFrame(gameLoop);
 addLog("Game Ready.");
 
 // 縦持ち画面のオフセット（スワイプで調整、localStorageに保存）
-let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40', 10);
+let _portraitOffsetY = parseInt(safeStorageGet('portrait_offset_y', null) || '40', 10);
 // 横持ち標準画面のオフセット（スワイプで上下調整、localStorageに保存）
-let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '0', 10);
+let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '0', 10);
 
 // ウィンドウサイズに合わせてゲーム全体をスケーリング（タッチコントロールはオーバーレイなので余白不要）
 (function initScale() {
@@ -48964,7 +48964,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             _zoomIsPanning = false;
             // 画面位置をlocalStorageに保存
             if (!_tcZoomMode) {
-                localStorage.setItem('portrait_offset_y', String(Math.round(_portraitOffsetY)));
+                safeStorageSet('portrait_offset_y', String(Math.round(_portraitOffsetY)));
             }
             return;
         }
@@ -49198,7 +49198,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
                     testModeVisible = true;
                     SOUNDS.SELECT();
                 } else if (testModeVisible) {
-                    const _duLT = localStorage.getItem('deep_unlocked') === '1';
+                    const _duLT = safeStorageGet('deep_unlocked', null) === '1';
                     const _tpiLT = _duLT ? 3 : 2;
                     const _dtiLT = _duLT ? 4 : 3;
                     if (titleSelection === _tpiLT) _showMobileFloorInput(false);
