@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v710';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v711';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -28454,27 +28454,6 @@ function draw(now) {
             ctx.restore();
         }
 
-        // 5.1. スマホ: ＠ボタン長押し中のブロック設置ガイド（上下左右の□と矢印）
-        if (window._mBlockGuide && isPlayerVisible && gameState === 'PLAYING') {
-            const _bgOn = window._mBlockGuide.on;
-            const _bgDirs = [['up', 0, -1, '↑'], ['down', 0, 1, '↓'], ['left', -1, 0, '←'], ['right', 1, 0, '→']];
-            ctx.save();
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            for (const [_bgK, _bgDx, _bgDy, _bgArrow] of _bgDirs) {
-                const _bgX = player.x + _bgDx, _bgY = player.y + _bgDy;
-                if (_bgX < 0 || _bgX >= COLS || _bgY < 0 || _bgY >= ROWS || isWallAt(_bgX, _bgY)) continue;
-                const _bgLit = _bgK === _bgOn;
-                const _bgCx = player.x * TILE_SIZE + TILE_SIZE / 2, _bgCy = player.y * TILE_SIZE + TILE_SIZE / 2;
-                ctx.fillStyle = _bgLit ? '#ffffff' : 'rgba(237,237,237,0.45)';
-                ctx.shadowColor = '#000'; ctx.shadowBlur = 3;
-                ctx.font = `bold ${TILE_SIZE}px 'Courier New'`;
-                ctx.fillText(SYMBOLS.BLOCK, _bgCx + _bgDx * TILE_SIZE, _bgCy + _bgDy * TILE_SIZE);
-                ctx.font = `bold ${Math.round(TILE_SIZE * 0.7)}px 'Courier New'`;
-                ctx.fillText(_bgArrow, _bgCx + _bgDx * TILE_SIZE * 0.52, _bgCy + _bgDy * TILE_SIZE * 0.52);
-            }
-            ctx.restore();
-        }
-
         // 5.5. 風エフェクト（突風の間）— 突風時のみ表示
         if (isWindFloor && now < windGustEndTime) {
             ctx.save();
@@ -48532,12 +48511,14 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     padding: 18px 20px; margin: -18px -20px;
 }
 /* 縦持ちレイアウト（スマホは横にしてもこのレイアウトのまま） */
-#tc-wrap { justify-content: center; }
-#tc-dpad { position: relative; z-index: 10; margin-right: 16px; }
+/* 十字キーは左寄せ、＠ボタンは右端から離す（＠のまわりにブロック設置ガイドの□を出す空きを作る） */
+#tc-wrap { justify-content: flex-start; }
+#tc-dpad { position: relative; z-index: 10; margin-left: -46px; margin-right: 0; }
 #tc-block-btn {
-    position: absolute; right: 16px;
+    position: absolute; right: 36px;
     top: 50%; transform: translateY(-50%);
 }
+@media (max-width: 340px) { #tc-block-btn { right: 14px; } } /* 幅の狭いスマホ: 左の□が十字キーに重ならないように */
 .tc-btn {
     background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
     font-size: 22px; border-radius: 8px;
@@ -48617,6 +48598,17 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
 }
 .tc-act:active { background: #2e2e2e; color: #fff; }
 /* ── ズームモード ストーリーダイアログ オーバーレイ（スマホ専用） ── */
+/* ── ＠ボタン長押し中のブロック設置ガイド（ボタンのまわりに矢印＋□） ── */
+#tc-block-guide { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 1001; pointer-events: none; display: none; }
+#tc-block-guide .tc-bg-item {
+    position: absolute; transform: translate(-50%, -50%);
+    font: bold 16px 'Courier New', monospace; line-height: 1; color: rgba(237,237,237,0.75);
+    text-shadow: 0 0 3px #000, 0 0 3px #000;
+    background: rgba(0,0,0,0.6); padding: 2px 3px; border-radius: 4px; /* ズーム中もマップと区別できるように */
+    transition: color 0.08s, transform 0.08s;
+}
+#tc-block-guide .tc-bg-item.tc-bg-block { font-size: 22px; }
+#tc-block-guide .tc-bg-item.tc-bg-on { color: #fff; transform: translate(-50%, -50%) scale(1.35); }
 /* ── ズームモード用 DQ風プレート（黒地・白枠。drawDQWindow と同じ見た目） ── */
 .m-plate {
     background: #000; color: #ededed;
@@ -49322,18 +49314,50 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     // BLOCK ボタン（ホールド型）
     // 押している間: isSpacePressed = true（防御+ブロック設置モード、ボタン点灯）
     // 離した時: ブロック未設置なら handleAction(0,0) で防御発動、点灯解除
-    // ── ブロック設置ガイド: ＠を押している間、プレイヤーの上下左右に「矢印＋□」を出す ──
-    // 描画は draw() 側（window._mBlockGuide を見る）。スライド中の方向＝離すと置く方向を強調
-    function _showBlockGuide() { window._mBlockGuide = { on: null }; }
+    // ── ブロック設置ガイド: ＠を押している間、ボタンのまわりに「矢印＋□」を出す ──
+    // ＠ボタンの操作説明（押してスライド→離すとその方向にブロック）。スライド中の方向を明るく強調
+    const _BG_DIRS = { up: [0, -1, '↑'], down: [0, 1, '↓'], left: [-1, 0, '←'], right: [1, 0, '→'] };
+    const _tcBlockGuide = document.createElement('div');
+    _tcBlockGuide.id = 'tc-block-guide';
+    const _bgItems = {};
+    for (const k in _BG_DIRS) {
+        const a = document.createElement('span'); a.className = 'tc-bg-item'; a.textContent = _BG_DIRS[k][2];
+        const b = document.createElement('span'); b.className = 'tc-bg-item tc-bg-block'; b.textContent = SYMBOLS.BLOCK;
+        _tcBlockGuide.appendChild(a); _tcBlockGuide.appendChild(b);
+        _bgItems[k] = [a, b];
+    }
+    document.body.appendChild(_tcBlockGuide);
+
+    function _showBlockGuide() {
+        // 見た目の丸（#tc-block-visual, 88px）を基準にする（ボタン本体120pxはタッチ範囲）
+        const r = (document.getElementById('tc-block-visual') || _tcBlockBtn).getBoundingClientRect();
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const rad = r.width / 2;
+        const M = 12; // 画面端からの余白（狭い画面でも□が画面外に出ないように）
+        for (const k in _BG_DIRS) {
+            const [dx, dy] = _BG_DIRS[k];
+            let blockD = rad + 28;                // □：丸の外側
+            if (dx > 0) blockD = Math.min(blockD, window.innerWidth  - M - cx);
+            if (dx < 0) blockD = Math.min(blockD, cx - M);
+            if (dy > 0) blockD = Math.min(blockD, window.innerHeight - M - cy);
+            if (dy < 0) blockD = Math.min(blockD, cy - M);
+            const arrowD = Math.min(rad + 8, blockD - 16); // 矢印：丸と□の間
+            const [a, b] = _bgItems[k];
+            a.style.left = (cx + dx * arrowD) + 'px'; a.style.top = (cy + dy * arrowD) + 'px';
+            b.style.left = (cx + dx * blockD) + 'px'; b.style.top = (cy + dy * blockD) + 'px';
+            a.classList.remove('tc-bg-on'); b.classList.remove('tc-bg-on');
+        }
+        _tcBlockGuide.style.display = 'block';
+    }
     function _updateBlockGuide(fdx, fdy) {
-        if (!window._mBlockGuide) return;
+        if (_tcBlockGuide.style.display === 'none') return;
         let on = null;
         if (Math.sqrt(fdx * fdx + fdy * fdy) > 30) {
             on = Math.abs(fdx) > Math.abs(fdy) ? (fdx > 0 ? 'right' : 'left') : (fdy > 0 ? 'down' : 'up');
         }
-        window._mBlockGuide.on = on;
+        for (const k in _bgItems) _bgItems[k].forEach(el => el.classList.toggle('tc-bg-on', k === on));
     }
-    function _hideBlockGuide() { window._mBlockGuide = null; }
+    function _hideBlockGuide() { _tcBlockGuide.style.display = 'none'; }
 
     _tcBlockBtn.addEventListener('touchstart', e => {
         e.preventDefault();
