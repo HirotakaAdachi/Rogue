@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v723';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v724';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -49479,7 +49479,8 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
             isSpacePressed = true;
             spaceUsedForBlock = false;
             _tcBlockBtn.classList.add('tc-active');
-            _showBlockGuide();
+            // ブロック設置ガイドは魔法の杖（2階）を手に入れてから。杖がないうちは＠は防御だけなので出さない
+            if (player.hasWand) _showBlockGuide();
         }
     }, { passive: false });
 
