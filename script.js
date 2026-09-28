@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v720';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v721';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -24657,11 +24657,10 @@ function gameLoop(now) {
         drawInventoryScreen();
     } else if (gameState === 'SHOP') {
         draw(now);
-        drawShopScreen();
+        if (!window._mHideCanvasShop) drawShopScreen(); // スマホの買い物枠表示中は描かない（二重表示防止）
     } else if (gameState === 'CONFIRM_BUY') {
         draw(now);
-        drawShopScreen();
-        drawConfirmBuy();
+        if (!window._mHideCanvasShop) { drawShopScreen(); drawConfirmBuy(); }
     } else if (gameState === 'RINGS') {
         draw(now);
         drawRingsScreen();
@@ -26792,7 +26791,7 @@ function _drawCanvasHUDBot() {
     // Log lines (last 3, fading gradient)
     const FONT = "12px 'Courier New', Courier, monospace";
     const LH = 16;
-    const show = _logLines.slice(-3);
+    const show = window._mHideCanvasLog ? [] : _logLines.slice(-3); // スマホのログ枠表示中は描かない（二重表示防止）
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     for (let i = 0; i < show.length; i++) {
@@ -28786,7 +28785,8 @@ function draw(now) {
     }
 
     // 物語のメッセージ（storyMessage）
-    if (storyMessage) {
+    // スマホのズーム中はHTMLのストーリー枠（#zoom-dialog）に出すので、キャンバスには描かない（二重表示防止）
+    if (storyMessage && !window._mHideCanvasStory) {
         const lines = storyMessage.lines;
         const _isJP = s => /[\u3000-\u9FFF\uFF00-\uFFEF]/.test(s);
         const FONT_EN = "13px 'Courier New', Courier, monospace";
@@ -48868,6 +48868,8 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     // _zoomLoop から毎フレーム呼ぶ
     function _updateMobilePlates(storyVisible) {
         const zoomed = _tcZoomMode && _zoomModeActive;
+        // ズーム中はストーリー文をHTML枠に任せ、キャンバス側は描かない
+        window._mHideCanvasStory = zoomed;
         const hudR = _mHud.getBoundingClientRect();
         const tcR  = document.getElementById('tc-wrap')?.getBoundingClientRect();
         const actR = document.getElementById('tc-actions')?.getBoundingClientRect(); // MENUボタン（tc-wrapより上に出ている）
@@ -48903,6 +48905,7 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
             _mShopPlate.style.display = 'none';
             _mShopLastHTML = '';
         }
+        window._mHideCanvasShop = inShop;
 
         // ログ（新しい行が出たら数秒だけ表示）
         const lastLog = _logLines.length ? _logLines[_logLines.length - 1] : null;
@@ -48916,8 +48919,10 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
             _mLogPlate.style.bottom = (window.innerHeight - areaBottom) + 'px';
             _mLogPlate.style.opacity = age > _M_LOG_SHOW_MS - 600 ? '0' : '1';
             _mLogPlate.style.display = 'block';
-        } else if (_mLogPlate.style.display !== 'none') {
-            _mLogPlate.style.display = 'none';
+            window._mHideCanvasLog = true;
+        } else {
+            if (_mLogPlate.style.display !== 'none') _mLogPlate.style.display = 'none';
+            window._mHideCanvasLog = false;
         }
     }
 
