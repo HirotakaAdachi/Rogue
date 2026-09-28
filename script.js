@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v721';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v722';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48532,11 +48532,11 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
 }
 /* ── 縦向き: 半透明オーバーレイ（下部） ── */
 #tc-wrap {
-    position: fixed; bottom: 8px; left: 0; right: 0; z-index: 1000;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
     display: flex; flex-direction: row;
     justify-content: space-around; align-items: center;
-    padding: 8px 16px env(safe-area-inset-bottom, 8px);
-    background: rgba(0,0,0,0.38);
+    padding: 8px 16px calc(env(safe-area-inset-bottom, 8px) + 8px); /* 旧: bottom 8px + 下余白。ボタン位置は同じ */
+    background: #000; /* 不透明（ズーム中もマップが透けない） */
     user-select: none; -webkit-user-select: none;
     pointer-events: none;
 }
@@ -48658,12 +48658,28 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     box-sizing: border-box;
 }
 .m-plate.m-ja, .m-plate .m-ja { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif; }
-#m-log-plate {
-    position: fixed; left: 8px; right: 8px; z-index: 1050;
-    display: none; padding: 8px 14px; font-size: 14px;
-    pointer-events: none; transition: opacity 0.4s;
+/* ── ズーム中の英語ログ: 画面左下（十字キーの下）に小さく3行 ── */
+#m-log-mini {
+    position: fixed; left: 8px; width: 64%; z-index: 1002;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 1px);
+    display: none; pointer-events: none;
+    font: 10px 'Courier New', monospace; line-height: 11px; color: #bbb;
 }
-#m-log-plate div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#m-log-mini div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#m-log-mini div.m-old1 { opacity: 0.7; }
+#m-log-mini div.m-old2 { opacity: 0.45; }
+#m-log-mini div.m-new { animation: m-log-in 0.25s ease-out; }
+@keyframes m-log-in { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* ── ズーム切替のカメラボタン（操作エリア左上） ── */
+#tc-camera {
+    position: absolute; left: 10px; top: 10px; z-index: 20;
+    width: 36px; height: 36px; padding: 0; box-sizing: border-box;
+    border-radius: 50%; border: 1px solid #333; background: rgba(26,26,26,0.9); color: #999;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+#tc-camera.tc-on { border-color: #c8a000; color: #ffd700; }
+#tc-camera svg { display: block; }
 #m-shop-plate {
     position: fixed; left: 8px; right: 8px; z-index: 1060;
     display: none; flex-direction: column; gap: 8px;
@@ -48708,6 +48724,7 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     const _tcWrap = document.createElement('div');
     _tcWrap.id = 'tc-wrap';
     _tcWrap.innerHTML = `
+        <button id="tc-camera" aria-label="Zoom"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M2.5 6.5 h3 l1.5 -2 h6 l1.5 2 h3 v9 h-15 z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="10" cy="11" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
         <div id="tc-actions">
             <button class="tc-act" id="tc-menu">MENU</button>
         </div>
@@ -48757,10 +48774,9 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     // ── ズームモード DQ風プレート（ログ・商人の買い物） ──
     // ズーム中はキャンバスの一部しか見えず、文字が画面外に切れるため、
     // 読む必要のある文字だけをHTMLのプレートに大きく出し直す（表示専用。操作は従来のボタン）
-    const _mLogPlate = document.createElement('div');
-    _mLogPlate.id = 'm-log-plate';
-    _mLogPlate.className = 'm-plate';
-    document.body.appendChild(_mLogPlate);
+    const _mLogMini = document.createElement('div');
+    _mLogMini.id = 'm-log-mini';
+    document.body.appendChild(_mLogMini);
 
     const _mShopPlate = document.createElement('div');
     _mShopPlate.id = 'm-shop-plate';
@@ -48862,8 +48878,7 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     }
 
     let _mShopLastHTML = '', _mShopLastSel = -1;
-    let _mLogLastRef = null, _mLogShownAt = 0, _mLogLastHTML = '';
-    const _M_LOG_SHOW_MS = 4500;
+    let _mLogLastRef = null, _mLogLastHTML = '';
 
     // _zoomLoop から毎フレーム呼ぶ
     function _updateMobilePlates(storyVisible) {
@@ -48907,22 +48922,25 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
         }
         window._mHideCanvasShop = inShop;
 
-        // ログ（新しい行が出たら数秒だけ表示）
-        const lastLog = _logLines.length ? _logLines[_logLines.length - 1] : null;
-        if (lastLog !== _mLogLastRef) { _mLogLastRef = lastLog; if (lastLog) _mLogShownAt = performance.now(); }
-        const age = performance.now() - _mLogShownAt;
-        if (zoomed && gameState === 'PLAYING' && !storyVisible && lastLog && age < _M_LOG_SHOW_MS) {
-            const html = _logLines.slice(-3).map(l => l.segments
-                ? '<div>' + l.segments.map(s => `<span style="color:${_mEsc(s.color || '#bbb')}">${_mEsc(s.text)}</span>`).join('') + '</div>'
-                : `<div>${_mEsc(l.text)}</div>`).join('');
-            if (html !== _mLogLastHTML) { _mLogPlate.innerHTML = html; _mLogLastHTML = html; }
-            _mLogPlate.style.bottom = (window.innerHeight - areaBottom) + 'px';
-            _mLogPlate.style.opacity = age > _M_LOG_SHOW_MS - 600 ? '0' : '1';
-            _mLogPlate.style.display = 'block';
-            window._mHideCanvasLog = true;
-        } else {
-            if (_mLogPlate.style.display !== 'none') _mLogPlate.style.display = 'none';
-            window._mHideCanvasLog = false;
+        // ログ: ズーム中は画面左下に小さく最新3行（新しい行が下から流れてくる）。キャンバス下部のログは描かない
+        const showLog = zoomed && !['TITLE', 'LANG_SELECT', 'OPENING'].includes(gameState);
+        window._mHideCanvasLog = zoomed;
+        if (showLog) {
+            const lastLog = _logLines.length ? _logLines[_logLines.length - 1] : null;
+            const isNew = lastLog !== _mLogLastRef;
+            _mLogLastRef = lastLog;
+            const rows = _logLines.slice(-3);
+            const html = rows.map((l, i) => {
+                const cls = i === rows.length - 1 ? (isNew ? 'm-new' : '') : (i === rows.length - 2 ? 'm-old1' : 'm-old2');
+                const body = l.segments
+                    ? l.segments.map(sg => `<span style="color:${_mEsc(sg.color || '#bbb')}">${_mEsc(sg.text)}</span>`).join('')
+                    : _mEsc(l.text);
+                return `<div class="${cls}">${body || '&nbsp;'}</div>`;
+            }).join('');
+            if (html !== _mLogLastHTML || isNew) { _mLogMini.innerHTML = html; _mLogLastHTML = html; }
+            _mLogMini.style.display = 'block';
+        } else if (_mLogMini.style.display !== 'none') {
+            _mLogMini.style.display = 'none';
         }
     }
 
@@ -48932,7 +48950,7 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     let _manualTx = 0, _manualTy = 0; // 自由パン時のカメラ位置
     let _lastTx = 0, _lastTy = 0;    // _applyZoom が最後に計算した実際のカメラ位置
     let _zoomModeActive = false;  // 実際に全画面になっているか
-    const _ZOOM_SCALE = 1.75;
+    const _ZOOM_SCALE = 1.4;
 
     function _applyZoom() {
         const shouldZoom = _tcZoomMode && ['PLAYING','MENU','STATUS','INVENTORY','SHOP','CONFIRM_BUY','RINGS','CONFIRM_ESCAPE','TITLE','LANG_SELECT','OPENING'].includes(gameState);
@@ -49171,6 +49189,8 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
             }
         }
         _updateMobilePlates(!!_zdlg && _zdlg.style.display === 'block');
+        const _cam = document.getElementById('tc-camera');
+        if (_cam) _cam.classList.toggle('tc-on', _tcZoomMode);
         requestAnimationFrame(_zoomLoop);
     })();
 
@@ -49244,6 +49264,17 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
         if (!_tcZoomMode) _zoomFreePan = false;
         _zoomIsPanning = false;
     }, { passive: true });
+
+    // カメラボタン: ズーム ⇔ 通常表示 の切り替え
+    const _tcCamera = document.getElementById('tc-camera');
+    _tcCamera.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    _tcCamera.addEventListener('touchend', e => {
+        e.preventDefault(); e.stopPropagation();
+        _tcZoomMode = !_tcZoomMode;
+        if (!_tcZoomMode) _zoomFreePan = false;
+        _zoomIsPanning = false;
+        SOUNDS.SELECT();
+    }, { passive: false });
 
     // ストーリーメッセージ待機中：画面タッチでページ送り（非ズームモード含む）
     document.addEventListener('touchend', () => {
