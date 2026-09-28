@@ -1666,12 +1666,13 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v716';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v717';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
 let _syncInputDy = 0; // 46F シンクロ: そのターンの入力方向Y
 let isRoomTestMode = false; // 部屋タイプテストモードフラグ
+let _testStartFloor = null;  // ステージセレクト等のテスト開始時の開始階（通常プレイは null）
 let forcedLayoutType = null; // 強制レイアウトタイプ
 let currentDeepTheme = null; // 深遠フロアのテーマ（updateUI で表示）
 let isDeepTestMode = false;  // DEEP TEST モードフラグ
@@ -14336,7 +14337,9 @@ function initMap() {
         player.x = 6; player.y = 12;
 
         // 魔法使いの杖（小部屋の出口に配置して強制入手させる）
-        map[12][22] = SYMBOLS.WAND;
+        // すでに杖を持っている（リミナルスペース等で戻ってきた）場合は置かない＝杖イベントも起きない。
+        // ただしステージセレクトで2階から始めたときは、イベント確認用に置く（テスト開始時は最初から杖を持っているため）
+        if (!player.hasWand || _testStartFloor === 2) map[12][22] = SYMBOLS.WAND;
 
         // ゴール
         map[12][33] = SYMBOLS.STAIRS;
@@ -46862,6 +46865,7 @@ function isTileInLaser(x, y, ignoreEnemy = null) {
 }
 
 async function startGame(startFloor = 1, isTestMode = false) {
+    _testStartFloor = isTestMode ? startFloor : null;
     if (startFloor === 1 && !isTestMode && gameState !== 'OPENING') {
         await playOpeningSequence();
         return;
