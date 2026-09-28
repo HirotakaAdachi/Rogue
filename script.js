@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v722';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v723';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48670,7 +48670,7 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
 #m-log-mini div.m-old2 { opacity: 0.45; }
 #m-log-mini div.m-new { animation: m-log-in 0.25s ease-out; }
 @keyframes m-log-in { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
-/* ── ズーム切替のカメラボタン（操作エリア左上） ── */
+/* ── ズーム切替ボタン（虫めがね＋／−。操作エリア左上。idは tc-camera のまま） ── */
 #tc-camera {
     position: absolute; left: 10px; top: 10px; z-index: 20;
     width: 36px; height: 36px; padding: 0; box-sizing: border-box;
@@ -48724,7 +48724,7 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     const _tcWrap = document.createElement('div');
     _tcWrap.id = 'tc-wrap';
     _tcWrap.innerHTML = `
-        <button id="tc-camera" aria-label="Zoom"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M2.5 6.5 h3 l1.5 -2 h6 l1.5 2 h3 v9 h-15 z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="10" cy="11" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
+        <button id="tc-camera" aria-label="Zoom"></button>
         <div id="tc-actions">
             <button class="tc-act" id="tc-menu">MENU</button>
         </div>
@@ -49190,7 +49190,13 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
         }
         _updateMobilePlates(!!_zdlg && _zdlg.style.display === 'block');
         const _cam = document.getElementById('tc-camera');
-        if (_cam) _cam.classList.toggle('tc-on', _tcZoomMode);
+        if (_cam && _cam._zoomShown !== _tcZoomMode) {
+            // 虫めがね: 通常表示のとき「＋」（押すと拡大）、ズーム中は「−」（押すと元に戻る）
+            _cam._zoomShown = _tcZoomMode;
+            _cam.classList.toggle('tc-on', _tcZoomMode);
+            _cam.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">'
+                + '<circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5 L17 17 M6 8.5 H11' + (_tcZoomMode ? '' : ' M8.5 6 V11') + '"/></svg>';
+        }
         requestAnimationFrame(_zoomLoop);
     })();
 
@@ -49265,7 +49271,7 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
         _zoomIsPanning = false;
     }, { passive: true });
 
-    // カメラボタン: ズーム ⇔ 通常表示 の切り替え
+    // ズーム切替ボタン（虫めがね）: ズーム ⇔ 通常表示 の切り替え
     const _tcCamera = document.getElementById('tc-camera');
     _tcCamera.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
     _tcCamera.addEventListener('touchend', e => {
