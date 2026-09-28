@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v709';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v710';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -28454,6 +28454,27 @@ function draw(now) {
             ctx.restore();
         }
 
+        // 5.1. スマホ: ＠ボタン長押し中のブロック設置ガイド（上下左右の□と矢印）
+        if (window._mBlockGuide && isPlayerVisible && gameState === 'PLAYING') {
+            const _bgOn = window._mBlockGuide.on;
+            const _bgDirs = [['up', 0, -1, '↑'], ['down', 0, 1, '↓'], ['left', -1, 0, '←'], ['right', 1, 0, '→']];
+            ctx.save();
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            for (const [_bgK, _bgDx, _bgDy, _bgArrow] of _bgDirs) {
+                const _bgX = player.x + _bgDx, _bgY = player.y + _bgDy;
+                if (_bgX < 0 || _bgX >= COLS || _bgY < 0 || _bgY >= ROWS || isWallAt(_bgX, _bgY)) continue;
+                const _bgLit = _bgK === _bgOn;
+                const _bgCx = player.x * TILE_SIZE + TILE_SIZE / 2, _bgCy = player.y * TILE_SIZE + TILE_SIZE / 2;
+                ctx.fillStyle = _bgLit ? '#ffffff' : 'rgba(237,237,237,0.45)';
+                ctx.shadowColor = '#000'; ctx.shadowBlur = 3;
+                ctx.font = `bold ${TILE_SIZE}px 'Courier New'`;
+                ctx.fillText(SYMBOLS.BLOCK, _bgCx + _bgDx * TILE_SIZE, _bgCy + _bgDy * TILE_SIZE);
+                ctx.font = `bold ${Math.round(TILE_SIZE * 0.7)}px 'Courier New'`;
+                ctx.fillText(_bgArrow, _bgCx + _bgDx * TILE_SIZE * 0.52, _bgCy + _bgDy * TILE_SIZE * 0.52);
+            }
+            ctx.restore();
+        }
+
         // 5.5. 風エフェクト（突風の間）— 突風時のみ表示
         if (isWindFloor && now < windGustEndTime) {
             ctx.save();
@@ -49228,6 +49249,7 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
         _wallRingLockDx = 0; _wallRingLockDy = 0; _wallRingMode = 'place';
         _wallRingPlacePending = false;
         _tcBlockBtn.classList.remove('tc-active');
+        _hideBlockGuide();
         const icon = _tcBlockIcon();
         // フリック解除後は向きを復元（rAFループが次フレームで上書きするが、過渡期のちらつき防止）
         if (icon) icon.style.transform = (typeof player !== 'undefined' && player.facing === 'RIGHT') ? 'scaleX(-1)' : '';
@@ -49300,6 +49322,19 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     // BLOCK ボタン（ホールド型）
     // 押している間: isSpacePressed = true（防御+ブロック設置モード、ボタン点灯）
     // 離した時: ブロック未設置なら handleAction(0,0) で防御発動、点灯解除
+    // ── ブロック設置ガイド: ＠を押している間、プレイヤーの上下左右に「矢印＋□」を出す ──
+    // 描画は draw() 側（window._mBlockGuide を見る）。スライド中の方向＝離すと置く方向を強調
+    function _showBlockGuide() { window._mBlockGuide = { on: null }; }
+    function _updateBlockGuide(fdx, fdy) {
+        if (!window._mBlockGuide) return;
+        let on = null;
+        if (Math.sqrt(fdx * fdx + fdy * fdy) > 30) {
+            on = Math.abs(fdx) > Math.abs(fdy) ? (fdx > 0 ? 'right' : 'left') : (fdy > 0 ? 'down' : 'up');
+        }
+        window._mBlockGuide.on = on;
+    }
+    function _hideBlockGuide() { window._mBlockGuide = null; }
+
     _tcBlockBtn.addEventListener('touchstart', e => {
         e.preventDefault();
         _tcBlockActive = true;
@@ -49309,6 +49344,7 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
             isSpacePressed = true;
             spaceUsedForBlock = false;
             _tcBlockBtn.classList.add('tc-active');
+            _showBlockGuide();
         }
     }, { passive: false });
 
@@ -49327,7 +49363,10 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
         }
         const icon = _tcBlockIcon();
         if (icon) icon.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
+        _updateBlockGuide(fdx, fdy);
     }, { passive: false });
+
+    _tcBlockBtn.addEventListener('touchcancel', e => { e.preventDefault(); _tcResetBlock(); }, { passive: false });
 
     _tcBlockBtn.addEventListener('touchend', e => {
         e.preventDefault();
