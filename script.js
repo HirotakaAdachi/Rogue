@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v713';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v714';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -14192,7 +14192,7 @@ function initMap() {
         }
 
         // 二番目の部屋に敵を配置
-        enemies.push({ type: 'NORMAL', x: 25, y: 12, hp: 10, maxHp: 10, flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 5, stunTurns: 0, _hpGrowth: 50, _atkGrowth: 8 });
+        enemies.push({ type: 'NORMAL', x: 25, y: 12, hp: 10, maxHp: 10, flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 5, stunTurns: 0, _hpGrowth: 50, _atkGrowth: 8, _growthDoubling: true }); // 特殊個体: 仲間にすると成長量がレベルごとに2倍
 
         // ゴール
         map[12][34] = SYMBOLS.STAIRS;
@@ -35145,6 +35145,11 @@ function _grantAllyExp(ally, exp) {
         ally.hp        = Math.min(ally.maxHp, ally.hp + ally._hpGrowth); // 増えた分だけ回復（満タンにはしない）
         ally._atkBonus = (ally._atkBonus || 0) + ally._atkGrowth;
         spawnFloatingText(ally.x, ally.y, `LV UP! HP+${ally._hpGrowth} ATK+${ally._atkGrowth}`, '#fbbf24', 1400);
+        // 1階の特殊個体E: 次のレベルアップの成長量は今回の2倍（必要経験値は他の仲間と同じ）
+        if (ally._growthDoubling) {
+            ally._hpGrowth  *= 2;
+            ally._atkGrowth *= 2;
+        }
     }
 }
 
