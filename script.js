@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v719';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v720';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48640,14 +48640,14 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
 #tc-block-guide { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 1001; pointer-events: none; display: none; }
 #tc-block-guide .tc-bg-item {
     position: absolute; transform: translate(-50%, -50%);
-    width: 22px; height: 22px; box-sizing: border-box;
+    width: 18px; height: 18px; box-sizing: border-box;
     display: flex; align-items: center; justify-content: center;
     color: rgba(237,237,237,0.75);
     background: rgba(0,0,0,0.6); border-radius: 4px; /* ズーム中もマップと区別できるように */
     transition: color 0.08s, transform 0.08s;
 }
 #tc-block-guide .tc-bg-item svg { display: block; overflow: visible; }
-#tc-block-guide .tc-bg-item.tc-bg-block { width: 28px; height: 28px; }
+#tc-block-guide .tc-bg-item.tc-bg-block { width: 26px; height: 26px; }
 #tc-block-guide .tc-bg-item.tc-bg-on { color: #fff; transform: translate(-50%, -50%) scale(1.35); }
 /* ── ズームモード用 DQ風プレート（黒地・白枠。drawDQWindow と同じ見た目） ── */
 .m-plate {
@@ -49379,14 +49379,17 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
         const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
         const rad = r.width / 2;
         const M = 12; // 画面端からの余白（狭い画面でも□が画面外に出ないように）
+        const _dpadRc = document.getElementById('tc-right')?.getBoundingClientRect();
+        const _dpadR = _dpadRc && _dpadRc.width > 0 ? _dpadRc.right : 0;
         for (const k in _BG_DIRS) {
             const [dx, dy] = _BG_DIRS[k];
             let blockD = rad + 28;                // □：丸の外側
             if (dx > 0) blockD = Math.min(blockD, window.innerWidth  - M - cx);
             if (dx < 0) blockD = Math.min(blockD, cx - M);
+            if (dx < 0 && _dpadR) blockD = Math.min(blockD, cx - (_dpadR + 8 + 13)); // 狭い画面: 左の□を十字キーから8px離す
             if (dy > 0) blockD = Math.min(blockD, window.innerHeight - M - cy);
             if (dy < 0) blockD = Math.min(blockD, cy - M);
-            const arrowD = Math.min(rad + 8, blockD - 16); // 矢印：丸と□の間
+            const arrowD = Math.min(rad + 8, blockD - 22); // 矢印：丸と□の間（矢印の下地9px＋□の下地13px 分あけて重ならないように）
             const [a, b] = _bgItems[k];
             a.style.left = (cx + dx * arrowD) + 'px'; a.style.top = (cy + dy * arrowD) + 'px';
             b.style.left = (cx + dx * blockD) + 'px'; b.style.top = (cy + dy * blockD) + 'px';
@@ -49403,6 +49406,27 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
         for (const k in _bgItems) _bgItems[k].forEach(el => el.classList.toggle('tc-bg-on', k === on));
     }
     function _hideBlockGuide() { _tcBlockGuide.style.display = 'none'; }
+
+    // ── 十字キーを右へ寄せる（右手で操作しやすいように）──
+    // ＠ボタン左側のブロック設置ガイド（□）に重ならないぎりぎりまで。画面幅ごとに測って決める
+    const _DPAD_BASE_MARGIN = -46; // CSS の #tc-dpad margin-left と同じ値
+    function _layoutDpadNearCenter() {
+        const dpad = document.getElementById('tc-dpad');
+        const rightCell = document.getElementById('tc-right');
+        const vis = document.getElementById('tc-block-visual');
+        if (!dpad || !rightCell || !vis) return;
+        dpad.style.marginLeft = _DPAD_BASE_MARGIN + 'px';
+        const v = vis.getBoundingClientRect();
+        if (v.width === 0) return;
+        const cx = v.left + v.width / 2, rad = v.width / 2;
+        // _showBlockGuide() の左の□: 中心 cx-(rad+28)、幅26px → 左端 cx-rad-41。さらに8pxあける
+        const limit = cx - rad - 41 - 8;
+        const shift = Math.max(0, Math.floor(limit - rightCell.getBoundingClientRect().right));
+        dpad.style.marginLeft = (_DPAD_BASE_MARGIN + shift) + 'px';
+    }
+    requestAnimationFrame(_layoutDpadNearCenter);
+    window.addEventListener('resize', _layoutDpadNearCenter);
+    window.addEventListener('orientationchange', () => setTimeout(_layoutDpadNearCenter, 200));
 
     _tcBlockBtn.addEventListener('touchstart', e => {
         e.preventDefault();
