@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v711';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v712';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -48602,12 +48602,14 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
 #tc-block-guide { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 1001; pointer-events: none; display: none; }
 #tc-block-guide .tc-bg-item {
     position: absolute; transform: translate(-50%, -50%);
-    font: bold 16px 'Courier New', monospace; line-height: 1; color: rgba(237,237,237,0.75);
-    text-shadow: 0 0 3px #000, 0 0 3px #000;
-    background: rgba(0,0,0,0.6); padding: 2px 3px; border-radius: 4px; /* ズーム中もマップと区別できるように */
+    width: 22px; height: 22px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(237,237,237,0.75);
+    background: rgba(0,0,0,0.6); border-radius: 4px; /* ズーム中もマップと区別できるように */
     transition: color 0.08s, transform 0.08s;
 }
-#tc-block-guide .tc-bg-item.tc-bg-block { font-size: 22px; }
+#tc-block-guide .tc-bg-item svg { display: block; overflow: visible; }
+#tc-block-guide .tc-bg-item.tc-bg-block { width: 28px; height: 28px; }
 #tc-block-guide .tc-bg-item.tc-bg-on { color: #fff; transform: translate(-50%, -50%) scale(1.35); }
 /* ── ズームモード用 DQ風プレート（黒地・白枠。drawDQWindow と同じ見た目） ── */
 .m-plate {
@@ -49316,13 +49318,18 @@ let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '
     // 離した時: ブロック未設置なら handleAction(0,0) で防御発動、点灯解除
     // ── ブロック設置ガイド: ＠を押している間、ボタンのまわりに「矢印＋□」を出す ──
     // ＠ボタンの操作説明（押してスライド→離すとその方向にブロック）。スライド中の方向を明るく強調
-    const _BG_DIRS = { up: [0, -1, '↑'], down: [0, 1, '↓'], left: [-1, 0, '←'], right: [1, 0, '→'] };
+    // 矢印と□は文字ではなくSVGで描く（文字だと字形ごとに余白が違い、中心がずれて見えるため）
+    // 第3要素 = 右向き矢印を基準にした回転角
+    const _BG_DIRS = { up: [0, -1, -90], down: [0, 1, 90], left: [-1, 0, 180], right: [1, 0, 0] };
+    const _BG_ARROW_SVG = deg => `<svg width="16" height="16" viewBox="-8 -8 16 16" style="transform:rotate(${deg}deg)">`
+        + `<path d="M-6 0 H5 M1 -4 L5 0 L1 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const _BG_BLOCK_SVG = `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="1.5" y="1.5" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
     const _tcBlockGuide = document.createElement('div');
     _tcBlockGuide.id = 'tc-block-guide';
     const _bgItems = {};
     for (const k in _BG_DIRS) {
-        const a = document.createElement('span'); a.className = 'tc-bg-item'; a.textContent = _BG_DIRS[k][2];
-        const b = document.createElement('span'); b.className = 'tc-bg-item tc-bg-block'; b.textContent = SYMBOLS.BLOCK;
+        const a = document.createElement('span'); a.className = 'tc-bg-item'; a.innerHTML = _BG_ARROW_SVG(_BG_DIRS[k][2]);
+        const b = document.createElement('span'); b.className = 'tc-bg-item tc-bg-block'; b.innerHTML = _BG_BLOCK_SVG;
         _tcBlockGuide.appendChild(a); _tcBlockGuide.appendChild(b);
         _bgItems[k] = [a, b];
     }
