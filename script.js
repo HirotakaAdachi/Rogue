@@ -1666,7 +1666,7 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = false; // itch.io公開ビルド: true にするとテストモード解放を封鎖
-const _GAME_VERSION = 'v715';  // ← コミットごとに ?v=N と同期して更新する
+const _GAME_VERSION = 'v716';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
@@ -35146,10 +35146,13 @@ function scheduleEnemyFall(enemy, msg, killedByPlayer = false) {
     setTimeout(() => { handleEnemyDeath(enemy, killedByPlayer); }, 400);
 }
 
+const SPECIAL_E_MAX_LEVEL = 50; // 1階の特殊個体E（_growthDoubling）のレベル上限
+
 function _grantAllyExp(ally, exp) {
     ally.exp     = (ally.exp     || 0) + exp;
     ally.level   =  ally.level   || 1;
     ally.nextExp =  ally.nextExp || (ally.level * 10);
+    if (ally._growthDoubling && ally.level >= SPECIAL_E_MAX_LEVEL) { ally.exp = 0; return; } // 上限到達後は経験値をためない
     while (ally.exp >= ally.nextExp) {
         if (ally._hpGrowth  === undefined) ally._hpGrowth  = Math.floor(Math.random() * 48) + 3;
         if (ally._atkGrowth === undefined) ally._atkGrowth = Math.floor(Math.random() * 8)  + 1;
@@ -35164,6 +35167,11 @@ function _grantAllyExp(ally, exp) {
         if (ally._growthDoubling) {
             ally._hpGrowth  *= 2;
             ally._atkGrowth *= 2;
+            if (ally.level >= SPECIAL_E_MAX_LEVEL) {
+                ally.exp = 0;
+                spawnFloatingText(ally.x, ally.y - 1, 'MAX LEVEL', '#fbbf24', 1800);
+                break;
+            }
         }
     }
 }
@@ -43006,8 +43014,8 @@ async function enemyTurn() {
             continue;
         }
         if (e.isAlly && e.type !== 'AMBULATOR') {
-            // ドラゴンが近くにいる場合はおびえて逃げる
-            const nearDragon = floorLevel === 100
+            // ドラゴンが近くにいる場合はおびえて逃げる（1階の特殊個体E＝未来の魔王はおびえない）
+            const nearDragon = floorLevel === 100 && !e._growthDoubling
                 ? enemies.find(t => t._bossDragon && t.hp > 0 &&
                     Math.abs((t.x + 5) - e.x) + Math.abs(t.y - e.y) <= 7)
                 : null;
