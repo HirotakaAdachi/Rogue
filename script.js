@@ -47542,10 +47542,16 @@ window.addEventListener('keydown', async e => {
                         spawnFloatingText(player.x, player.y, `+${item.sellPrice}G`, "#4ade80");
                     } else if (item.type === 'sell_ring') {
                         const _sr = RINGS[item.ringIndex];
-                        player.ownedRings = player.ownedRings.filter(id => id !== item.ringId);
-                        // 装備中なら外す
+                        // 同種を複数所持できるため、売却する1個だけ取り除く
+                        const _soldRingIndex = player.ownedRings.indexOf(item.ringId);
+                        if (_soldRingIndex >= 0) player.ownedRings.splice(_soldRingIndex, 1);
+                        // 残りの所持数で維持できる装備は残し、超過分だけ外す（前のスロットを優先）
+                        let _remainingRingCount = player.ownedRings.filter(id => id === item.ringId).length;
                         for (let _si = 0; _si < player.equippedRings.length; _si++) {
-                            if (player.equippedRings[_si] === item.ringId) player.equippedRings[_si] = null;
+                            if (player.equippedRings[_si] === item.ringId) {
+                                if (_remainingRingCount > 0) _remainingRingCount--;
+                                else player.equippedRings[_si] = null;
+                            }
                         }
                         player.gold += item.sellPrice;
                         SOUNDS.GET_ITEM();
