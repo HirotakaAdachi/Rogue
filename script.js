@@ -183,16 +183,16 @@ function safeStorageGetInt(key, fallback, min = -Infinity, max = Infinity) {
 // ===== SECTION: CONSTANTS & CANVAS SETUP =====
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
-const logElement = document.getElementById('log');
-const hpElement = document.getElementById('hp');
-const lvElement = document.getElementById('lv');
-const staminaBar = document.getElementById('stamina-bar');
-const floorElement = document.getElementById('floor');
-const statsBar = document.querySelector('.stats-bar');
-const logRow = document.querySelector('.log-row');
 const gameWrapper = document.querySelector('.game-wrapper');
-statsBar.style.display = 'none';
-logRow.style.display = 'none';
+// ===== CANVAS HUD STATE =====
+let _hudLV = 1, _hudHP = '20/20', _hudHPColor = '#ededed';
+let _hudStamina = 100, _hudStaminaInfinite = false;
+let _hudFloor = '1/100', _hudFloorPrefix = 'FLOOR ';
+let _hudHasKey = false, _hudSwordCount = 0, _hudArmorCount = 0;
+let _hudGold = 0, _hudRingNames = [];
+let _hudBestFloor = 1;
+let _hudMinimapData = null;
+let _logLines = [];
 
 // 設定
 const TILE_SIZE = 20;
@@ -203,12 +203,15 @@ const COLS = 40;
 const DEEP_ENDING_FLOOR = Number.MAX_SAFE_INTEGER;
 const CANVAS_W = COLS * TILE_SIZE;
 const CANVAS_H = ROWS * TILE_SIZE + 2; // +2: 描画オフセット分を確保
+const HUD_TOP_H = 90;
+const HUD_BOT_H = 60;
+const CANVAS_H_FULL = HUD_TOP_H + CANVAS_H + HUD_BOT_H;
 const dpr = window.devicePixelRatio || 1;
 canvas.width  = CANVAS_W * dpr;
-canvas.height = CANVAS_H * dpr;
+canvas.height = CANVAS_H_FULL * dpr;
 // CSSのflexストレッチでcanvasが引き伸ばされないよう明示的にサイズを固定
 canvas.style.width  = CANVAS_W + 'px';
-canvas.style.height = CANVAS_H + 'px';
+canvas.style.height = CANVAS_H_FULL + 'px';
 ctx.scale(dpr, dpr);
 
 const SYMBOLS = {
@@ -259,7 +262,8 @@ const SYMBOLS = {
     DISPEL_FLOOR: '⊘', // ディスペル床: 踏むと魔導書バフを全消去（深層専用）
     HEAL_FLOOR:   '⊞', // 回復床: 乗っている間、毎ターン少量HP回復
     BLUE_KEY:     'K',  // 青い鍵: 青いブロックを一撃で破壊できる
-    BLUE_BLOCK:   '▦'  // 青いブロック: 青い鍵で一撃破壊可能な障害物
+    BLUE_BLOCK:   '▦', // 青いブロック: 青い鍵で一撃破壊可能な障害物
+    BLUE_HOLE:    '⊙', // 青い穴: ウィスプが入るとBlueBlockを全消去するスイッチ
 };
 
 // ===== SECTION: ENEMY TYPE SETS =====
@@ -268,7 +272,8 @@ const SYMBOLS = {
 const ENEMY_NO_CARRY_TYPES = new Set([
     'TURRET', 'HOPPER_TURRET', 'SPAWNER', 'WISP_SPAWNER',
     'MIMIC', 'FAIRY_MIMIC', 'RING_MIMIC', 'TOME_MIMIC', 'WEAPON_MIMIC', 'ARMOR_MIMIC', 'WALL_MIMIC', 'PAUPER_SHADE', 'KEY_RUNNER',
-    'DRAGON', 'SUMMONER', 'KING'
+    'DRAGON', 'SUMMONER', 'KING',
+    'WEAVER', // 軌跡が危険なため画面移動・フロア移動でついてこない
 ]);
 const ITEM_MIMIC_TYPES = new Set(['RING_MIMIC', 'TOME_MIMIC', 'WEAPON_MIMIC', 'ARMOR_MIMIC']);
 const ITEM_MIMIC_META = {
@@ -282,7 +287,7 @@ const ITEM_MIMIC_META = {
 const RINGS = [
   { id: 'FIRE_RING',     name: 'Fire Ring',     nameJa: '炎の指輪',     desc: 'Nullify lava, fire & Blaze attacks',   descJa: '溶岩・炎床・Fの攻撃を無効化',       cost: 700, symbol: '◎', color: '#ef4444' },
   { id: 'POISON_RING',   name: 'Poison Ring',   nameJa: '毒の指輪',     desc: 'Nullifies all poison swamp effects',   descJa: '毒沼の効果を完全に無効化する',           cost: 700, symbol: '◎', color: '#a855f7' },
-  { id: 'CRITICAL_RING', name: 'Critical Ring', nameJa: '会心の指輪',   desc: 'Critical hit chance 10% -> 20%',       descJa: '会心の一撃の確率が2倍に',             cost: 500, symbol: '◎', color: '#fbbf24' },
+  { id: 'CRITICAL_RING', name: 'Fatal Ring',    nameJa: '致命の指輪',   desc: 'Critical hit chance doubled.',          descJa: 'クリティカルダメージの確率が２倍になる。', cost: 500, symbol: '◎', color: '#fbbf24' },
   { id: 'STAMINA_RING',  name: 'Stamina Ring',  nameJa: '活力の指輪',   desc: 'Attack stamina cost 20 -> 12',         descJa: '攻撃時のスタミナ消費を軽減',         cost: 500, symbol: '◎', color: '#f97316' },
   { id: 'LIFE_RING',     name: 'Life Ring',     nameJa: '生命の指輪',   desc: 'Max HP +50%',                           descJa: '最大HPが50%上昇する',                     cost: 500, symbol: '◎', color: '#4ade80' },
   { id: 'TOUGH_RING',    name: 'Tough Ring',    nameJa: '堅守の指輪',   desc: 'Reduces all damage taken by 25%',       descJa: '被ダメージを25%軽減する',          cost: 500, symbol: '◎', color: '#94a3b8' },
@@ -298,6 +303,7 @@ const RINGS = [
   { id: 'TERRAIN_RING',  name: 'Terrain Ring',    nameJa: '地形の指輪',   desc: 'Cannot place or destroy walls, but can change floor terrain.\nIncompatible with some rings.', descJa: '壁の作成・破壊はできないが、地形を変更できる。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#84cc16' },
   { id: 'SUMMON_RING',  name: 'Summon Ring',     nameJa: '召喚の指輪',   desc: 'Block action summons an ally (defeated enemy types only).\nNormal dungeon: costs 10% MaxHP.\nLiminal Space: no HP cost.\nIncompatible with some rings.', descJa: '体力を消費し、討伐済みの敵を召喚。\n一部の指輪との併用は不可。', cost: 2500, symbol: '◎', color: '#a78bfa' },
   { id: 'PUSH_RING',    name: 'Push Ring',       nameJa: '壁押しの指輪', desc: 'Can push a small section of wall.', descJa: 'すこしの壁を押すことができる。', cost: 1000, symbol: '◎', color: '#78716c' },
+  { id: 'WALL_RING',    name: 'Room Builder Ring', nameJa: '部屋作りの指輪', desc: 'Place normal indestructible walls instead of blocks.\nFace a wall + place action to remove it.', descJa: '設置ブロックの代わりに破壊不能の壁を置く。\n壁に向けて設置操作すると消せる。', cost: 2000, symbol: '◎', color: '#2dd4bf' },
 ];
 
 // 同時装備不可の指輪ペア（片方を装備すると他方を弾く）
@@ -308,6 +314,7 @@ const RING_EXCLUSIVES = {
     STAR_RING:      ['TERRAIN_RING', 'WEB_RING', 'SUMMON_RING'],
     WEB_RING:       ['ICE_BLOCK_RING', 'BOMB_RING', 'STAR_RING', 'TERRAIN_RING', 'SUMMON_RING'],
     SUMMON_RING:    ['ICE_BLOCK_RING', 'BOMB_RING', 'STAR_RING', 'TERRAIN_RING', 'WEB_RING'],
+    WALL_RING:      ['WALL_RING', 'BOMB_RING', 'ICE_BLOCK_RING', 'STAR_RING', 'WEB_RING', 'TERRAIN_RING', 'SUMMON_RING'],
 };
 // 指輪の排他チェック（TERRAIN_RING×2・SUMMON_RING×2 は常に許可）
 function _checkRingConflict(idA, idB) {
@@ -389,7 +396,7 @@ const _SUMMON_CYCLE = [
 const RING_DOUBLED_DESC = {
     FIRE_RING:      { ja: '攻撃に炎ダメージを追加（+floor/3+4）＋30%でスタン', en: 'Bonus fire damage + 30% chance to stun' },
     POISON_RING:    { ja: '攻撃に毒ダメ追加 + 敵を5ターン鈍化',               en: 'Poison damage + slow enemy for 5 turns' },
-    CRITICAL_RING:  { ja: '会心率20% ＋ 二重装備で会心時即死',                  en: 'Critical rate 20%; double equip = instant kill on critical' },
+    CRITICAL_RING:  { ja: 'クリティカルの確率が２倍。二重装備でクリティカル時に即死。', en: 'Critical chance doubled. Double equip: instant kill on critical.' },
     STAMINA_RING:   { ja: '攻撃時のスタミナ消費 12 → 6',                      en: 'Attack stamina cost 12 → 6' },
     LIFE_RING:      { ja: '最大HP +50% → +100%',                             en: 'Max HP bonus 50% → 100%' },
     TOUGH_RING:     { ja: '被ダメージ -25% → -50%',                          en: 'Damage reduction 25% → 50%' },
@@ -565,7 +572,7 @@ const SOUNDS = {
         const noiseGain = audioCtx.createGain();
         noiseGain.gain.setValueAtTime(0.35, audioCtx.currentTime);
         noiseGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-        noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(audioCtx.destination);
+        noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(sfxMasterGain);
         noise.start();
         // 低音の「ドン」
         const osc = audioCtx.createOscillator();
@@ -575,7 +582,7 @@ const SOUNDS = {
         osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + duration);
         g.gain.setValueAtTime(0.25, audioCtx.currentTime);
         g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
-        osc.connect(g); g.connect(audioCtx.destination);
+        osc.connect(g); g.connect(sfxMasterGain);
         osc.start(); osc.stop(audioCtx.currentTime + duration);
     },
     GET_ITEM: () => playMelody([{ f: 880, d: 0.1 }, { f: 1760, d: 0.1 }]),
@@ -624,7 +631,7 @@ const SOUNDS = {
         noiseGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
         noise.connect(filter);
         filter.connect(noiseGain);
-        noiseGain.connect(audioCtx.destination);
+        noiseGain.connect(sfxMasterGain);
         noise.start();
 
         // 「とん」という低い歩行音を追加
@@ -635,7 +642,7 @@ const SOUNDS = {
         osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + duration);
         g.gain.setValueAtTime(0.04, audioCtx.currentTime);
         g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
-        osc.connect(g); g.connect(audioCtx.destination);
+        osc.connect(g); g.connect(sfxMasterGain);
         osc.start(); osc.stop(audioCtx.currentTime + duration);
     },
     TOME_READ: () => {
@@ -808,7 +815,7 @@ const SOUNDS = {
         nGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
         nGain.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 0.1);
         nGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
-        noise.connect(filter); filter.connect(nGain); nGain.connect(audioCtx.destination);
+        noise.connect(filter); filter.connect(nGain); nGain.connect(sfxMasterGain);
         noise.start(); noise.stop(audioCtx.currentTime + duration);
     },
     EXPLODE: () => {
@@ -1011,7 +1018,7 @@ const SOUNDS = {
         g.gain.setValueAtTime(0.35, t);
         g.gain.linearRampToValueAtTime(0.45, t + 0.08);
         g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-        osc.connect(lp); lp.connect(g); g.connect(audioCtx.destination);
+        osc.connect(lp); lp.connect(g); g.connect(sfxMasterGain);
         osc.start(t); osc.stop(t + 0.25);
         // 低域ノイズでゴッという空気感
         const bufferSize = audioCtx.sampleRate * 0.25;
@@ -1026,7 +1033,7 @@ const SOUNDS = {
         ng.gain.setValueAtTime(0.15, t);
         ng.gain.linearRampToValueAtTime(0.2, t + 0.08);
         ng.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-        noise.connect(nf); nf.connect(ng); ng.connect(audioCtx.destination);
+        noise.connect(nf); nf.connect(ng); ng.connect(sfxMasterGain);
         noise.start(t); noise.stop(t + 0.25);
     },
     DISPEL: () => {
@@ -1048,7 +1055,7 @@ const SOUNDS = {
             g2.gain.linearRampToValueAtTime(0.16, t + delay + 0.04);
             g2.gain.linearRampToValueAtTime(0.13, t + delay + 0.22);
             g2.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.3);
-            o.connect(lp); lp.connect(g2); g2.connect(audioCtx.destination);
+            o.connect(lp); lp.connect(g2); g2.connect(sfxMasterGain);
             o.start(t + delay); o.stop(t + delay + 0.32);
         });
         // --- 締め: しゅるるっとしぼむノイズ ---
@@ -1064,7 +1071,7 @@ const SOUNDS = {
         ng.gain.setValueAtTime(0, t + 1.1);
         ng.gain.linearRampToValueAtTime(0.18, t + 1.18);
         ng.gain.exponentialRampToValueAtTime(0.001, t + 1.55);
-        noise.connect(bp); bp.connect(ng); ng.connect(audioCtx.destination);
+        noise.connect(bp); bp.connect(ng); ng.connect(sfxMasterGain);
         noise.start(t + 1.1); noise.stop(t + 1.6);
     },
     MIMIC_REVEAL: () => {
@@ -1081,7 +1088,7 @@ const SOUNDS = {
         osc2.frequency.exponentialRampToValueAtTime(600, t + 0.3);
         g.gain.setValueAtTime(0.15, t);
         g.gain.linearRampToValueAtTime(0, t + 0.3);
-        osc1.connect(g); osc2.connect(g); g.connect(audioCtx.destination);
+        osc1.connect(g); osc2.connect(g); g.connect(sfxMasterGain);
         osc1.start(t); osc1.stop(t + 0.3);
         osc2.start(t); osc2.stop(t + 0.3);
     },
@@ -1095,7 +1102,7 @@ const SOUNDS = {
         osc.frequency.exponentialRampToValueAtTime(100, t + 0.4);
         g.gain.setValueAtTime(0.12, t);
         g.gain.linearRampToValueAtTime(0, t + 0.4);
-        osc.connect(g); g.connect(audioCtx.destination);
+        osc.connect(g); g.connect(sfxMasterGain);
         osc.start(t); osc.stop(t + 0.4);
     },
     SUMMON: () => {
@@ -1113,7 +1120,7 @@ const SOUNDS = {
         g.gain.setValueAtTime(0.15, t);
         g.gain.setValueAtTime(0.15, t + 0.2);
         g.gain.linearRampToValueAtTime(0, t + 0.5);
-        osc1.connect(g); osc2.connect(g); g.connect(audioCtx.destination);
+        osc1.connect(g); osc2.connect(g); g.connect(sfxMasterGain);
         osc1.start(t); osc1.stop(t + 0.5);
         osc2.start(t); osc2.stop(t + 0.5);
     },
@@ -1213,7 +1220,7 @@ const SOUNDS = {
         const ng = audioCtx.createGain();
         ng.gain.setValueAtTime(0.4, t);
         ng.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
-        noise.connect(bp); bp.connect(ng); ng.connect(audioCtx.destination);
+        noise.connect(bp); bp.connect(ng); ng.connect(sfxMasterGain);
         noise.start(t);
         // 2) 低音の唸り（不気味さ）
         const osc = audioCtx.createOscillator();
@@ -1223,7 +1230,7 @@ const SOUNDS = {
         const og = audioCtx.createGain();
         og.gain.setValueAtTime(0.25, t);
         og.gain.exponentialRampToValueAtTime(0.001, t + 0.65);
-        osc.connect(og); og.connect(audioCtx.destination);
+        osc.connect(og); og.connect(sfxMasterGain);
         osc.start(t); osc.stop(t + 0.65);
     },
     START_INTENSE_RUMBLE: () => {
@@ -1271,7 +1278,7 @@ const SOUNDS = {
         gain2.gain.setValueAtTime(0.0, now);
         gain2.gain.linearRampToValueAtTime(0.2, now + 0.15);
         gain2.gain.exponentialRampToValueAtTime(0.001, now + duration);
-        osc2.connect(gain2); gain2.connect(audioCtx.destination);
+        osc2.connect(gain2); gain2.connect(sfxMasterGain);
         osc2.start(now); osc2.stop(now + duration);
     },
     SLIDER_JUMP: () => {
@@ -1423,13 +1430,14 @@ const SOUNDS = {
 }
 
 // ===== SECTION: BGM SYSTEM =====
-let bgmEnabled = true;
+let bgmEnabled = safeStorageGet('rogue_bgm_enabled', null) !== 'false'; // 保存済みミュート状態を復元
 let bgmVolumeLevel = safeStorageGetInt('rogue_bgm_vol', 3, 1, 5); // 1-5
 let settingsRow = 0;    // 0=BGM, 1=BGM VOLUME, 2=SFX VOLUME, 3=LANGUAGE
 let _gameLang = 'en';  // 'en' or 'ja'
 let sfxVolumeLevel = safeStorageGetInt('rogue_sfx_vol', 3, 0, 5); // 0-5 (0=mute)
 const SFX_VOLUME_LEVELS = [0, 0.2, 0.4, 0.6, 0.8, 1.0];
 function getSFXVolume() { return SFX_VOLUME_LEVELS[sfxVolumeLevel]; }
+sfxMasterGain.gain.value = getSFXVolume(); // 起動時にlocalStorageの保存値を反映
 let bgmActive = false;
 let bgmFadeTimer = null;
 let bgmFadeInterval = null;
@@ -1570,6 +1578,7 @@ function playBossBGM(src) {
 
 function toggleBGM() {
     bgmEnabled = !bgmEnabled;
+    safeStorageSet('rogue_bgm_enabled', bgmEnabled);
     SOUNDS.SELECT();
     if (bgmEnabled && gameState === 'PLAYING') startBGM();
     else stopBGM();
@@ -1657,11 +1666,13 @@ let testModeVisible = false; // テストメニューの表示フラグ（秘密
 let titleSecretBuffer = []; // 秘密キーシーケンス入力バッファ
 const TITLE_SECRET_SEQ = ['1', '0', '2', '1']; // 1021
 const _ITCH_RELEASE = true; // itch.io公開ビルド: true にするとテストモード解放を封鎖
+const _GAME_VERSION = 'v724';  // ← コミットごとに ?v=N と同期して更新する
 let fixedStageSelection = 0; // FIXED_STAGE_SELECT画面のカーソル位置
 let fixedStageScrollOffset = 0; // FIXED_STAGE_SELECT画面のスクロールオフセット
 let _syncInputDx = 0; // 46F シンクロ: そのターンの入力方向X（実移動ではなく入力）
 let _syncInputDy = 0; // 46F シンクロ: そのターンの入力方向Y
 let isRoomTestMode = false; // 部屋タイプテストモードフラグ
+let _testStartFloor = null;  // ステージセレクト等のテスト開始時の開始階（通常プレイは null）
 let forcedLayoutType = null; // 強制レイアウトタイプ
 let currentDeepTheme = null; // 深遠フロアのテーマ（updateUI で表示）
 let isDeepTestMode = false;  // DEEP TEST モードフラグ
@@ -1695,6 +1706,7 @@ const FIXED_STAGES = [
     { floor: 25,  title: 'FROZEN GALE' },
     { floor: 26,  title: 'PEACEFUL VILLAGE',                   suppressWind: true },
     { floor: 27,  title: 'SMALL ROOM LABYRINTH' },
+    { floor: 28,  title: 'BLUE HOLE MAZE',               suppressWind: true },
     { floor: 29,  title: 'SEALED CHAMBER II' },
     { floor: 30,  title: 'GRAND FORGERY (MIMICS)' },
     { floor: 33,  title: 'FACTION RUINS',                  suppressWind: true },
@@ -1926,6 +1938,7 @@ const ROOM_TEST_TYPES = [
     { id: 'bizarre_all',        name: 'BIZARRE GALLERY',   nameJa: '奇妙ギャラリー',        prob: 'テスト専用', desc: '全20種の奇妙な部屋を5×5フロアで一覧。' },
     { id: 'latin_test',         name: 'LATIN CAVE',        nameJa: 'LATIN検証洞窟',         prob: 'テスト専用', desc: '全26種の小文字ラテン文字敵が棲む洞窟。各敵の挙動を観察・検証できる。' },
     { id: 'catacombs',          name: 'CATACOMBS',         nameJa: '地下墓地',              prob: 'テスト専用', desc: '壁に無数の小孔が穿たれた奇妙な固定レイアウト。ステージ1の隠し部屋と同一の構造。' },
+    { id: 'blue_key_room',      name: 'BLUE KEY ROOM',     nameJa: '青鍵テスト部屋',        prob: 'テスト専用', desc: '青い鍵(K)を拾って青いブロック(▦)を破壊し、穴へ到達する。Blue Key/Block機能の検証用。' },
 ];
 // マルチスクリーン専用タイプ（ROOM_TEST_TYPESに含まれないもの）の表示名マップ
 const SCREEN_TYPE_EXTRA = {
@@ -2009,6 +2022,9 @@ let ambushRooms = [];
 let movingFairies = []; // {x, y, screenX, screenY} - マルチスクリーン用自律移動妖精
 let movingMadmen = []; // {x, y, screenX, screenY, hp, ...} - マルチスクリーン追跡狂人
 let travelingAllies = []; // isAlly=true の仲間敵：画面をまたいでプレイヤーについてくる
+let _liminalSavedAllies = []; // リミナルスペース入室前に保存した仲間（帰還時に復元）
+let _savedAllies = [];         // セーブデータに保存された仲間スナップショット
+let _pendingRestoredAllies = []; // loadGame後、次のstartFloorTransitionで適用待ちの仲間
 let floorLevel = 1;
 let maxReachedFloor = 1; // 最高到達階層
 let _f24ItemsTaken = { sword: false, escape: false, warpText: false }; // 24F固定アイテム取得済みフラグ
@@ -2155,9 +2171,14 @@ let _ncDarkAlpha = 1.0; // NOVEL_CORRIDOR 暗闇フェード (0=真っ暗, 1=通
 let tomeAuraParams = { active: false, x: 0, y: 0, radius: 0, alpha: 0, particles: [] };
 let isSpacePressed = false;
 let spaceUsedForBlock = false; // 今回のスペース押下でブロックを置いたかフラグ
+let _wallRingLockDx = 0;     // WALL_RING: 最初に壁を置いた/消した方向 X（Space離すまで保持）
+let _wallRingLockDy = 0;     // WALL_RING: 最初に壁を置いた/消した方向 Y
+let _wallRingMode = 'place'; // WALL_RING: 'place'（設置ロック）/ 'remove'（除去ロック）
+let _wallRingPlacePending = false; // WALL_RING: 移動完了後に壁を設置するフラグ
 let gameOverAlpha = 0;
 let storyMessage = null; // { lines: [], alpha: 0, showNext: false }
 let isTutorialInputActive = false; // チュートリアル入力待ちフラグ
+let _openingSkipRequested = false; // オープニング全スキップフラグ
 let endingSkipLock = false; // エンディング中のスキップ防止フラグ
 let hasShownStage1Tut = false; // 1階スタミナチュートリアル済みフラグ
 let _warpedFromEscapeRoom = false; // リミナルスペースからワープした場合のチュートリアル抑制フラグ
@@ -2326,6 +2347,8 @@ let screenShake = { x: 0, y: 0, until: 0 };
 // マルチスクリーンマップ（90-99F ゼルダ式画面切替）
 let multiScreenMode = false;
 let screenGrid = null;               // { maps: [N][N], enemies: [N][N], wisps: [N][N] }
+let _blueDivCol = null;             // 98F列分断: 分断列インデックス（nullなら未設定/解除済み）
+let _blueDivSealRight = true;       // 98F列分断: true=右封鎖, false=左封鎖
 let currentScreen = { x: 0, y: 0 };
 let screenGridSize = 2;  // kept for deep/test modes that don't need non-square
 let screenGridCols = 2;
@@ -2421,6 +2444,10 @@ function loadGame() {
     if (data.terrainRingMerchantUnlocked) terrainRingMerchantUnlocked = data.terrainRingMerchantUnlocked;
     if (data.summonRingMerchantUnlocked) summonRingMerchantUnlocked = data.summonRingMerchantUnlocked;
     if (data.gameLang) _gameLang = data.gameLang;
+
+    // 仲間モンスターの復元
+    _pendingRestoredAllies = Array.isArray(data.savedAllies) ? data.savedAllies : [];
+    _liminalSavedAllies    = Array.isArray(data.liminalSavedAllies) ? data.liminalSavedAllies : [];
 
     // マップ・敵・フロア状態はコンティニュー時に再生成するためここでは復元しない
     updateUI();
@@ -3317,6 +3344,10 @@ async function enterEscapeRoom() {
 
     // --- エスケープルーム状態に移行 ---
     isInEscapeRoom = true;
+    // リミナルスペース入室前の仲間を保存（帰還時に復元するため）
+    _liminalSavedAllies = enemies
+        .filter(e => e.isAlly && e.hp > 0 && !e._dead && !ENEMY_NO_CARRY_TYPES.has(e.type))
+        .map(e => ({ ...e, body: undefined, offsetX: 0, offsetY: 0, flashUntil: 0 }));
     multiScreenMode = false;
     screenGrid = null;
     resetFloorHazardState();
@@ -3477,6 +3508,10 @@ function saveGame(notify = false) {
 
         // 言語設定
         gameLang: _gameLang,
+
+        // 仲間モンスター
+        savedAllies: _savedAllies,
+        liminalSavedAllies: _liminalSavedAllies,
     };
     safeStorageSetJSON('minimal_rogue_save', data);
     if (notify) addLog("[ Saved ]");
@@ -3684,170 +3719,64 @@ function updateUI() {
         if (windTimer === 4) addLog("The wind is picking up...");
     }
     isPlayerVisible = true; // 確実に表示状態にする
-    hpElement.innerText = `${player.hp}/${getPlayerMaxHp()}`;
-    if (player.isShielded) {
-        hpElement.style.color = '#4ade80'; // 守護状態は緑色に
-    } else if (player.isBreaker) {
-        hpElement.style.color = '#f59e0b'; // 壁破壊状態はオレンジに
-    } else {
-        hpElement.style.color = '#ededed';
-    }
-
-    const bar = document.getElementById('stamina-bar');
-    if (bar) {
-        if (player.isInfiniteStamina) {
-            bar.style.width = '100%';
-            bar.style.backgroundColor = '#fbbf24'; // 金色
-            bar.classList.add('stamina-glow-active');
-        } else {
-            bar.style.width = `${player.stamina}%`;
-            bar.style.backgroundColor = player.stamina < 30 ? '#f87171' : '#38bdf8';
-            bar.classList.remove('stamina-glow-active');
-        }
-    }
-    lvElement.innerText = player.level;
-    lvElement.style.color = '#ededed';
-    const bestFloorEl = document.getElementById('best-floor');
-    if (bestFloorEl) bestFloorEl.innerText = `B${formatFloor(maxReachedFloor)}F`;
-    const rtlEl = document.getElementById('room-type-label');
-    if (rtlEl) {
-        rtlEl.innerHTML = '';
-        rtlEl.style.display = 'none';
-    }
-    const _floorPfx = document.getElementById('floor-prefix');
-    if (_floorPfx) _floorPfx.style.display = isInEscapeRoom ? 'none' : '';
+    _hudHP = `${player.hp}/${getPlayerMaxHp()}`;
+    _hudHPColor = player.isShielded ? '#4ade80' : player.isBreaker ? '#f59e0b' : '#ededed';
+    _hudStamina = player.stamina;
+    _hudStaminaInfinite = player.isInfiniteStamina;
+    _hudLV = player.level;
+    _hudBestFloor = maxReachedFloor;
+    _hudHasKey = player.hasKey;
+    _hudSwordCount = player.swordCount;
+    _hudArmorCount = player.armorCount;
+    _hudGold = player.gold;
+    _hudRingNames = player.equippedRings
+        .map(id => id ? (RINGS.find(r => r.id === id)?.name || '') : '')
+        .filter(n => n);
     if (isInEscapeRoom) {
-        floorElement.innerText = 'LIMINAL SPACE';
+        _hudFloorPrefix = '';
+        _hudFloor = 'LIMINAL SPACE';
     } else if (floorLevel === -1) {
-        floorElement.innerText = 'END CREDITS';
+        _hudFloorPrefix = '';
+        _hudFloor = 'END CREDITS';
     } else if (floorLevel === 100) {
-        floorElement.innerText = "LAST FLOOR";
+        _hudFloorPrefix = 'FLOOR ';
+        _hudFloor = 'LAST FLOOR';
     } else if (floorLevel >= 101) {
-        floorElement.innerText = floorLevel === DEEP_ENDING_FLOOR ? 'TRUE BOTTOM' : `DEEP ${formatFloor(floorLevel)} [${currentScreen.x+1},${currentScreen.y+1}]`;
-    } else if (multiScreenMode) {
-        floorElement.innerText = `${floorLevel}/100`;
+        _hudFloorPrefix = '';
+        _hudFloor = floorLevel === DEEP_ENDING_FLOOR ? 'TRUE BOTTOM' : `DEEP ${formatFloor(floorLevel)} [${currentScreen.x+1},${currentScreen.y+1}]`;
     } else {
-        floorElement.innerText = `${floorLevel}/100`;
+        _hudFloorPrefix = 'FLOOR ';
+        _hudFloor = `${floorLevel}/100`;
     }
-
-    // スタイル定義 (記号用)
-    const symbolStyle = 'style="color: #38bdf8; font-weight: bold;"';
-
-    // 鍵の表示 (所持中のみ)
-    const keyNode = document.getElementById('key-status');
-    if (keyNode) {
-        keyNode.innerHTML = player.hasKey
-            ? `<span style="color: #fbbf24; font-weight: bold;">${SYMBOLS.KEY}</span>`
-            : '';
-    }
-
-    // 剣の表示 (常に表示)
-    const swordNode = document.getElementById('sword-status');
-    if (swordNode) {
-        swordNode.innerHTML = `<span ${symbolStyle}>${SYMBOLS.SWORD}</span>x${player.swordCount}`;
-    }
-
-    // 防具の表示 (常に表示)
-    const armorNode = document.getElementById('armor-status');
-    if (armorNode) {
-        armorNode.innerHTML = `<span ${symbolStyle}>${SYMBOLS.ARMOR}</span>x${player.armorCount}`;
-    }
-
-    // 妖精はインベントリ表示に移動したためstats-barには表示しない
-    const fairyNode = document.getElementById('fairy-status');
-    if (fairyNode) fairyNode.innerHTML = "";
-
-    // ゴールド表示
-    const goldNode = document.getElementById('gold-status');
-    if (goldNode) {
-        goldNode.innerText = `${player.gold}G`;
-    }
-    // 装備指輪表示
-    const ringNode = document.getElementById('ring-status');
-    if (ringNode) {
-        const names = player.equippedRings
-            .map(id => id ? (RINGS.find(r => r.id === id)?.name || '') : '')
-            .filter(n => n);
-        ringNode.innerText = names.length ? names.join('  /  ') : '';
-    }
-
-
-    updateMinimap();
+    _updateMinimapData();
 }
 
-function updateMinimap() {
-    const el = document.getElementById('minimap');
-    const _zmEl = document.getElementById('zoom-minimap');
-    if (!el) return;
+function _updateMinimapData() {
     if (isInEscapeRoom) {
-        el.style.display = 'block';
-        let html = '';
-        for (let r = 0; r < 2; r++) {
-            html += '<div class="minimap-row">';
-            for (let c = 0; c < 5; c++) {
-                const p = r * 5 + c;
-                const isCur = (p === _escapeRoomPage);
-                html += `<span style="color:#ededed">${isCur ? '■' : '□'}</span>`;
-            }
-            html += '</div>';
-        }
-        el.innerHTML = html;
-        if (_zmEl) { _zmEl.innerHTML = html; _zmEl.style.display = 'block'; }
+        _hudMinimapData = { type: 'escape', total: 10, current: _escapeRoomPage };
         return;
     }
     if (floorLevel === 1 || !multiScreenMode || !visitedScreens) {
-        el.style.display = 'none';
-        el.innerHTML = '';
-        if (_zmEl) { _zmEl.innerHTML = ''; _zmEl.style.display = 'none'; }
-        return;
+        _hudMinimapData = null; return;
     }
-    el.style.display = 'block';
-    let html = '';
-    // NOVEL_CORRIDOR: compact progress bar (100 cells would overflow)
     if (isRoomTestMode && forcedLayoutType === 'NOVEL_CORRIDOR') {
-        const cur = currentScreen.x;
-        const total = screenGridCols;
-        const winHalf = 9;
-        const winStart = Math.max(0, cur - winHalf);
-        const winEnd = Math.min(total - 1, cur + winHalf);
-        html += '<div class="minimap-row" style="white-space:nowrap">';
-        if (winStart > 0) html += '<span style="color:#555">…</span>';
-        for (let sx = winStart; sx <= winEnd; sx++) {
-            const isCurrent = (sx === cur);
-            const isVisited = visitedScreens[0][sx];
-            if (isCurrent) html += '<span style="color:#ededed">■</span>';
-            else if (isVisited) html += '<span style="color:#666">■</span>';
-            else html += '<span style="color:#ededed">□</span>';
-        }
-        if (winEnd < total - 1) html += '<span style="color:#555">…</span>';
-        html += `<span style="color:#888;font-size:0.85em;margin-left:6px">Room ${cur + 1}/${total}</span>`;
-        html += '</div>';
-        el.innerHTML = html;
+        _hudMinimapData = {
+            type: 'corridor',
+            current: currentScreen.x, total: screenGridCols,
+            winStart: Math.max(0, currentScreen.x - 9),
+            winEnd: Math.min(screenGridCols - 1, currentScreen.x + 9),
+            visited: visitedScreens
+        };
         return;
     }
-    for (let sy = 0; sy < screenGridRows; sy++) {
-        html += '<div class="minimap-row">';
-        for (let sx = 0; sx < screenGridCols; sx++) {
-            const _mmActive = !screenGrid || !screenGrid.active || screenGrid.active[sy][sx];
-            if (!_mmActive) {
-                html += '<span style="color:#222">　</span>';
-                continue;
-            }
-            const isCurrent = (sx === currentScreen.x && sy === currentScreen.y);
-            const isVisited = visitedScreens[sy][sx];
-            if (isCurrent) {
-                html += '<span style="color:#ededed">■</span>';
-            } else if (isVisited) {
-                html += '<span style="color:#666">■</span>';
-            } else {
-                html += '<span style="color:#ededed">□</span>';
-            }
-        }
-        html += '</div>';
-    }
-    el.innerHTML = html;
-    if (_zmEl) { _zmEl.innerHTML = html; _zmEl.style.display = 'block'; }
+    _hudMinimapData = {
+        type: 'grid',
+        rows: screenGridRows, cols: screenGridCols,
+        current: { x: currentScreen.x, y: currentScreen.y },
+        active: screenGrid?.active, visited: visitedScreens
+    };
 }
+function updateMinimap() { _updateMinimapData(); }
 
 // ===== SECTION: MAP GENERATION =====
 // Fixed floor blocks are inside initMap() as: if (floorLevel === N) { ... return; }
@@ -4664,6 +4593,175 @@ function _initLatinTestCave() {
     addLog("🔤 [→ right room] t(fire) u(copy@) v(fire) w(dig) x(bomb) y(diagonal) z(Z-drop)");
 }
 
+// BlueBlockが存在するのにBlueHoleかウィスプが欠けている場合、詰み防止でBlockを全除去
+function _validateBlueBlockSafety() {
+    if (multiScreenMode && screenGrid) {
+        // フロア全体チェック: BlueHoleとWispが存在するならBlueBlockはフロア全体で有効
+        // （クロススクリーン分割設計のBlueBlockを誤除去しないため）
+        let _globalHole = false, _globalWisp = false;
+        for (let _vsy = 0; _vsy < screenGridRows; _vsy++) {
+            for (let _vsx = 0; _vsx < screenGridCols; _vsx++) {
+                if (screenGrid.active && !screenGrid.active[_vsy][_vsx]) continue;
+                const _vsMap = screenGrid.maps[_vsy][_vsx];
+                if (!_vsMap) continue;
+                for (let y = 0; y < ROWS && !_globalHole; y++)
+                    for (let x = 0; x < COLS && !_globalHole; x++)
+                        if (_vsMap[y][x] === SYMBOLS.BLUE_HOLE) _globalHole = true;
+                if ((screenGrid.wisps[_vsy][_vsx] || []).length > 0) _globalWisp = true;
+            }
+        }
+        if (_globalHole && _globalWisp) {
+            // BlueHole+Wispあり → Spawner除去のみ行い、BlueBlockは保持
+            for (let sy = 0; sy < screenGridRows; sy++) {
+                for (let sx = 0; sx < screenGridCols; sx++) {
+                    if (screenGrid.active && !screenGrid.active[sy][sx]) continue;
+                    const sMap = screenGrid.maps[sy][sx];
+                    if (!sMap) continue;
+                    let hasHole = false;
+                    for (let y = 0; y < ROWS; y++)
+                        for (let x = 0; x < COLS; x++)
+                            if (sMap[y][x] === SYMBOLS.BLUE_HOLE) hasHole = true;
+                    if (hasHole) {
+                        screenGrid.enemies[sy][sx] = (screenGrid.enemies[sy][sx] || []).filter(
+                            e => e.type !== 'SPAWNER' && e.type !== 'WISP_SPAWNER'
+                        );
+                    }
+                }
+            }
+            return;
+        }
+        // BlueHole/Wispなし → スクリーン単位のクリーンアップ
+        for (let sy = 0; sy < screenGridRows; sy++) {
+            for (let sx = 0; sx < screenGridCols; sx++) {
+                if (screenGrid.active && !screenGrid.active[sy][sx]) continue;
+                const sMap = screenGrid.maps[sy][sx];
+                if (!sMap) continue;
+                let hasBlock = false, hasHole = false;
+                for (let y = 0; y < ROWS; y++)
+                    for (let x = 0; x < COLS; x++) {
+                        if (sMap[y][x] === SYMBOLS.BLUE_BLOCK) hasBlock = true;
+                        if (sMap[y][x] === SYMBOLS.BLUE_HOLE)  hasHole = true;
+                    }
+                const sWisps = (screenGrid.wisps[sy][sx] || []);
+                if (hasBlock && (!hasHole || sWisps.length === 0)) {
+                    for (let y = 0; y < ROWS; y++)
+                        for (let x = 0; x < COLS; x++)
+                            if (sMap[y][x] === SYMBOLS.BLUE_BLOCK) sMap[y][x] = SYMBOLS.FLOOR;
+                    console.warn(`[Safety] F${floorLevel} screen(${sx},${sy}): Blue Blocks removed — no Hole/Wisp.`);
+                }
+                // BlueHoleがある画面にSpawnerがいたら除去（即解決防止）
+                if (hasHole) {
+                    screenGrid.enemies[sy][sx] = (screenGrid.enemies[sy][sx] || []).filter(
+                        e => e.type !== 'SPAWNER' && e.type !== 'WISP_SPAWNER'
+                    );
+                }
+            }
+        }
+    } else {
+        let hasBlock = false, hasHole = false;
+        for (let y = 0; y < ROWS; y++)
+            for (let x = 0; x < COLS; x++) {
+                if (map[y][x] === SYMBOLS.BLUE_BLOCK) hasBlock = true;
+                if (map[y][x] === SYMBOLS.BLUE_HOLE)  hasHole = true;
+            }
+        if (hasBlock && (!hasHole || wisps.length === 0)) {
+            for (let y = 0; y < ROWS; y++)
+                for (let x = 0; x < COLS; x++)
+                    if (map[y][x] === SYMBOLS.BLUE_BLOCK) map[y][x] = SYMBOLS.FLOOR;
+            console.warn(`[Safety] F${floorLevel}: Blue Blocks removed — no Hole/Wisp.`);
+        }
+        // BlueHoleがある画面にSpawnerがいたら除去（即解決防止）
+        if (hasHole) {
+            enemies = enemies.filter(e => e.type !== 'SPAWNER' && e.type !== 'WISP_SPAWNER');
+        }
+    }
+}
+
+// Blue Hole画面にWEAVERがいる場合、WISP_SPAWNERを追加配置する
+// _validateBlueBlockSafety() の後に呼ぶこと（同関数がWISP_SPAWNERを除去するため）
+function _addWispSpawnerForWeaver() {
+    const _place = (sMap, sEnemies) => {
+        // Blue Hole があるか確認
+        let bhX = -1, bhY = -1;
+        _bhOuter: for (let y = 0; y < ROWS; y++)
+            for (let x = 0; x < COLS; x++)
+                if (sMap[y][x] === SYMBOLS.BLUE_HOLE) { bhX = x; bhY = y; break _bhOuter; }
+        if (bhX < 0) return;
+        // WEAVER がいるか確認
+        if (!sEnemies.some(e => e.type === 'WEAVER')) return;
+        // 既に WISP_SPAWNER がいたらスキップ
+        if (sEnemies.some(e => e.type === 'WISP_SPAWNER')) return;
+        // WISP_SPAWNER を配置（Blue Holeから5マス以上・FLOOR優先）
+        const _tryPlace = (minDist) => {
+            for (let t = 0; t < 400; t++) {
+                const cx = 2 + Math.floor(Math.random() * (COLS - 4));
+                const cy = 2 + Math.floor(Math.random() * (ROWS - 4));
+                if (sMap[cy][cx] !== SYMBOLS.FLOOR) continue;
+                if (Math.abs(cx-bhX)+Math.abs(cy-bhY) < minDist) continue;
+                if (sEnemies.some(e => e.x === cx && e.y === cy)) continue;
+                const wsHp = 60 + floorLevel * 3;
+                sEnemies.push({ type: 'WISP_SPAWNER', x: cx, y: cy,
+                    hp: wsHp, maxHp: wsHp, flashUntil: 0, offsetX: 0, offsetY: 0,
+                    expValue: 50, stunTurns: 0, spawnCooldown: 10, immuneToWind: true });
+                return true;
+            }
+            return false;
+        };
+        if (!_tryPlace(5)) _tryPlace(0); // 距離条件を緩和してリトライ
+    };
+    if (multiScreenMode && screenGrid) {
+        for (let sy = 0; sy < screenGridRows; sy++)
+            for (let sx = 0; sx < screenGridCols; sx++) {
+                if (screenGrid.active && !screenGrid.active[sy][sx]) continue;
+                const sMap = screenGrid.maps[sy][sx];
+                if (!sMap) continue;
+                _place(sMap, screenGrid.enemies[sy][sx] || []);
+            }
+    } else {
+        _place(map, enemies);
+    }
+}
+
+function _initBlueKeyRoom() {
+    // 全面を壁で初期化してから内側を床に
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) map[y][x] = SYMBOLS.WALL;
+    for (let y = 1; y < ROWS - 1; y++) for (let x = 1; x < COLS - 1; x++) map[y][x] = SYMBOLS.FLOOR;
+
+    // ── ウィスプ誘導用の島壁（ウィスプが壁に沿ってBLUE_HOLEへ向かうルートを形成）──
+    // 中央左寄りに縦壁（x=11, y=4..20）→ ウィスプがここに沿って動く
+    for (let y = 4; y <= 20; y++) map[y][11] = SYMBOLS.WALL;
+    // 島の下端（y=20, x=11..16）→ ウィスプを右へ折り返す
+    for (let x = 11; x <= 16; x++) map[20][x] = SYMBOLS.WALL;
+    // 島の右端下部（x=16, y=14..20）
+    for (let y = 14; y <= 20; y++) map[y][16] = SYMBOLS.WALL;
+
+    // ── BLUE_HOLE（スイッチ）を島の右上角に配置 ──
+    map[4][16] = SYMBOLS.BLUE_HOLE;
+
+    // ── 出口の穴をBlueBlockで囲む（周囲2マスの正方形外周）──
+    const _stX = 35, _stY = 12;
+    for (let dy = -2; dy <= 2; dy++)
+        for (let dx = -2; dx <= 2; dx++)
+            if (Math.abs(dx) === 2 || Math.abs(dy) === 2)
+                map[_stY + dy][_stX + dx] = SYMBOLS.BLUE_BLOCK;
+    map[_stY][_stX] = SYMBOLS.STAIRS;
+
+    // ── プレイヤー開始位置（左エリア左上）──
+    player.x = 4; player.y = 3;
+    player.offsetX = 0; player.offsetY = 0;
+    player.hasBlueKey = false;
+
+    // ── ウィスプ（L字壁の外周を右手法で巡回 — 縦壁右隣から南向きで即沿い開始）──
+    // x=12はL字縦壁(x=11)の右隣。南向きFOLLOWで右(西)を壁と確認しながら南下する
+    wisps.push({ x: 12, y: 5, dir: 2, mode: 'FOLLOW' }); // dir=2: 南
+
+    // 安全確認: BlueBlockがあればBlueHoleとWispが存在するかチェック
+    _validateBlueBlockSafety();
+
+    addLog("BLUE HOLE ROOM — Guide the blue wisp (※) into the Blue Hole (⊙).");
+    addKeyLog("When the wisp enters ⊙, all blue blocks (▦) vanish. Reach the hole (>).");
+}
+
 function _initCatacombsTest() {
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) map[y][x] = SYMBOLS.WALL;
 
@@ -4814,7 +4912,7 @@ function _initCatacombsTest() {
     const _tomePool = [SYMBOLS.HEAL_TOME, SYMBOLS.SPEED, SYMBOLS.CHARM, SYMBOLS.STEALTH, SYMBOLS.EXPLOSION, SYMBOLS.ESCAPE, SYMBOLS.BREAKER_TOME, SYMBOLS.GUARDIAN];
     for (const _t of _tomePool) if (Math.random() < 0.15) _placeItem(_t);
 
-    addLog("地下墓地 — CATACOMBS");
+    addLog("CATACOMBS");
     addLog("The air is cold and still. Something ancient rests here.");
 }
 
@@ -4920,6 +5018,9 @@ function initMap() {
     movingFairies = []; // 妖精をリセット
     movingMadmen = []; // 狂人をリセット
     travelingAllies = []; // 仲間をリセット
+    _liminalSavedAllies = []; // リミナルスペース保存仲間もリセット
+    _savedAllies = [];
+    _pendingRestoredAllies = [];
     _pushRingMoves = []; _pushRingRoomIdx = -1; _floorRooms = []; // PUSH_RING状態リセット
     player.hasKey = false;
     player.hasBlueKey = false;
@@ -4942,6 +5043,7 @@ function initMap() {
     multiScreenMode = false;
     screenGrid = null;
     visitedScreens = null;
+    _blueDivCol = null;
     ambushRooms = [];
     _dynamicWarpPad = null;
 
@@ -4957,12 +5059,15 @@ function initMap() {
     if (isRoomTestMode && forcedLayoutType === 'latin_test') { _initLatinTestCave(); return; }
     // ===== テストモード: 地下墓地（単画面固定レイアウト）=====
     if (isRoomTestMode && forcedLayoutType === 'catacombs') { _initCatacombsTest(); return; }
+    // ===== テストモード: 青鍵テスト部屋（単画面固定レイアウト）=====
+    if (isRoomTestMode && forcedLayoutType === 'blue_key_room') { _initBlueKeyRoom(); return; }
 
     // フロア20は固定マルチスクリーン（ランダム生成より先に実行して確実に固定レイアウトを使用）
     if (floorLevel === 20) { _initFloor20(); return; }
     // フロア24は固定シングルステージ（上下逆分割ハイブリッドの敵なしテスト）
     if (floorLevel === 24) { _initFloor24HybridVSplitInv(); return; }
     // フロア36は固定マルチスクリーン（上:入口/扉、下:R巡回部屋+KEY）
+    if (floorLevel === 28) { _initBlueKeyRoom(); return; }
     if (floorLevel === 36) { _initFloor36(); return; }
     // エンドクレジットステージ（負の階層番号 = 通常ゲームフローからは絶対に到達不可）
     if (floorLevel === -1) { _initFloorEndCredits(); return; }
@@ -5828,8 +5933,8 @@ function initMap() {
 
                 }
 
-                // 商人をたまに配置（8%: フロアにまだ商人がいない場合のみ）
-                if (!merchantState && Math.random() < 0.12 && castleRooms.length > 0) {
+                // 商人をたまに配置（深層101F+は商人なし）
+                if (!merchantState && floorLevel < 101 && Math.random() < 0.12 && castleRooms.length > 0) {
                     const shuffled = castleRooms.slice().sort(() => Math.random() - 0.5);
                     for (const cr of shuffled) {
                         let placed = false;
@@ -8953,10 +9058,7 @@ function initMap() {
 
             // ---- RIVER_CROSSING: 川を渡れ ----
             } else if (bizType === 'RIVER_CROSSING') {
-                // 横連結チェーンに属する場合は共有hazardを使用
-                const _rcHazard = (_riverChain && _riverChain.sy === sy && _riverChain.sxSet.has(sx))
-                    ? _riverChain.hazard
-                    : (Math.random() < 0.33 ? SYMBOLS.LAVA : Math.random() < 0.5 ? SYMBOLS.ICE : SYMBOLS.POISON);
+                const _rcHazard = Math.random() < 0.33 ? SYMBOLS.LAVA : Math.random() < 0.5 ? SYMBOLS.ICE : SYMBOLS.POISON;
                 const _rcY1=10, _rcY2=14;
                 for (let y=_rcY1;y<=_rcY2;y++) for (let x=2;x<COLS-2;x++) sMap[y][x]=_rcHazard;
                 const _rcMakeRooms=(yMin,yMax,count)=>{
@@ -10663,29 +10765,7 @@ function initMap() {
         const _ALL_BIZ_TYPES = ['MONSTER_FLOOD', 'LAVA_SEA', 'FROZEN_PRISON', 'VOID_CELLS', 'CHAOS_ALTAR', 'TREASURY', 'BOMBER_MAZE', 'SPAWNER_HIVE', 'MIMIC_GARDEN', 'ISLAND_HAZARD', 'RIVER_CROSSING', 'TIGHT_MAZE', 'FACTION_WAR', 'FLEEING_HORDE', 'CIRCLE_SIEGE', 'KINGS_COURT', 'VSCROLL_WALLS', 'BIG_AMBUSH_HALL', 'STAGE_39', 'BOAR_CHAMBER', 'LAVA_CROSS', 'VERTICAL_RIVER', 'MAZE_LAVA_CORNER', 'WARP_CELLS', 'WARP_CELLS_V', 'WARP_CELLS_H', 'AURA_MAZE', 'SOLAR_SYSTEM'];
         let _bizAllIdx = 0;
 
-        // ===== 川渡り横連結の事前選定 =====
-        // 水平方向に連続する2画面以上を1行選んで川渡りにする（縦には並ばない）
-        let _riverChain = null;
-        if (!isRoomTestMode) {
-            const _rcRows = [];
-            for (let _rsy = 0; _rsy < screenGridRows; _rsy++) {
-                let _run = [];
-                for (let _rsx = 0; _rsx < screenGridCols; _rsx++) {
-                    if (screenGrid.active[_rsy][_rsx]) { _run.push(_rsx); }
-                    else if (_run.length >= 2) { _rcRows.push({ sy: _rsy, sxList: _run.slice() }); _run = []; }
-                    else { _run = []; }
-                }
-                if (_run.length >= 2) _rcRows.push({ sy: _rsy, sxList: _run.slice() });
-            }
-            if (_rcRows.length > 0 && Math.random() < 0.25) {
-                const _rcPick = _rcRows[Math.floor(Math.random() * _rcRows.length)];
-                _riverChain = {
-                    sy: _rcPick.sy,
-                    sxSet: new Set(_rcPick.sxList),
-                    hazard: Math.random() < 0.33 ? SYMBOLS.LAVA : Math.random() < 0.5 ? SYMBOLS.ICE : SYMBOLS.POISON
-                };
-            }
-        }
+        // RIVER_CROSSING は単発ビザールスクリーンとして generateBizarreScreen の通常プールから出現する
 
         for (let sy = 0; sy < screenGridRows; sy++) {
             for (let sx = 0; sx < screenGridCols; sx++) {
@@ -11237,22 +11317,10 @@ function initMap() {
                     if (screenGrid.ambushRooms) screenGrid.ambushRooms[sy][sx] = result.sAmbushRooms || [];
                     continue;
                 }
-                // 川渡り横連結: 事前選定画面は強制的にRIVER_CROSSING
-                if (_riverChain && sy === _riverChain.sy && _riverChain.sxSet.has(sx) && !isSpecial) {
-                    const result = generateBizarreScreen(sx, sy, 'RIVER_CROSSING');
-                    screenGrid.maps[sy][sx] = result.sMap;
-                    screenGrid.enemies[sy][sx] = result.sEnemies;
-                    screenGrid.wisps[sy][sx] = result.sWisps;
-                    screenGrid.tempWalls[sy][sx] = result.sTempWalls || [];
-                    if (screenGrid.types) screenGrid.types[sy][sx] = 'RIVER_CROSSING';
-                    allRooms[`${sx},${sy}`] = result.rooms;
-                    if (screenGrid.ambushRooms) screenGrid.ambushRooms[sy][sx] = result.sAmbushRooms || [];
-                    continue;
-                }
-                // 奇妙な場所（50F以上・特殊画面以外。101F+はテーマで変動、90〜99Fは高確率、50〜89Fは低確率）
+                // 奇妙な場所（50F以上・特殊画面以外。101F+はテーマで変動、98Fは10x10なので低確率、90〜97Fは25%、50〜89Fは低確率）
                 const _bizChance = floorLevel >= 101
                     ? (_sTheme ? _sTheme.bizarreChance : 0.25)
-                    : floorLevel >= 98 ? 0.40  // 98F(5×5): 40%
+                    : floorLevel >= 98 ? 0.10  // 98F(10×10): 10%（100画面分のため低めに）
                     : floorLevel >= 90 ? 0.25  // 90〜97F: 25%
                     : 0.06;                    // 50〜89F: 6%
                 if (!isSpecial && Math.random() < _bizChance) {
@@ -12887,6 +12955,772 @@ function initMap() {
             }
         }
 
+        // ----- FLOOR 98: 画面ごとの敵種類を最大4種類に絞る -----
+        // generateOneScreen + 各種スポーン後にすべての画面に適用。
+        // 体数の多い上位4種を残し、それ以外の敵を除去する。
+        if (floorLevel === 98 && multiScreenMode) {
+            for (let _sy = 0; _sy < screenGridRows; _sy++) {
+                for (let _sx = 0; _sx < screenGridCols; _sx++) {
+                    if (!screenGrid.active[_sy][_sx]) continue;
+                    const _e98 = screenGrid.enemies[_sy][_sx];
+                    if (!_e98 || _e98.length === 0) continue;
+                    // タイプ別の体数を集計
+                    const _cnt98 = {};
+                    for (const e of _e98) _cnt98[e.type] = (_cnt98[e.type] || 0) + 1;
+                    const _types98 = Object.keys(_cnt98);
+                    if (_types98.length <= 4) continue;
+                    // 体数の多い順に上位4種を選択
+                    const _keep98 = new Set(
+                        _types98.sort((a, b) => _cnt98[b] - _cnt98[a]).slice(0, 4)
+                    );
+                    screenGrid.enemies[_sy][_sx] = _e98.filter(e => _keep98.has(e.type));
+                }
+            }
+        }
+
+        // ----- ランダムフロア: 各スクリーンのBREAKER(W)を最大2体に制限 -----
+        // breaker_room タイプの画面と固定ステージは除外する
+        if (!FIXED_STAGE_FLOORS.includes(floorLevel)) {
+            for (let _bsy = 0; _bsy < screenGridRows; _bsy++) {
+                for (let _bsx = 0; _bsx < screenGridCols; _bsx++) {
+                    if (!screenGrid.active[_bsy][_bsx]) continue;
+                    const _bsType = screenGrid.types?.[_bsy]?.[_bsx];
+                    if (_bsType === 'breaker' || _bsType === 'breaker_room') continue;
+                    const _bsArr = screenGrid.enemies[_bsy][_bsx];
+                    if (!_bsArr) continue;
+                    let _bsCnt = 0;
+                    screenGrid.enemies[_bsy][_bsx] = _bsArr.filter(e => {
+                        if (e.type !== 'BREAKER') return true;
+                        return ++_bsCnt <= 2;
+                    });
+                }
+            }
+        }
+
+        // ===== BlueBlock ヘルパー関数（98F・42F・43-97F・101F+・3×1 共通） =====
+        const _relocateEnemiesFromBlocks = (sMap, sEnemies) => {
+            for (const _e of (sEnemies || [])) {
+                if (sMap[_e.y]?.[_e.x] !== SYMBOLS.BLUE_BLOCK) continue;
+                for (let _r = 1; _r <= 6; _r++) {
+                    let _moved = false;
+                    for (let _dy = -_r; _dy <= _r && !_moved; _dy++)
+                        for (let _dx = -_r; _dx <= _r && !_moved; _dx++) {
+                            if (Math.abs(_dy) !== _r && Math.abs(_dx) !== _r) continue;
+                            const _ny = _e.y+_dy, _nx = _e.x+_dx;
+                            if (_ny<1||_ny>=ROWS-1||_nx<1||_nx>=COLS-1) continue;
+                            if (sMap[_ny][_nx] !== SYMBOLS.FLOOR) continue;
+                            if (sEnemies.some(oe => oe !== _e && oe.x === _nx && oe.y === _ny)) continue;
+                            _e.x = _nx; _e.y = _ny; _moved = true;
+                        }
+                    if (_moved || sMap[_e.y]?.[_e.x] !== SYMBOLS.BLUE_BLOCK) break;
+                }
+            }
+        };
+        const _placeBlueHoleRobust = (sMap, exitX, exitY) => {
+            const _tiers = [
+                (y, x) => Math.abs(x-exitX)+Math.abs(y-exitY)>=5 &&
+                    [[0,1],[0,-1],[1,0],[-1,0]].filter(([dy,dx])=>{const t=sMap[y+dy]?.[x+dx];return t&&t!==SYMBOLS.WALL&&t!==SYMBOLS.BLUE_BLOCK;}).length>=3,
+                (y, x) => Math.abs(x-exitX)+Math.abs(y-exitY)>=3,
+                (y, x) => !(x===exitX && y===exitY),
+            ];
+            for (const _cond of _tiers) {
+                const _cands = [];
+                for (let _hy=2;_hy<ROWS-2;_hy++) for (let _hx=2;_hx<COLS-2;_hx++) {
+                    if (sMap[_hy][_hx]!==SYMBOLS.FLOOR) continue;
+                    if (_cond(_hy,_hx)) _cands.push({x:_hx,y:_hy});
+                }
+                if (_cands.length > 0) {
+                    const _h = _cands[Math.floor(Math.random()*_cands.length)];
+                    for (let _dy=-1;_dy<=1;_dy++) for (let _dx=-1;_dx<=1;_dx++) {
+                        const _cy=_h.y+_dy,_cx=_h.x+_dx;
+                        if (_cy>=1&&_cy<ROWS-1&&_cx>=1&&_cx<COLS-1&&sMap[_cy][_cx]!==SYMBOLS.BLUE_BLOCK)
+                            sMap[_cy][_cx]=SYMBOLS.FLOOR;
+                    }
+                    sMap[_h.y][_h.x]=SYMBOLS.BLUE_HOLE;
+                    for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
+                        if (sMap[_ly][_lx]===SYMBOLS.LAVA) sMap[_ly][_lx]=SYMBOLS.FLOOR;
+                    return _h;
+                }
+            }
+            return null;
+        };
+        const _placeWispRobust = (sMap, wispArr, holeX, holeY) => {
+            const _tries = [
+                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=5 &&
+                    [[0,1],[0,-1],[1,0],[-1,0]].some(([dy,dx])=>sMap[y+dy]?.[x+dx]===SYMBOLS.WALL),
+                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=5,
+                (y, x) => Math.abs(x-holeX)+Math.abs(y-holeY)>=3,
+            ];
+            for (const _cond of _tries) {
+                const _cands = [];
+                for (let _wy=2;_wy<ROWS-2;_wy++) for (let _wx=2;_wx<COLS-2;_wx++) {
+                    if (sMap[_wy][_wx]!==SYMBOLS.FLOOR) continue;
+                    if (_cond(_wy,_wx)) _cands.push({x:_wx,y:_wy});
+                }
+                if (_cands.length > 0) {
+                    const _w = _cands[Math.floor(Math.random()*_cands.length)];
+                    wispArr.push({x:_w.x, y:_w.y, dir:1, mode:'FOLLOW'});
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // ----- FLOOR 98: BLUE DIVISION — スタート列の通路を封鎖 -----
+        // 左寄りスタート(列0〜4): 右通路を封鎖 → 右ゾーンへはWisp必要
+        // 右寄りスタート(列5〜9): 左通路を封鎖 → 左ゾーンへはWisp必要
+        if (floorLevel === 98 && multiScreenMode && screenGridCols >= 2) {
+            const _f98PassH = [11, 12, 13];
+            const _f98Safe = new Set([SYMBOLS.STAIRS, SYMBOLS.DOOR, SYMBOLS.KEY,
+                SYMBOLS.BLUE_KEY, SYMBOLS.MERCHANT]);
+            const _f98DivCol = _ssX;
+            // スタートが左寄りなら右通路、右寄りなら左通路を封鎖
+            const _f98SealRight = _ssX < Math.ceil(screenGridCols / 2);
+            const _f98PassX = _f98SealRight ? [COLS-2, COLS-3] : [1, 2];
+
+            // 妖精を通路タイルから画面内側のFLOORへ退かすヘルパー
+            const _f98MoveFairy = (sMap) => {
+                for (let _fy = 2; _fy < ROWS-2; _fy++)
+                    for (let _fx = 2; _fx < COLS-6; _fx++)
+                        if (sMap[_fy][_fx] === SYMBOLS.FLOOR) {
+                            sMap[_fy][_fx] = SYMBOLS.FAIRY;
+                            return true;
+                        }
+                return false;
+            };
+
+            // 封鎖列の全アクティブ画面: 対象通路をBlueBlockで封鎖
+            for (let _f98Sy = 0; _f98Sy < screenGridRows; _f98Sy++) {
+                if (!screenGrid.active[_f98Sy][_f98DivCol]) continue;
+                const _f98Map = screenGrid.maps[_f98Sy][_f98DivCol];
+                if (!_f98Map) continue;
+                for (const _py of _f98PassH) {
+                    for (const _px of _f98PassX) {
+                        const _tile = _f98Map[_py][_px];
+                        if (_f98Safe.has(_tile)) continue;
+                        if (_tile === SYMBOLS.FAIRY) _f98MoveFairy(_f98Map);
+                        _f98Map[_py][_px] = SYMBOLS.BLUE_BLOCK;
+                    }
+                }
+            }
+
+            // 敵をBlueBlock上から退かす（封鎖列の全スクリーン）
+            for (let _f98ESy = 0; _f98ESy < screenGridRows; _f98ESy++) {
+                if (!screenGrid.active[_f98ESy][_f98DivCol]) continue;
+                const _f98EM = screenGrid.maps[_f98ESy][_f98DivCol];
+                if (_f98EM) _relocateEnemiesFromBlocks(_f98EM, screenGrid.enemies[_f98ESy][_f98DivCol]);
+            }
+            // BlueHole: 封鎖列のスタート画面以外・奇妙な部屋タイプを除外してランダム選択
+            const _f98SafeTypes = new Set([null, undefined, 'dungeon', 'maze', 'castle', 'spiral', 'breaker_room']);
+            const _f98HoleSyCands = [];
+            for (let _sy = 0; _sy < screenGridRows; _sy++) {
+                if (_sy === _ssY) continue;
+                if (!screenGrid.active[_sy][_f98DivCol]) continue;
+                if (!screenGrid.maps[_sy][_f98DivCol]) continue;
+                const _f98T = screenGrid.types?.[_sy]?.[_f98DivCol];
+                if (!_f98SafeTypes.has(_f98T)) continue; // 奇妙な部屋は除外
+                _f98HoleSyCands.push(_sy);
+            }
+            if (_f98HoleSyCands.length > 0) {
+                const _f98HoleSy = _f98HoleSyCands[Math.floor(Math.random() * _f98HoleSyCands.length)];
+                const _f98HMap = screenGrid.maps[_f98HoleSy][_f98DivCol];
+
+                // 開けた床（右端6マス除外・4方向3つ以上開放）
+                const _f98HoleCands = [];
+                for (let _hy = 3; _hy < ROWS-3; _hy++) {
+                    for (let _hx = 3; _hx < COLS-6; _hx++) {
+                        if (_f98HMap[_hy][_hx] !== SYMBOLS.FLOOR) continue;
+                        let _openCnt = 0;
+                        for (const [_dy, _dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+                            const _t = _f98HMap[_hy+_dy]?.[_hx+_dx];
+                            if (_t && _t !== SYMBOLS.WALL && _t !== SYMBOLS.BLUE_BLOCK) _openCnt++;
+                        }
+                        if (_openCnt >= 3) _f98HoleCands.push({ x: _hx, y: _hy });
+                    }
+                }
+                if (_f98HoleCands.length > 0) {
+                    const _f98Hole = _f98HoleCands[Math.floor(Math.random() * _f98HoleCands.length)];
+                    for (let _dy = -1; _dy <= 1; _dy++)
+                        for (let _dx = -1; _dx <= 1; _dx++) {
+                            const _cy = _f98Hole.y+_dy, _cx = _f98Hole.x+_dx;
+                            if (_cy>=1 && _cy<ROWS-1 && _cx>=1 && _cx<COLS-1 &&
+                                _f98HMap[_cy][_cx] !== SYMBOLS.BLUE_BLOCK)
+                                _f98HMap[_cy][_cx] = SYMBOLS.FLOOR;
+                        }
+                    _f98HMap[_f98Hole.y][_f98Hole.x] = SYMBOLS.BLUE_HOLE;
+                    // 溶岩床を除去（ウィスプ誘導のためのブロック設置を妨げないよう）
+                    for (let _ly = 0; _ly < ROWS; _ly++)
+                        for (let _lx = 0; _lx < COLS; _lx++)
+                            if (_f98HMap[_ly][_lx] === SYMBOLS.LAVA) _f98HMap[_ly][_lx] = SYMBOLS.FLOOR;
+
+                    // Wisp: BlueHoleから5マス以上・壁隣接（FOLLOW右手法）
+                    const _f98WispCands = [];
+                    for (let _wy = 2; _wy < ROWS-2; _wy++) {
+                        for (let _wx = 2; _wx < COLS-4; _wx++) {
+                            if (_f98HMap[_wy][_wx] !== SYMBOLS.FLOOR) continue;
+                            if (Math.abs(_wx-_f98Hole.x)+Math.abs(_wy-_f98Hole.y) < 5) continue;
+                            const _nearWall = [[0,1],[0,-1],[1,0],[-1,0]].some(([_dy,_dx]) =>
+                                _f98HMap[_wy+_dy]?.[_wx+_dx] === SYMBOLS.WALL);
+                            if (_nearWall) _f98WispCands.push({ x: _wx, y: _wy });
+                        }
+                    }
+                    if (_f98WispCands.length > 0) {
+                        const _f98Wisp = _f98WispCands[Math.floor(Math.random() * _f98WispCands.length)];
+                        screenGrid.wisps[_f98HoleSy][_f98DivCol].push({
+                            x: _f98Wisp.x, y: _f98Wisp.y, dir: 1, mode: 'FOLLOW'
+                        });
+                        addKeyLog(_f98SealRight
+                            ? "⊙ The right zone is sealed by Blue Blocks. Find the Wisp — guide it to ⊙."
+                            : "⊙ The left zone is sealed by Blue Blocks. Find the Wisp — guide it to ⊙.");
+                    }
+                }
+            }
+            // 安全チェック: Hole/Wisp未配置なら封鎖列のBlueBlockを全除去
+            // ※ _validateBlueBlockSafety()はスクリーン単位なので呼ばない
+            {
+                let _f98HasHole = false, _f98HasWisp = false;
+                for (let _sy = 0; _sy < screenGridRows; _sy++) {
+                    if (!screenGrid.active[_sy][_f98DivCol]) continue;
+                    const _m = screenGrid.maps[_sy][_f98DivCol];
+                    if (!_m) continue;
+                    for (let y = 0; y < ROWS; y++)
+                        for (let x = 0; x < COLS; x++)
+                            if (_m[y][x] === SYMBOLS.BLUE_HOLE) _f98HasHole = true;
+                    if ((screenGrid.wisps[_sy][_f98DivCol] || []).length > 0) _f98HasWisp = true;
+                }
+                if (!_f98HasHole || !_f98HasWisp) {
+                    for (let _sy = 0; _sy < screenGridRows; _sy++) {
+                        if (!screenGrid.active[_sy][_f98DivCol]) continue;
+                        const _m = screenGrid.maps[_sy][_f98DivCol];
+                        if (!_m) continue;
+                        for (let y = 0; y < ROWS; y++)
+                            for (let x = 0; x < COLS; x++)
+                                if (_m[y][x] === SYMBOLS.BLUE_BLOCK) _m[y][x] = SYMBOLS.FLOOR;
+                    }
+                    console.warn(`[98F Safety] Blue Division removed — no Hole or Wisp placed.`);
+                } else {
+                    // 分断成立: ワープ制限用にグローバルを設定
+                    _blueDivCol = _f98DivCol;
+                    _blueDivSealRight = _f98SealRight;
+                }
+            }
+        }
+
+        // ----- DEEP FLOOR (101F+): SUB-GRID SPLIT — 3×3/4×4のスクリーンまとまりで列/行分割 (30%) -----
+        // グリッド内で全スクリーンがアクティブな3×3または4×4の矩形を探し、
+        // その中の1列(V)または1行(H)の右/下通路をBlueBlockで封鎖する。
+        // サブ領域外は無傷のため迂回路が必ず存在し詰みなし・ワープ安全。
+        let _deepBlueDone = false;
+        if (floorLevel >= 101 && multiScreenMode &&
+            Math.random() < (isRoomTestMode ? 1.0 : 0.30)) {
+
+            const _dpSafeTypes = new Set([null, undefined, 'dungeon', 'maze', 'castle', 'spiral', 'breaker_room']);
+            const _dpPassH = [11, 12, 13];   // 左右通路の行
+            const _dpPassV = [18, 19, 20, 21]; // 上下通路の列
+            const _dpSafe = new Set([SYMBOLS.STAIRS, SYMBOLS.DOOR, SYMBOLS.KEY, SYMBOLS.BLUE_KEY, SYMBOLS.MERCHANT]);
+
+            // 妖精を内側FLOORへ退かすヘルパー
+            const _dpMoveFairy = (sMap) => {
+                for (let _fy = 2; _fy < ROWS-2; _fy++)
+                    for (let _fx = 2; _fx < COLS-4; _fx++)
+                        if (sMap[_fy][_fx] === SYMBOLS.FLOOR) { sMap[_fy][_fx] = SYMBOLS.FAIRY; return; }
+            };
+
+            // 3×3 → 4×4 の順でアクティブな矩形サブ領域を探す
+            const _dpSubCands = [];
+            for (const _sz of [3, 4]) {
+                for (let _ry = 0; _ry <= screenGridRows - _sz; _ry++) {
+                    for (let _rx = 0; _rx <= screenGridCols - _sz; _rx++) {
+                        let _ok = true;
+                        for (let _dy = 0; _dy < _sz && _ok; _dy++)
+                            for (let _dx = 0; _dx < _sz && _ok; _dx++)
+                                if (!screenGrid.active[_ry+_dy][_rx+_dx]) _ok = false;
+                        if (_ok) _dpSubCands.push({ rx: _rx, ry: _ry, sz: _sz });
+                    }
+                }
+                if (_dpSubCands.length > 0) break; // 3×3で見つかれば4×4は試さない
+            }
+
+            if (_dpSubCands.length > 0) {
+                const _dpSub = _dpSubCands[Math.floor(Math.random() * _dpSubCands.length)];
+                const { rx: _dpRx, ry: _dpRy, sz: _dpSz } = _dpSub;
+                const _dpSplit = Math.random() < 0.5 ? 'V' : 'H';
+
+                // V: サブ領域の中央線（cx列の右通路 + cx+1列の左通路）を両側から封鎖
+                // H: 中央線（cy行の下通路 + cy+1行の上通路）を両側から封鎖
+                // → 真の分割壁。サブ領域外は一切手を付けないため迂回路あり。
+                const _dpDivIdx = Math.floor((_dpSz - 1) / 2); // sz=3→1, sz=4→1
+                const _dpBlockedScreens = []; // BlueHole候補スクリーン
+
+                const _dpSetBlock = (_m, _y, _x) => {
+                    if (_y < 1 || _y >= ROWS-1 || _x < 1 || _x >= COLS-1) return;
+                    const _t = _m[_y][_x];
+                    if (_dpSafe.has(_t)) return;
+                    if (_t === SYMBOLS.FAIRY) _dpMoveFairy(_m);
+                    _m[_y][_x] = SYMBOLS.BLUE_BLOCK;
+                };
+
+                if (_dpSplit === 'V') {
+                    const _dpCx  = _dpRx + _dpDivIdx;     // 左側列: 右通路を封鎖
+                    const _dpCx1 = _dpCx + 1;              // 右側列: 左通路を封鎖
+                    for (let _dsy = _dpRy; _dsy < _dpRy + _dpSz; _dsy++) {
+                        // 左側列の右通路
+                        const _mL = screenGrid.maps[_dsy][_dpCx];
+                        if (_mL) {
+                            for (const _py of _dpPassH) { _dpSetBlock(_mL, _py, COLS-2); _dpSetBlock(_mL, _py, COLS-3); }
+                            if (!(_dpCx === _ssX && _dsy === _ssY) &&
+                                _dpSafeTypes.has(screenGrid.types?.[_dsy]?.[_dpCx]))
+                                _dpBlockedScreens.push({ sx: _dpCx, sy: _dsy });
+                        }
+                        // 右側列の左通路（サブ領域内に存在する場合）
+                        if (_dpCx1 < _dpRx + _dpSz) {
+                            const _mR = screenGrid.maps[_dsy][_dpCx1];
+                            if (_mR) for (const _py of _dpPassH) { _dpSetBlock(_mR, _py, 1); _dpSetBlock(_mR, _py, 2); }
+                        }
+                    }
+                } else {
+                    const _dpCy  = _dpRy + _dpDivIdx;     // 上側行: 下通路を封鎖
+                    const _dpCy1 = _dpCy + 1;              // 下側行: 上通路を封鎖
+                    for (let _dsx = _dpRx; _dsx < _dpRx + _dpSz; _dsx++) {
+                        // 上側行の下通路
+                        const _mU = screenGrid.maps[_dpCy][_dsx];
+                        if (_mU) {
+                            for (const _px of _dpPassV) { _dpSetBlock(_mU, ROWS-2, _px); _dpSetBlock(_mU, ROWS-3, _px); }
+                            if (!(_dsx === _ssX && _dpCy === _ssY) &&
+                                _dpSafeTypes.has(screenGrid.types?.[_dpCy]?.[_dsx]))
+                                _dpBlockedScreens.push({ sx: _dsx, sy: _dpCy });
+                        }
+                        // 下側行の上通路（サブ領域内に存在する場合）
+                        if (_dpCy1 < _dpRy + _dpSz) {
+                            const _mD = screenGrid.maps[_dpCy1][_dsx];
+                            if (_mD) for (const _px of _dpPassV) { _dpSetBlock(_mD, 1, _px); _dpSetBlock(_mD, 2, _px); }
+                        }
+                    }
+                }
+
+                // 敵をBlueBlock上から退かす（封鎖スクリーン全て）
+                for (const _dpES of _dpBlockedScreens)
+                    _relocateEnemiesFromBlocks(
+                        screenGrid.maps[_dpES.sy][_dpES.sx],
+                        screenGrid.enemies[_dpES.sy][_dpES.sx]);
+                // BlueHole: 封鎖スクリーンの1つ（スタート画面除外済み）に配置
+                const _dpHoleSrcCands = _dpBlockedScreens.filter(
+                    s => !(s.sx === _ssX && s.sy === _ssY));
+                if (_dpHoleSrcCands.length > 0) {
+                    const _dpHoleSrc = _dpHoleSrcCands[Math.floor(Math.random() * _dpHoleSrcCands.length)];
+                    const _dpHMap = screenGrid.maps[_dpHoleSrc.sy][_dpHoleSrc.sx];
+
+                    const _dpHoleCands = [];
+                    for (let _hy = 2; _hy < ROWS-2; _hy++) {
+                        for (let _hx = 2; _hx < COLS-4; _hx++) {
+                            if (_dpHMap[_hy][_hx] !== SYMBOLS.FLOOR) continue;
+                            let _open = 0;
+                            for (const [_dy, _dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+                                const _t = _dpHMap[_hy+_dy]?.[_hx+_dx];
+                                if (_t && _t !== SYMBOLS.WALL && _t !== SYMBOLS.BLUE_BLOCK) _open++;
+                            }
+                            if (_open >= 3) _dpHoleCands.push({ x: _hx, y: _hy });
+                        }
+                    }
+                    if (_dpHoleCands.length > 0) {
+                        const _dpHole = _dpHoleCands[Math.floor(Math.random() * _dpHoleCands.length)];
+                        for (let _dy = -1; _dy <= 1; _dy++)
+                            for (let _dx = -1; _dx <= 1; _dx++) {
+                                const _cy = _dpHole.y+_dy, _cx = _dpHole.x+_dx;
+                                if (_cy>=1 && _cy<ROWS-1 && _cx>=1 && _cx<COLS-1 &&
+                                    _dpHMap[_cy][_cx] !== SYMBOLS.BLUE_BLOCK)
+                                    _dpHMap[_cy][_cx] = SYMBOLS.FLOOR;
+                            }
+                        _dpHMap[_dpHole.y][_dpHole.x] = SYMBOLS.BLUE_HOLE;
+                        for (let _ly = 0; _ly < ROWS; _ly++)
+                            for (let _lx = 0; _lx < COLS; _lx++)
+                                if (_dpHMap[_ly][_lx] === SYMBOLS.LAVA) _dpHMap[_ly][_lx] = SYMBOLS.FLOOR;
+
+                        // Wisp: FOLLOW右手法・BlueHoleから5マス以上・壁隣接
+                        const _dpWispCands = [];
+                        for (let _wy = 2; _wy < ROWS-2; _wy++) {
+                            for (let _wx = 2; _wx < COLS-4; _wx++) {
+                                if (_dpHMap[_wy][_wx] !== SYMBOLS.FLOOR) continue;
+                                if (Math.abs(_wx-_dpHole.x)+Math.abs(_wy-_dpHole.y) < 5) continue;
+                                const _nearWall = [[0,1],[0,-1],[1,0],[-1,0]].some(([_dy,_dx]) =>
+                                    _dpHMap[_wy+_dy]?.[_wx+_dx] === SYMBOLS.WALL);
+                                if (_nearWall) _dpWispCands.push({ x: _wx, y: _wy });
+                            }
+                        }
+                        if (_dpWispCands.length > 0) {
+                            const _dpWisp = _dpWispCands[Math.floor(Math.random() * _dpWispCands.length)];
+                            screenGrid.wisps[_dpHoleSrc.sy][_dpHoleSrc.sx].push({
+                                x: _dpWisp.x, y: _dpWisp.y, dir: 1, mode: 'FOLLOW'
+                            });
+                            addKeyLog("⊙ A barrier seals part of the dungeon. Guide the Wisp to ⊙.");
+                            _deepBlueDone = true;
+                        }
+                    }
+                }
+
+                // 安全チェック: Hole/Wisp未配置なら全BlueBlockを除去
+                if (!_deepBlueDone) {
+                    for (let _sy = 0; _sy < screenGridRows; _sy++)
+                        for (let _sx = 0; _sx < screenGridCols; _sx++) {
+                            const _m = screenGrid.maps[_sy]?.[_sx];
+                            if (!_m) continue;
+                            for (let _y = 0; _y < ROWS; _y++)
+                                for (let _x = 0; _x < COLS; _x++)
+                                    if (_m[_y][_x] === SYMBOLS.BLUE_BLOCK) _m[_y][_x] = SYMBOLS.FLOOR;
+                        }
+                }
+            }
+        }
+
+        // BlueBlock上の敵を近くのFLOORへ退かすヘルパー（全BlueBlock配置箇所で共有）
+        // (helpers moved above floor-98 code — see below)
+
+        // ----- FLOOR 42: デバッグテスト — 出口(DOOR)周囲1マスをBlueBlockで確定封鎖 -----
+        // BlueHole+Wispも同スクリーンに配置。レンダリング・動作確認用。
+        if (floorLevel === 42 && multiScreenMode && screenGrid &&
+            typeof doorScreenX !== 'undefined' && typeof doorScreenY !== 'undefined') {
+            const _t42Map = screenGrid.maps[doorScreenY]?.[doorScreenX];
+            if (_t42Map) {
+                // 出口（DOOR or STAIRS）の位置を探す
+                let _t42Ex = -1, _t42Ey = -1;
+                _t42outer: for (let _y = 1; _y < ROWS-1; _y++)
+                    for (let _x = 1; _x < COLS-1; _x++)
+                        if (_t42Map[_y][_x] === SYMBOLS.DOOR || _t42Map[_y][_x] === SYMBOLS.STAIRS)
+                            { _t42Ex = _x; _t42Ey = _y; break _t42outer; }
+
+                if (_t42Ex >= 0) {
+                    const _t42Safe = new Set([SYMBOLS.KEY, SYMBOLS.BLUE_KEY, SYMBOLS.DOOR, SYMBOLS.STAIRS]);
+                    // 出口周囲1マス（3×3の枠）をBlueBlockで囲む
+                    for (let _dy = -1; _dy <= 1; _dy++) {
+                        for (let _dx = -1; _dx <= 1; _dx++) {
+                            if (_dy === 0 && _dx === 0) continue;
+                            const _ty = _t42Ey+_dy, _tx = _t42Ex+_dx;
+                            if (_ty<1||_ty>=ROWS-1||_tx<1||_tx>=COLS-1) continue;
+                            if (_t42Safe.has(_t42Map[_ty][_tx])) continue;
+                            if (_t42Map[_ty][_tx] === SYMBOLS.FAIRY) {
+                                for (let _fy=2;_fy<ROWS-2;_fy++) for (let _fx=2;_fx<COLS-4;_fx++)
+                                    if (_t42Map[_fy][_fx]===SYMBOLS.FLOOR){_t42Map[_fy][_fx]=SYMBOLS.FAIRY;_fy=ROWS;break;}
+                            }
+                            _t42Map[_ty][_tx] = SYMBOLS.BLUE_BLOCK;
+                        }
+                    }
+                    // 敵をBlueBlock上から退かす
+                    _relocateEnemiesFromBlocks(_t42Map, screenGrid.enemies[doorScreenY][doorScreenX]);
+                    // BlueHole: フォールバック付きで確実に配置
+                    const _t42H = _placeBlueHoleRobust(_t42Map, _t42Ex, _t42Ey);
+                    if (_t42H) {
+                        // Wisp（壁隣接優先→フォールバックで必ず配置）
+                        if (_placeWispRobust(_t42Map, screenGrid.wisps[doorScreenY][doorScreenX], _t42H.x, _t42H.y))
+                            addKeyLog("⊙ [42F] Exit sealed. Guide the Blue Wisp (※) to ⊙ to unseal it.");
+                    }
+                }
+            }
+        }
+
+        // ----- 43〜97F ランダムマルチスクリーン: 出口周囲1マスをBlueBlockで囲む (25%) -----
+        // 42Fと同タイプの仕掛け。Blue Hole解除で出口にアクセス可能になる。
+        if (multiScreenMode && floorLevel >= 43 && floorLevel <= 97 &&
+            !FIXED_STAGE_FLOORS.includes(floorLevel) &&
+            typeof doorScreenX !== 'undefined' && typeof doorScreenY !== 'undefined' &&
+            Math.random() < (isRoomTestMode ? 1.0 : 0.25)) {
+
+            const _rxMap = screenGrid.maps[doorScreenY]?.[doorScreenX];
+            if (_rxMap) {
+                let _rxEx = -1, _rxEy = -1;
+                _rxOuter: for (let _y = 1; _y < ROWS-1; _y++)
+                    for (let _x = 1; _x < COLS-1; _x++)
+                        if (_rxMap[_y][_x] === SYMBOLS.DOOR || _rxMap[_y][_x] === SYMBOLS.STAIRS)
+                            { _rxEx = _x; _rxEy = _y; break _rxOuter; }
+
+                if (_rxEx >= 0) {
+                    const _rxSafe = new Set([SYMBOLS.KEY, SYMBOLS.BLUE_KEY, SYMBOLS.DOOR, SYMBOLS.STAIRS]);
+                    // 出口周囲1マス（8方向）をBlueBlockで囲む
+                    for (let _dy = -1; _dy <= 1; _dy++) {
+                        for (let _dx = -1; _dx <= 1; _dx++) {
+                            if (_dy === 0 && _dx === 0) continue;
+                            const _ty = _rxEy+_dy, _tx = _rxEx+_dx;
+                            if (_ty<1||_ty>=ROWS-1||_tx<1||_tx>=COLS-1) continue;
+                            if (_rxSafe.has(_rxMap[_ty][_tx])) continue;
+                            if (_rxMap[_ty][_tx] === SYMBOLS.FAIRY) {
+                                for (let _fy=2;_fy<ROWS-2;_fy++) for (let _fx=2;_fx<COLS-4;_fx++)
+                                    if (_rxMap[_fy][_fx]===SYMBOLS.FLOOR){_rxMap[_fy][_fx]=SYMBOLS.FAIRY;_fy=ROWS;break;}
+                            }
+                            _rxMap[_ty][_tx] = SYMBOLS.BLUE_BLOCK;
+                        }
+                    }
+                    _relocateEnemiesFromBlocks(_rxMap, screenGrid.enemies[doorScreenY][doorScreenX]);
+
+                    // BlueHole + Wisp: フォールバック付きで確実に配置
+                    const _rxH = _placeBlueHoleRobust(_rxMap, _rxEx, _rxEy);
+                    if (_rxH && _placeWispRobust(_rxMap, screenGrid.wisps[doorScreenY][doorScreenX], _rxH.x, _rxH.y))
+                        addKeyLog("⊙ The exit is sealed by Blue Blocks. Guide the Wisp (※) to ⊙.");
+                }
+            }
+        }
+
+        // ----- 101F+ 深層階: 出口周囲1マスをBlueBlockで囲む (3%) -----
+        if (multiScreenMode && floorLevel >= 101 &&
+            typeof doorScreenX !== 'undefined' && typeof doorScreenY !== 'undefined' &&
+            Math.random() < (isRoomTestMode ? 1.0 : 0.03)) {
+
+            const _d101Map = screenGrid.maps[doorScreenY]?.[doorScreenX];
+            if (_d101Map) {
+                let _d101Ex = -1, _d101Ey = -1;
+                _d101Outer: for (let _y = 1; _y < ROWS-1; _y++)
+                    for (let _x = 1; _x < COLS-1; _x++)
+                        if (_d101Map[_y][_x] === SYMBOLS.DOOR || _d101Map[_y][_x] === SYMBOLS.STAIRS)
+                            { _d101Ex = _x; _d101Ey = _y; break _d101Outer; }
+
+                if (_d101Ex >= 0) {
+                    const _d101Safe = new Set([SYMBOLS.KEY, SYMBOLS.BLUE_KEY, SYMBOLS.DOOR, SYMBOLS.STAIRS]);
+                    for (let _dy = -1; _dy <= 1; _dy++) {
+                        for (let _dx = -1; _dx <= 1; _dx++) {
+                            if (_dy === 0 && _dx === 0) continue;
+                            const _ty = _d101Ey+_dy, _tx = _d101Ex+_dx;
+                            if (_ty<1||_ty>=ROWS-1||_tx<1||_tx>=COLS-1) continue;
+                            if (_d101Safe.has(_d101Map[_ty][_tx])) continue;
+                            if (_d101Map[_ty][_tx] === SYMBOLS.FAIRY) {
+                                for (let _fy=2;_fy<ROWS-2;_fy++) for (let _fx=2;_fx<COLS-4;_fx++)
+                                    if (_d101Map[_fy][_fx]===SYMBOLS.FLOOR){_d101Map[_fy][_fx]=SYMBOLS.FAIRY;_fy=ROWS;break;}
+                            }
+                            _d101Map[_ty][_tx] = SYMBOLS.BLUE_BLOCK;
+                        }
+                    }
+                    _relocateEnemiesFromBlocks(_d101Map, screenGrid.enemies[doorScreenY][doorScreenX]);
+
+                    const _d101HC = [];
+                    for (let _hy=2;_hy<ROWS-2;_hy++) for (let _hx=2;_hx<COLS-2;_hx++) {
+                        if (_d101Map[_hy][_hx]!==SYMBOLS.FLOOR) continue;
+                        if (Math.abs(_hx-_d101Ex)+Math.abs(_hy-_d101Ey)<5) continue;
+                        let _op=0;
+                        for (const [_dy,_dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+                            const _t=_d101Map[_hy+_dy]?.[_hx+_dx];
+                            if (_t&&_t!==SYMBOLS.WALL&&_t!==SYMBOLS.BLUE_BLOCK) _op++;
+                        }
+                        if (_op>=3) _d101HC.push({x:_hx,y:_hy});
+                    }
+                    if (_d101HC.length > 0) {
+                        const _d101H = _d101HC[Math.floor(Math.random()*_d101HC.length)];
+                        for (let _dy=-1;_dy<=1;_dy++) for (let _dx=-1;_dx<=1;_dx++) {
+                            const _cy=_d101H.y+_dy,_cx=_d101H.x+_dx;
+                            if (_cy>=1&&_cy<ROWS-1&&_cx>=1&&_cx<COLS-1&&_d101Map[_cy][_cx]!==SYMBOLS.BLUE_BLOCK)
+                                _d101Map[_cy][_cx]=SYMBOLS.FLOOR;
+                        }
+                        _d101Map[_d101H.y][_d101H.x] = SYMBOLS.BLUE_HOLE;
+                        for (let _ly=0;_ly<ROWS;_ly++) for (let _lx=0;_lx<COLS;_lx++)
+                            if (_d101Map[_ly][_lx]===SYMBOLS.LAVA) _d101Map[_ly][_lx]=SYMBOLS.FLOOR;
+
+                        if (_placeWispRobust(_d101Map, screenGrid.wisps[doorScreenY][doorScreenX], _d101H.x, _d101H.y))
+                            addKeyLog("⊙ The exit is sealed. Guide the Blue Wisp (※) to ⊙ to break the seal.");
+                    }
+                }
+            }
+        }
+
+        // ----- 横3画面(3×1): 中央スクリーンの右通路をBlueBlockで封鎖 (50%) -----
+        // screenGridCols=3, screenGridRows=1 の横一列レイアウト専用。
+        // 中央[1,0]の右通路を塞ぎ、BlueHole+Wispを配置。右スクリーンへはBlueHole解除が必要。
+        // 29F以降（28F=チュートリアル済み、31F=専用処理のため除外）
+        if (multiScreenMode && screenGridCols === 3 && screenGridRows === 1 &&
+            !FIXED_STAGE_FLOORS.includes(floorLevel) && floorLevel >= 29 && floorLevel !== 31 && floorLevel < 101 &&
+            Math.random() < (isRoomTestMode ? 1.0 : 0.5)) {
+
+            const _h3Map = screenGrid.maps[0][1]; // 中央スクリーン
+            const _h3SafeTypes = new Set([null, undefined, 'dungeon', 'maze', 'castle', 'spiral', 'breaker_room']);
+            let _h3Placed = false;
+            if (_h3Map && _h3SafeTypes.has(screenGrid.types?.[0]?.[1])) {
+                const _h3Safe = new Set([SYMBOLS.STAIRS, SYMBOLS.DOOR, SYMBOLS.KEY, SYMBOLS.BLUE_KEY, SYMBOLS.MERCHANT]);
+                const _h3PassH = [11, 12, 13];
+
+                // 妖精を内側FLOORへ退かすヘルパー
+                const _h3MoveFairy = () => {
+                    for (let _fy = 2; _fy < ROWS-2; _fy++)
+                        for (let _fx = 2; _fx < COLS-6; _fx++)
+                            if (_h3Map[_fy][_fx] === SYMBOLS.FLOOR) { _h3Map[_fy][_fx] = SYMBOLS.FAIRY; return; }
+                };
+
+                // 中央[1,0]の右通路を封鎖
+                for (const _py of _h3PassH) {
+                    for (const _px of [COLS-2, COLS-3]) {
+                        const _t = _h3Map[_py][_px];
+                        if (_h3Safe.has(_t)) continue;
+                        if (_t === SYMBOLS.FAIRY) _h3MoveFairy();
+                        _h3Map[_py][_px] = SYMBOLS.BLUE_BLOCK;
+                    }
+                }
+
+                // 敵をBlueBlock上から退かす
+                _relocateEnemiesFromBlocks(_h3Map, screenGrid.enemies[0][1]);
+                // BlueHole: 中央スクリーン内の開けた床（右端から離れた位置）
+                const _h3HoleCands = [];
+                for (let _hy = 2; _hy < ROWS-2; _hy++) {
+                    for (let _hx = 2; _hx < COLS-6; _hx++) {
+                        if (_h3Map[_hy][_hx] !== SYMBOLS.FLOOR) continue;
+                        let _open = 0;
+                        for (const [_dy, _dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+                            const _t = _h3Map[_hy+_dy]?.[_hx+_dx];
+                            if (_t && _t !== SYMBOLS.WALL && _t !== SYMBOLS.BLUE_BLOCK) _open++;
+                        }
+                        if (_open >= 3) _h3HoleCands.push({ x: _hx, y: _hy });
+                    }
+                }
+                if (_h3HoleCands.length > 0) {
+                    const _h3Hole = _h3HoleCands[Math.floor(Math.random() * _h3HoleCands.length)];
+                    for (let _dy = -1; _dy <= 1; _dy++)
+                        for (let _dx = -1; _dx <= 1; _dx++) {
+                            const _cy = _h3Hole.y+_dy, _cx = _h3Hole.x+_dx;
+                            if (_cy>=1 && _cy<ROWS-1 && _cx>=1 && _cx<COLS-1 &&
+                                _h3Map[_cy][_cx] !== SYMBOLS.BLUE_BLOCK)
+                                _h3Map[_cy][_cx] = SYMBOLS.FLOOR;
+                        }
+                    _h3Map[_h3Hole.y][_h3Hole.x] = SYMBOLS.BLUE_HOLE;
+                    // 溶岩除去
+                    for (let _ly = 0; _ly < ROWS; _ly++)
+                        for (let _lx = 0; _lx < COLS; _lx++)
+                            if (_h3Map[_ly][_lx] === SYMBOLS.LAVA) _h3Map[_ly][_lx] = SYMBOLS.FLOOR;
+
+                    // Wisp: FOLLOW右手法・BlueHoleから5マス以上・壁隣接
+                    const _h3WispCands = [];
+                    for (let _wy = 2; _wy < ROWS-2; _wy++) {
+                        for (let _wx = 2; _wx < COLS-4; _wx++) {
+                            if (_h3Map[_wy][_wx] !== SYMBOLS.FLOOR) continue;
+                            if (Math.abs(_wx-_h3Hole.x)+Math.abs(_wy-_h3Hole.y) < 5) continue;
+                            const _nearWall = [[0,1],[0,-1],[1,0],[-1,0]].some(([_dy,_dx]) =>
+                                _h3Map[_wy+_dy]?.[_wx+_dx] === SYMBOLS.WALL);
+                            if (_nearWall) _h3WispCands.push({ x: _wx, y: _wy });
+                        }
+                    }
+                    if (_h3WispCands.length > 0) {
+                        const _h3Wisp = _h3WispCands[Math.floor(Math.random() * _h3WispCands.length)];
+                        screenGrid.wisps[0][1].push({ x: _h3Wisp.x, y: _h3Wisp.y, dir: 1, mode: 'FOLLOW' });
+                        addKeyLog("⊙ The way forward is sealed. Guide the Blue Wisp to ⊙.");
+                        _h3Placed = true;
+                    }
+                }
+                // 安全チェック: Hole/Wisp未配置ならBlueBlockを全除去
+                if (!_h3Placed) {
+                    for (let _y = 0; _y < ROWS; _y++)
+                        for (let _x = 0; _x < COLS; _x++)
+                            if (_h3Map[_y][_x] === SYMBOLS.BLUE_BLOCK) _h3Map[_y][_x] = SYMBOLS.FLOOR;
+                }
+            }
+        }
+
+        // ----- FLOOR 31: スタート画面の内側1マスをBlueBlockで封鎖 -----
+        if (floorLevel === 31) {
+            // 敵数を全画面で半減
+            for (let _sy = 0; _sy < screenGridRows; _sy++)
+                for (let _sx = 0; _sx < screenGridCols; _sx++) {
+                    const _se = screenGrid.enemies[_sy][_sx];
+                    if (_se && _se.length > 1)
+                        screenGrid.enemies[_sy][_sx] = _se.filter((_, i) => i % 2 === 0);
+                }
+
+            const _ss31Sx = currentScreen.x, _ss31Sy = currentScreen.y;
+            const _ss31Map = screenGrid.maps[_ss31Sy][_ss31Sx];
+            if (_ss31Map) {
+                const _safe31 = new Set([SYMBOLS.STAIRS, SYMBOLS.DOOR, SYMBOLS.KEY]);
+                // 隣スクリーンへの出入り口のみBlueBlockで封鎖
+                // 隣スクリーンへの通路を 通路幅×奥行き2マス のBlueBlockで封鎖
+                // 左右通路: y=11-13（3マス幅）, x=1-2 / x=COLS-3〜COLS-2（奥行き2）
+                // 上下通路: x=18-21（4マス幅）, y=1-2 / y=ROWS-3〜ROWS-2（奥行き2）
+                const _hasAdj = (sx, sy) =>
+                    sx >= 0 && sx < screenGridCols && sy >= 0 && sy < screenGridRows &&
+                    screenGrid.active?.[sy]?.[sx];
+                const _setBlock = (y, x) => {
+                    if (y >= 1 && y < ROWS-1 && x >= 1 && x < COLS-1 && !_safe31.has(_ss31Map[y][x]))
+                        _ss31Map[y][x] = SYMBOLS.BLUE_BLOCK;
+                };
+                const _passH = [11, 12, 13];         // 左右通路の行（3マス）
+                const _passV = [18, 19, 20, 21];      // 上下通路の列（4マス）
+
+                if (_hasAdj(_ss31Sx - 1, _ss31Sy))   // 左に隣接スクリーン
+                    for (const _py of _passH) { _setBlock(_py, 1); _setBlock(_py, 2); }
+                if (_hasAdj(_ss31Sx + 1, _ss31Sy))   // 右に隣接スクリーン
+                    for (const _py of _passH) { _setBlock(_py, COLS-2); _setBlock(_py, COLS-3); }
+                if (_hasAdj(_ss31Sx, _ss31Sy - 1))   // 上に隣接スクリーン
+                    for (const _px of _passV) { _setBlock(1, _px); _setBlock(2, _px); }
+                if (_hasAdj(_ss31Sx, _ss31Sy + 1))   // 下に隣接スクリーン
+                    for (const _px of _passV) { _setBlock(ROWS-2, _px); _setBlock(ROWS-3, _px); }
+
+                // BlueHoleとWispを内側（y=2..ROWS-3, x=2..COLS-3）のFLOORに配置
+                // 4方向のうち3つ以上がFLOOR系（壁・BlueBlock以外）= 開放空間チェック
+                const _isOpen31 = (_y, _x) => {
+                    let _cnt = 0;
+                    for (const [_dy, _dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+                        const _ty = _y+_dy, _tx = _x+_dx;
+                        if (_ty<0||_ty>=ROWS||_tx<0||_tx>=COLS) continue;
+                        const _t = _ss31Map[_ty][_tx];
+                        if (_t !== SYMBOLS.WALL && _t !== SYMBOLS.BLUE_BLOCK) _cnt++;
+                    }
+                    return _cnt >= 3;
+                };
+                const _inner31 = [];
+                for (let _y = 2; _y < ROWS-2; _y++)
+                    for (let _x = 2; _x < COLS-2; _x++)
+                        if (_ss31Map[_y][_x] === SYMBOLS.FLOOR &&
+                            Math.abs(_x - player.x) + Math.abs(_y - player.y) >= 3 &&
+                            _isOpen31(_y, _x))
+                            _inner31.push({ x: _x, y: _y });
+                // フォールバック: 任意のFLOORに置き、周囲の壁を削って開放空間を作る
+                if (_inner31.length === 0) {
+                    const _fb31 = [];
+                    for (let _y = 3; _y < ROWS-3; _y++)
+                        for (let _x = 3; _x < COLS-3; _x++)
+                            if (_ss31Map[_y][_x] === SYMBOLS.FLOOR &&
+                                Math.abs(_x - player.x) + Math.abs(_y - player.y) >= 5)
+                                _fb31.push({ x: _x, y: _y });
+                    if (_fb31.length > 0) {
+                        const _fp = _fb31[Math.floor(Math.random() * _fb31.length)];
+                        // 周囲2マスの壁を削ってFLOORにする（空間確保）
+                        for (let _dy = -2; _dy <= 2; _dy++)
+                            for (let _dx = -2; _dx <= 2; _dx++) {
+                                const _ty = _fp.y+_dy, _tx = _fp.x+_dx;
+                                if (_ty>=1&&_ty<ROWS-1&&_tx>=1&&_tx<COLS-1 &&
+                                    _ss31Map[_ty][_tx] === SYMBOLS.WALL)
+                                    _ss31Map[_ty][_tx] = SYMBOLS.FLOOR;
+                            }
+                        _inner31.push(_fp);
+                    }
+                }
+
+                if (_inner31.length > 0) {
+                    const _bhIdx = Math.floor(Math.random() * _inner31.length);
+                    const _bh31 = _inner31[_bhIdx];
+                    _ss31Map[_bh31.y][_bh31.x] = SYMBOLS.BLUE_HOLE;
+                    // 溶岩床を除去（ウィスプ誘導のためのブロック設置を妨げないよう）
+                    for (let _31ly = 0; _31ly < ROWS; _31ly++)
+                        for (let _31lx = 0; _31lx < COLS; _31lx++)
+                            if (_ss31Map[_31ly][_31lx] === SYMBOLS.LAVA) _ss31Map[_31ly][_31lx] = SYMBOLS.FLOOR;
+                    // BlueHole周囲1マスを正方形にFLOOR化（WALLも削る、BLUE_BLOCKは保持）
+                    for (let _dy = -1; _dy <= 1; _dy++)
+                        for (let _dx = -1; _dx <= 1; _dx++) {
+                            if (_dx===0 && _dy===0) continue;
+                            const _cy = _bh31.y+_dy, _cx = _bh31.x+_dx;
+                            if (_cy>=1&&_cy<ROWS-1&&_cx>=1&&_cx<COLS-1 &&
+                                _ss31Map[_cy][_cx] !== SYMBOLS.BLUE_BLOCK)
+                                _ss31Map[_cy][_cx] = SYMBOLS.FLOOR;
+                        }
+                    // Wisp: BlueHoleから3マス以上離れた内側
+                    const _wc31 = _inner31.filter((t, i) => i !== _bhIdx &&
+                        Math.abs(t.x-_bh31.x)+Math.abs(t.y-_bh31.y) >= 3);
+                    const _wp31src = _wc31.length > 0 ? _wc31 : _inner31.filter((_,i) => i !== _bhIdx);
+                    if (_wp31src.length > 0) {
+                        const _wp31 = _wp31src[Math.floor(Math.random() * _wp31src.length)];
+                        screenGrid.wisps[_ss31Sy][_ss31Sx].push({ x: _wp31.x, y: _wp31.y, dir: 1, mode: 'STRAIGHT' });
+                    }
+                }
+
+                // Spawner除去・参照更新
+                screenGrid.enemies[_ss31Sy][_ss31Sx] = screenGrid.enemies[_ss31Sy][_ss31Sx].filter(
+                    e => e.type !== 'SPAWNER' && e.type !== 'WISP_SPAWNER'
+                );
+                enemies = screenGrid.enemies[_ss31Sy][_ss31Sx];
+                wisps   = screenGrid.wisps[_ss31Sy][_ss31Sx];
+            }
+            addKeyLog("⊙ Lead the Blue Wisp into the Blue Hole to unlock all exits.");
+        }
+
         return;
     }
 
@@ -13359,7 +14193,7 @@ function initMap() {
         }
 
         // 二番目の部屋に敵を配置
-        enemies.push({ type: 'NORMAL', x: 25, y: 12, hp: 10, maxHp: 10, flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 5, stunTurns: 0 });
+        enemies.push({ type: 'NORMAL', x: 25, y: 12, hp: 10, maxHp: 10, flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 5, stunTurns: 0, _hpGrowth: 50, _atkGrowth: 8, _growthDoubling: true }); // 特殊個体: 仲間にすると成長量がレベルごとに2倍
 
         // ゴール
         map[12][34] = SYMBOLS.STAIRS;
@@ -13503,7 +14337,9 @@ function initMap() {
         player.x = 6; player.y = 12;
 
         // 魔法使いの杖（小部屋の出口に配置して強制入手させる）
-        map[12][22] = SYMBOLS.WAND;
+        // すでに杖を持っている（リミナルスペース等で戻ってきた）場合は置かない＝杖イベントも起きない。
+        // ただしステージセレクトで2階から始めたときは、イベント確認用に置く（テスト開始時は最初から杖を持っているため）
+        if (!player.hasWand || _testStartFloor === 2) map[12][22] = SYMBOLS.WAND;
 
         // ゴール
         map[12][33] = SYMBOLS.STAIRS;
@@ -15333,8 +16169,8 @@ function initMap() {
 
     // ----- FLOOR 29: THE SEALED CHAMBER -----
     if (floorLevel === 29) {
-        addKeyLog("EVENT: The Sealed Chamber.");
-        addLog("Enemies are buried in the walls. A Wall Breaker will free them.");
+        addKeyLog("EVENT: The Sealed Chamber — Blue Wisps are sealed within.");
+        addLog("Sealed enemies wait in the walls. Free the Blue Wisp to shatter the blockade.");
 
         // 全体を壁で埋める
         for (let y = 1; y < ROWS - 1; y++)
@@ -15347,24 +16183,35 @@ function initMap() {
             for (let dx = -1; dx <= 1; dx++)
                 map[player.y + dy][player.x + dx] = SYMBOLS.FLOOR;
 
-        // 出口をランダムな壁マスに配置（プレイヤーから離れた場所）
+        // 出口: できるだけ下方に配置（yが大きい＝画面下側を優先）
         let exitX, exitY;
-        for (let t = 0; t < 300; t++) {
-            const tx = 3 + Math.floor(Math.random() * (COLS - 6));
-            const ty = 3 + Math.floor(Math.random() * (ROWS - 6));
-            if (map[ty][tx] !== SYMBOLS.WALL) continue;
-            if (Math.abs(tx - player.x) + Math.abs(ty - player.y) < 12) continue;
-            exitX = tx; exitY = ty;
-            break;
+        for (let ty = ROWS - 6; ty >= 5 && exitX == null; ty--) {
+            for (let t = 0; t < 60; t++) {
+                const tx = 5 + Math.floor(Math.random() * (COLS - 10));
+                if (map[ty][tx] !== SYMBOLS.WALL) continue;
+                if (Math.abs(tx - player.x) + Math.abs(ty - player.y) < 12) continue;
+                exitX = tx; exitY = ty;
+                break;
+            }
         }
-        if (exitX == null) { exitX = COLS - 4; exitY = ROWS - 4; }
+        if (exitX == null) { exitX = 20; exitY = ROWS - 6; }
+
+        // STAIRS配置 → 周囲1マス（8方向）をBlueBlockで直接囲む
+        // Blue Hole解除でBlueBlock→FLOORになりSTAIRSに隣接できる
         map[exitY][exitX] = SYMBOLS.STAIRS;
+        for (let dy = -1; dy <= 1; dy++)
+            for (let dx = -1; dx <= 1; dx++) {
+                if (dy === 0 && dx === 0) continue;
+                const _by = exitY + dy, _bx = exitX + dx;
+                if (_by >= 1 && _by < ROWS-1 && _bx >= 1 && _bx < COLS-1)
+                    map[_by][_bx] = SYMBOLS.BLUE_BLOCK;
+            }
 
         // 壁の中に孤立した1マス空間を見つけるヘルパー
-        const findTrappedCell29 = (minDist) => {
-            for (let t = 0; t < 100; t++) {
-                const cx = Math.floor(Math.random() * (COLS - 6)) + 3;
-                const cy = Math.floor(Math.random() * (ROWS - 6)) + 3;
+        const findTrappedCell29 = (minDist, xMin = 2, xMax = COLS - 3, yMin = 2, yMax = ROWS - 3) => {
+            for (let t = 0; t < 150; t++) {
+                const cx = xMin + Math.floor(Math.random() * (xMax - xMin + 1));
+                const cy = yMin + Math.floor(Math.random() * (yMax - yMin + 1));
                 if (map[cy][cx] !== SYMBOLS.WALL) continue;
                 if (map[cy-1][cx] !== SYMBOLS.WALL || map[cy+1][cx] !== SYMBOLS.WALL ||
                     map[cy][cx-1] !== SYMBOLS.WALL || map[cy][cx+1] !== SYMBOLS.WALL) continue;
@@ -15374,8 +16221,8 @@ function initMap() {
             return null;
         };
 
-        // NORMAL(E)を壁の中に封印（10体）
-        for (let i = 0; i < 10; i++) {
+        // NORMAL(E)を壁の中に封印（8体）
+        for (let i = 0; i < 8; i++) {
             const pos = findTrappedCell29(5);
             if (!pos) continue;
             map[pos.y][pos.x] = SYMBOLS.FLOOR;
@@ -15398,6 +16245,30 @@ function initMap() {
             });
         }
 
+        // ウィスプ2体を右側エリアの壁の中に封印（BREAKERが壁を破ると解放されて動き出す）
+        for (let i = 0; i < 2; i++) {
+            const wpos = findTrappedCell29(8, Math.floor(COLS * 0.6), COLS - 4, 2, ROWS - 4);
+            if (!wpos) continue;
+            map[wpos.y][wpos.x] = SYMBOLS.FLOOR;
+            wisps.push({ x: wpos.x, y: wpos.y, dir: i === 0 ? 1 : 2, mode: 'STRAIGHT' });
+        }
+        // ウィスプ追加1体: マップ全体のランダムな壁の中に封印
+        {
+            const _w3pos = findTrappedCell29(8);
+            if (_w3pos) {
+                map[_w3pos.y][_w3pos.x] = SYMBOLS.FLOOR;
+                wisps.push({ x: _w3pos.x, y: _w3pos.y, dir: Math.floor(Math.random() * 4), mode: 'STRAIGHT' });
+            }
+        }
+
+        // BlueHole: 主人公の近く（左上エリア）に配置
+        const _bhX = 8, _bhY = 8;
+        // BlueHole周囲1マスを開放（到達可能にする）
+        for (let dy = -1; dy <= 1; dy++)
+            for (let dx = -1; dx <= 1; dx++)
+                map[_bhY + dy][_bhX + dx] = SYMBOLS.FLOOR;
+        map[_bhY][_bhX] = SYMBOLS.BLUE_HOLE;
+
         // 妖精を壁の中に封印（1体）
         const fairyPos = findTrappedCell29(4);
         if (fairyPos) map[fairyPos.y][fairyPos.x] = SYMBOLS.FAIRY;
@@ -15409,28 +16280,13 @@ function initMap() {
             map[pos.y][pos.x] = item;
         }
 
-        // BREAKER: プレイヤーのそばに2匹（確定）
-        for (const offset of [{ dx: 2, dy: 0 }, { dx: 0, dy: 2 }]) {
-            const bx = player.x + offset.dx, by = player.y + offset.dy;
-            map[by][bx] = SYMBOLS.FLOOR;
-            enemies.push({
-                type: 'BREAKER', x: bx, y: by,
-                hp: 50 + floorLevel * 4, maxHp: 50 + floorLevel * 4,
-                flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 45, stunTurns: 0
-            });
-        }
+        // BREAKER: プレイヤーのそばに1匹（確定）
+        { const bx = player.x + 2, by = player.y;
+          map[by][bx] = SYMBOLS.FLOOR;
+          enemies.push({ type: 'BREAKER', x: bx, y: by, hp: 50 + floorLevel * 4, maxHp: 50 + floorLevel * 4, flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 45, stunTurns: 0 }); }
 
-        // BREAKER: 出口の隣に1匹（確定）
-        const exitBx = exitX - 1 >= 1 ? exitX - 1 : exitX + 1;
-        map[exitY][exitBx] = SYMBOLS.FLOOR;
-        enemies.push({
-            type: 'BREAKER', x: exitBx, y: exitY,
-            hp: 50 + floorLevel * 4, maxHp: 50 + floorLevel * 4,
-            flashUntil: 0, offsetX: 0, offsetY: 0, expValue: 45, stunTurns: 0
-        });
-
-        // BREAKER: 残り5匹をランダム配置
-        for (let i = 0; i < 5; i++) {
+        // BREAKER: 残り2匹をランダム配置
+        for (let i = 0; i < 2; i++) {
             let bx, by, tries = 0;
             do {
                 bx = Math.floor(Math.random() * (COLS - 4)) + 2;
@@ -15654,7 +16510,7 @@ function initMap() {
             }
         }
 
-        isWindFloor = false; // wind disabled
+        isWindFloor = true;
         windTimer = 4; // 1ターン目で即発動
 
         // プレイヤー開始位置: 左下付近
@@ -15693,8 +16549,8 @@ function initMap() {
                     if (Math.abs(cx - stairsX) <= 2 && Math.abs(wy - stairsY) <= 1) { blocked = true; break; }
                     // プレイヤー開始位置の周囲2マス以内は避ける
                     if (Math.abs(cx - player.x) <= 2 && Math.abs(wy - player.y) <= 2) { blocked = true; break; }
-                    // 縦壁の隙間を塞がない（隙間の上下1マスも含めて保護）
-                    if (cx === vertWallX && Math.abs(wy - gapY) <= 1) { blocked = true; break; }
+                    // 縦壁の隙間とその左右1マスを保護（左右アプローチタイルが塞がれると詰む）
+                    if (Math.abs(cx - vertWallX) <= 1 && wy === gapY) { blocked = true; break; }
                 }
                 if (blocked) continue;
                 break;
@@ -15725,6 +16581,11 @@ function initMap() {
                 }
             }
         }
+
+        // ギャップ通路の確実な開通（水平壁配置後に強制クリア）
+        if (vertWallX - 1 >= 1) map[gapY][vertWallX - 1] = SYMBOLS.FLOOR;
+        map[gapY][vertWallX] = SYMBOLS.FLOOR;
+        if (vertWallX + 1 < COLS - 1) map[gapY][vertWallX + 1] = SYMBOLS.FLOOR;
 
         // タレット: 上向き（dir:0）を3体配置（風で一緒に流される）
         for (let i = 0; i < 3; i++) {
@@ -15801,7 +16662,7 @@ function initMap() {
         isScrollWallFloor = true;
         scrollWalls = [];
         scrollWallLines = [];
-        isWindFloor = false; // wind disabled
+        isWindFloor = true;
         windTimer = 4;
 
         // 全面を床に
@@ -16077,7 +16938,7 @@ function initMap() {
         }
 
         // 突風確定
-        isWindFloor = false; // wind disabled
+        isWindFloor = true;
         windTimer = 4;
 
         // プレイヤー開始位置：左下
@@ -17695,7 +18556,7 @@ function initMap() {
         };
 
         // 突風を設定（66階は確定で風が吹く）
-        isWindFloor = false; // wind disabled
+        isWindFloor = true;
         windTimer = 4;
         addLog("💨 The Breaker's Den roars with violent winds!");
 
@@ -18878,7 +19739,7 @@ function initMap() {
 
     // ===== テストモード: 地下墓地（固定レイアウト） =====
     if (isRoomTestMode && forcedLayoutType === 'catacombs') {
-        addLog("地下墓地 — CATACOMBS");
+        addLog("CATACOMBS");
         for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) map[y][x] = SYMBOLS.WALL;
 
         const _cF = (x1, y1, x2, y2) => {
@@ -18953,8 +19814,6 @@ function initMap() {
     }
 
     // 通常ダンジョン型（部屋+廊下）: 0.80〜1.00 = 20%
-    // 大広間フロアのモディファイア（ICE / WIND / WISP）は無効化
-    let greatHallModifier = null;
 
     // ----- FLOOR 80: THE FROZEN FURNACE -----
     if (floorLevel === 80) {
@@ -20416,16 +21275,7 @@ function initMap() {
     }
     if (isIceFloor && !isDenseMazeFloor) addLog(floorLevel >= 50 ? "🌌 CHAOS FLOOR: Ice and Lava collide!" : "❄️ WARNING: This floor is completely FROZEN! (Slippery)");
 
-    // 大広間(ICEモディファイア): フロア全体を氷に変換
-    if (greatHallModifier === 'ICE') {
-        isIceFloor = true;
-        for (let _gy = 1; _gy < ROWS - 1; _gy++) {
-            for (let _gx = 1; _gx < COLS - 1; _gx++) {
-                if (map[_gy][_gx] === SYMBOLS.FLOOR) map[_gy][_gx] = SYMBOLS.ICE;
-            }
-        }
-        addLog("❄️ FROZEN HALL: The entire hall is a sheet of ice!");
-    }
+
 
     // 溶岩の床の生成
     // B8-24F: 30%で小パッチ1つ / B25-49F: 氷なし時80% / B50F+: 確定・大量
@@ -20547,7 +21397,7 @@ function initMap() {
     }
 
     // 全フロア（固定ステージ・1F 除く）: タレット or 溶岩がある部屋のみ、80%で LEECH_WEED を配置
-    if (floorLevel >= 2 && floorLevel !== 28 && !FIXED_STAGE_FLOORS.includes(floorLevel) && Math.random() < 0.80) {
+    if (floorLevel >= 2 && !FIXED_STAGE_FLOORS.includes(floorLevel) && Math.random() < 0.80) {
         const _lwEligRooms = rooms.filter(r => {
             for (let _ery = r.y; _ery < r.y + r.h; _ery++)
                 for (let _erx = r.x; _erx < r.x + r.w; _erx++)
@@ -20577,32 +21427,17 @@ function initMap() {
         }
     }
 
-    // 風フロアのランダム発生 (36階以降、3%の確率。固定ステージには発生しない)
     const fixedStages = FIXED_WIND_SUPPRESS_FLOORS;
-    // floorLevel === 33 の風は廃止
     if (floorLevel === 25 && !isWindFloor) {
         isWindFloor = true;
         windTimer = 4;
         addKeyLog("💨 FLOOR 25: Frozen gales howl through the cavern!");
     }
     if (floorLevel === 45 && !isWindFloor) {
-        isWindFloor = false; // wind disabled
-        windTimer = 4; // 1ターン目で即発動
+        isWindFloor = true;
+        windTimer = 4;
         addKeyLog("💨 FLOOR 45: Violent gales tear through this labyrinth!");
     }
-    const windChance = 0.015;
-    if (floorLevel >= 10 && !isWindFloor && !fixedStages.includes(floorLevel) && floorLevel !== 37 && floorLevel !== 50 && !isRoomTestMode && Math.random() < windChance) {
-        isWindFloor = false; // wind disabled
-        windTimer = 4; // 1ターン目で即発動
-        addKeyLog("💨 WARNING: Strong winds blow through this floor!");
-    }
-    // 大広間(WINDモディファイア): 確定で突風
-    if (greatHallModifier === 'WIND' && !isWindFloor) {
-        isWindFloor = false; // wind disabled
-        windTimer = 4;
-        addLog("💨 GUST HALL: A violent tempest rages through this vast chamber!");
-    }
-
     // モンスターROOM (5階以降、固定ステージ除く、15%の確率)
     if (floorLevel >= 5 && !fixedStages.includes(floorLevel) && rooms.length > 2 && Math.random() < 0.15) {
         // スタート・最終部屋を除いた中から、ある程度広い部屋を優先して選ぶ
@@ -21821,32 +22656,6 @@ function initMap() {
         if (actualSpawned > 0) addLog("Beware of the Wisps (※) following the walls!");
     }
 
-    // 大広間(WISPモディファイア): 各柱に隣接してウィスプを1体配置
-    if (greatHallModifier === 'WISP') {
-        const _ghDirs = [{dx:0,dy:-1},{dx:1,dy:0},{dx:0,dy:1},{dx:-1,dy:0}];
-        const _usedWispTiles = new Set();
-        for (let _wy = 1; _wy < ROWS - 1; _wy++) {
-            for (let _wx = 1; _wx < COLS - 1; _wx++) {
-                if (map[_wy][_wx] !== SYMBOLS.WALL) continue;
-                // 周囲に通行可能タイルがある（柱らしい）壁のみ対象
-                for (const _d of _ghDirs) {
-                    const _nx = _wx + _d.dx, _ny = _wy + _d.dy;
-                    if (_nx < 1 || _nx >= COLS - 1 || _ny < 1 || _ny >= ROWS - 1) continue;
-                    const _t = map[_ny][_nx];
-                    if (_t === SYMBOLS.WALL || _t === SYMBOLS.STAIRS) continue;
-                    if (_nx === player.x && _ny === player.y) continue;
-                    const _key = `${_nx},${_ny}`;
-                    if (_usedWispTiles.has(_key)) continue;
-                    if (wisps.some(w => w.x === _nx && w.y === _ny)) continue;
-                    _usedWispTiles.add(_key);
-                    wisps.push({ x: _nx, y: _ny, dir: Math.floor(Math.random() * 4), mode: 'FOLLOW' });
-                    break;
-                }
-            }
-        }
-        if (_usedWispTiles.size > 0) addLog("👻 HAUNTED HALL: Every pillar is haunted by a Wisp!");
-    }
-
     // 50階以降：NORMAL敵に溶岩/氷サブタイプを付与
     if (floorLevel >= 50) {
         enemies.forEach(e => {
@@ -23027,6 +23836,18 @@ async function startFloorTransition() {
     const _carriedAllies = enemies
         .filter(e => e.isAlly && e.hp > 0 && !e._dead && !ENEMY_NO_CARRY_TYPES.has(e.type))
         .map(e => ({ ...e, body: undefined, offsetX: 0, offsetY: 0, flashUntil: 0 }));
+    // リミナルスペースから戻る際は、入室前に保存した仲間を復元
+    if (_wasEscapeRoom && _liminalSavedAllies.length > 0) {
+        _carriedAllies.push(..._liminalSavedAllies);
+        _liminalSavedAllies = [];
+    }
+    // リロード直後（loadGame後）の復元待ち仲間を追加
+    if (_pendingRestoredAllies.length > 0) {
+        _carriedAllies.push(..._pendingRestoredAllies);
+        _pendingRestoredAllies = [];
+    }
+    // フロア移動時に仲間を全回復（プレイヤーと同様）
+    _carriedAllies.forEach(a => { a.hp = a.maxHp; });
     transition.active = true;
     transition.mode = 'FALLING';
     transition.text = floorLevel === -1 ? 'END CREDITS' : floorLevel === DEEP_ENDING_FLOOR ? 'THE TRUE BOTTOM' : `FLOOR ${formatFloor(floorLevel)}`;
@@ -23058,6 +23879,8 @@ async function startFloorTransition() {
     }
     // 完全暗転後にマップ生成（ここで1回だけinitMapを呼ぶ。continueGame等の呼び出し元では呼ばない）
     initMap();
+    _validateBlueBlockSafety(); // BlueBlock詰み防止チェック
+    _addWispSpawnerForWeaver(); // WEAVER+BlueHole画面にWISP_SPAWNERを追加
     spawnQueenIfEligible();
     // NOVEL_CORRIDOR: BGM停止 + 地響き開始（部屋0から）+ 暗闇リセット
     if (isRoomTestMode && forcedLayoutType === 'NOVEL_CORRIDOR') {
@@ -23141,7 +23964,8 @@ async function startFloorTransition() {
     // 階段降下時にHP全回復
     player.hp = getPlayerMaxHp();
     updateUI();
-    // フロア開始時点の状態をオートセーブ
+    // フロア開始時点の状態をオートセーブ（仲間スナップショットを先に更新）
+    _savedAllies = _carriedAllies.map(a => ({ ...a }));
     saveGame(true);
     isPlayerVisible = false; // 着地アニメーションまで非表示を維持
 
@@ -23475,11 +24299,8 @@ async function showStoryPages(pages, useMiddlePos = false, useTopPos = false, au
             solidWindow: solidWindow
         };
 
-        // フェードイン
-        for (let a = 0; a <= 1; a += 0.05) {
-            storyMessage.alpha = a;
-            await new Promise(r => setTimeout(r, 20));
-        }
+        // 即時表示（フェードなし）
+        storyMessage.alpha = 1;
 
         if (autoAdvanceMs > 0) {
             // 自動進行モード: 指定ミリ秒後に次へ
@@ -23492,27 +24313,16 @@ async function showStoryPages(pages, useMiddlePos = false, useTopPos = false, au
             }
         }
 
-        // フェードアウト
-        for (let a = 1; a >= 0; a -= 0.05) {
-            storyMessage.alpha = a;
-            await new Promise(r => setTimeout(r, 20));
-        }
+        // 即時消去（フェードなし）
         storyMessage = null;
         await new Promise(r => setTimeout(r, 1000));
     }
 }
 
-// 商人用: EN→ログ出力、JP→オーバーレイ表示
+// 商人用: 両言語対応オーバーレイ表示
 async function showMerchantStory(pages, showOnTop) {
     for (let pi = 0; pi < pages.length; pi++) {
-        const page = pages[pi];
-        page.forEach(line => {
-            if (typeof line === 'object' && line.en) {
-                line.en.split('\n').forEach(l => { if (l.trim()) addLog(l); });
-            }
-        });
-        const jpLines = page.map(line => typeof line === 'object' ? line.jp : line);
-        await showStoryPages([jpLines], false, showOnTop, 0, false, true);
+        await showStoryPages([pages[pi]], false, showOnTop, 0, false, true);
     }
 }
 
@@ -23694,9 +24504,18 @@ async function playOpeningSequence() {
     openingData.active = true;
     openingData.currentLine = null;
     openingData.alpha = 0;
+    _openingSkipRequested = false;
 
-    // 1. スタート直後の1秒間の静寂
-    await new Promise(r => setTimeout(r, 1000));
+    // スキップ可能な待機（途中でスキップされたら即抜ける）
+    const waitMs = async (ms) => {
+        const end = Date.now() + ms;
+        while (Date.now() < end && !_openingSkipRequested) {
+            await new Promise(r => setTimeout(r, 30));
+        }
+    };
+
+    // 1. スタート直後の静寂
+    await waitMs(1000);
 
     // シーン1: 裏切り
     const betrayalScene = [
@@ -23718,43 +24537,44 @@ async function playOpeningSequence() {
 
     const waitInput = async () => {
         isTutorialInputActive = true;
-        while (isTutorialInputActive) {
+        while (isTutorialInputActive && !_openingSkipRequested) {
             await new Promise(r => setTimeout(r, 20));
         }
+        isTutorialInputActive = false;
     };
 
     const showLine = async (line) => {
+        if (_openingSkipRequested) return;
         openingData.currentLine = line;
-        // フェードイン
-        for (let a = 0; a <= 1; a += 0.02) {
-            openingData.alpha = a;
-            await new Promise(r => requestAnimationFrame(r));
-        }
         openingData.alpha = 1;
         await waitInput();
-        // フェードアウト
-        for (let a = 1; a >= 0; a -= 0.05) {
-            openingData.alpha = a;
-            await new Promise(r => requestAnimationFrame(r));
-        }
         openingData.alpha = 0;
         openingData.currentLine = null;
-        await new Promise(r => setTimeout(r, 1000));
+        await waitMs(800);
     };
 
     // 前半
     for (const line of betrayalScene) {
+        if (_openingSkipRequested) break;
         await showLine(line);
     }
 
-    // 2. 沈黙の1秒
-    openingData.currentLine = null;
-    await new Promise(r => setTimeout(r, 1000));
+    // 沈黙
+    if (!_openingSkipRequested) {
+        openingData.currentLine = null;
+        await waitMs(1000);
+    }
 
     // 後半
     for (const line of revengeScene) {
+        if (_openingSkipRequested) break;
         await showLine(line);
     }
+
+    // 後処理
+    openingData.currentLine = null;
+    openingData.alpha = 0;
+    _openingSkipRequested = false;
 
     // 最終暗転
     transition.active = true;
@@ -23771,7 +24591,7 @@ async function playOpeningSequence() {
 
 // ===== SECTION: OPENING ANIMATION =====
 function drawOpening(now) {
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
@@ -23811,10 +24631,6 @@ function drawOpening(now) {
 
 // ===== SECTION: GAME LOOP =====
 function gameLoop(now) {
-    const hideStates = ['TITLE', 'LANG_SELECT', 'FIXED_STAGE_SELECT', 'ROOM_TYPE_SELECT', 'OPENING', 'GAMEOVER', 'GAMEOVER_SEQ', 'ENDING', 'ENDING_SEQ'];
-    const _hideHUD = hideStates.includes(gameState) || floorLevel === -1;
-    statsBar.style.display = _hideHUD ? 'none' : '';
-    logRow.style.display = _hideHUD ? 'none' : '';
     const _creditsMode = floorLevel === -1 && gameState === 'PLAYING';
     if (gameWrapper) gameWrapper.style.border = _creditsMode ? 'none' : '';
     canvas.style.border = _creditsMode ? 'none' : '';
@@ -23841,11 +24657,10 @@ function gameLoop(now) {
         drawInventoryScreen();
     } else if (gameState === 'SHOP') {
         draw(now);
-        drawShopScreen();
+        if (!window._mHideCanvasShop) drawShopScreen(); // スマホの買い物枠表示中は描かない（二重表示防止）
     } else if (gameState === 'CONFIRM_BUY') {
         draw(now);
-        drawShopScreen();
-        drawConfirmBuy();
+        if (!window._mHideCanvasShop) { drawShopScreen(); drawConfirmBuy(); }
     } else if (gameState === 'RINGS') {
         draw(now);
         drawRingsScreen();
@@ -23869,9 +24684,9 @@ function gameLoop(now) {
 
 // ===== SECTION: TITLE / GAMEOVER RENDERING =====
 function drawTitle() {
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.textAlign = 'center';
-    const deepUnlocked = localStorage.getItem('deep_unlocked') === '1';
+    const deepUnlocked = safeStorageGet('deep_unlocked', null) === '1';
 
     ctx.fillStyle = '#ededed';
     ctx.font = "bold 40px 'Courier New', Courier, monospace";
@@ -23983,10 +24798,16 @@ function drawTitle() {
     ctx.font = '14px Courier New';
     ctx.fillStyle = '#444';
     ctx.fillText('[Arrows] to Select  [Enter] to Decide', CANVAS_W / 2, CANVAS_H - 40);
+    // バージョン表示（右下）
+    ctx.textAlign = 'right';
+    ctx.font = "11px 'Courier New', Courier, monospace";
+    ctx.fillStyle = '#444';
+    ctx.fillText(_GAME_VERSION, CANVAS_W - 8, CANVAS_H - 8);
+    ctx.textAlign = 'center';
 }
 
 function drawLangSelect() {
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.textAlign = 'center';
@@ -24016,7 +24837,7 @@ function drawLangSelect() {
 }
 
 function drawFixedStageSelect() {
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.textAlign = 'center';
 
     ctx.fillStyle = '#ededed';
@@ -24061,7 +24882,7 @@ function drawFixedStageSelect() {
 }
 
 function drawRoomTypeSelect() {
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ededed';
     ctx.font = "bold 26px 'Courier New', Courier, monospace";
@@ -24111,7 +24932,7 @@ function drawRoomTypeSelect() {
 
 function drawGameOver() {
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H_FULL);
     ctx.textAlign = 'center';
 
     ctx.fillStyle = '#ff0000';
@@ -24147,6 +24968,7 @@ function drawStatusScreen() {
     const ROW = 28;
 
     if (statusPage === 0) {
+        const sx = WX + 80; const valX = sx + 200;
         // ── 上段: HP / ATTACK / DEFENSE ────────────────────────
         const atk = getPlayerAttack();
         const def = getPlayerDefense();
@@ -24156,7 +24978,7 @@ function drawStatusScreen() {
             { label: 'ATTACK',  val: `${atk}`,  sub: `(+${player.swordCount})` },
             { label: 'DEFENSE', val: `${def}`,   sub: `(+${player.armorCount})` },
         ];
-        let y = CY + 50;
+        let y = CY + 86;
         main.forEach(s => {
             ctx.textAlign = 'left';
             ctx.fillStyle = '#ededed';
@@ -24252,37 +25074,6 @@ function drawStatusScreen() {
             }
             if (!s.noAdvance) y += 24;
 
-            // KILLSの直下: 倒した敵種別チャート（2行）、その後♛王冠トロフィー
-            if (s.label === 'KILLS') {
-                ctx.textAlign = 'left';
-                // row 0: A-Z 28エントリを詰めて表示（11px/14px）、row 1: 記号4エントリ（13px/20px）
-                const _kcSteps = [14, 20];
-                const _kcFonts = [11, 13];
-                _KILL_CHART_ROWS.forEach((row, ri) => {
-                    let kx = valX;
-                    const _kcStep = _kcSteps[ri] ?? 20;
-                    const _kcSz  = _kcFonts[ri] ?? 13;
-                    row.forEach(entry => {
-                        const killed = entry.types.some(t => _killedEnemyTypes.has(t));
-                        kx += _kcStep;
-                        if (!killed) return;
-                        const _needsFallback = 'λΩφ'.includes(entry.char);
-                        ctx.font = _needsFallback
-                            ? `${_kcSz}px "Courier New", "DejaVu Sans Mono", monospace`
-                            : `${_kcSz}px "Courier New"`;
-                        ctx.fillStyle = '#ededed';
-                        ctx.fillText(entry.char, kx - _kcStep, y + ri * 20);
-                    });
-                });
-                y += _KILL_CHART_ROWS.length * 20 + 6;
-                if (kingKillCount > 0) {
-                    ctx.fillStyle = '#fbbf24';
-                    ctx.font = 'bold 14px Courier New';
-                    const _ktStr = kingKillCount <= 5 ? '♛'.repeat(kingKillCount) : `♛ ×${kingKillCount}`;
-                    ctx.fillText(_ktStr, valX, y);
-                    y += 24;
-                }
-            }
         });
 
         // ── 装備中の指輪 ────────────────────────────────────────
@@ -24310,29 +25101,71 @@ function drawStatusScreen() {
               subDesc: _gameLang === 'en' ? '+1 DEF per armor'           : '1個取得ごとに 防御力 +1' },
         ];
 
-        let y = CY + 50;
-        equip.forEach(e => {
+        let y = CY + 86;
+        const _eqItemW = 140;
+        const _eqGap = Math.floor((WW - _eqItemW * 2) / 3);
+        const _eqLeftX  = WX + _eqGap;
+        const _eqRightX = WX + _eqGap + _eqItemW + _eqGap;
+        equip.forEach((e, i) => {
+            const ex = i === 0 ? _eqLeftX : _eqRightX;
             ctx.textAlign = 'left';
             // アイコン（水色・太字）
             ctx.font = 'bold 14px Courier New';
             ctx.fillStyle = '#38bdf8';
-            ctx.fillText(e.symbol, sx, y);
+            ctx.fillText(e.symbol, ex, y);
             const _symW = ctx.measureText(e.symbol).width;
             // 名前（通常の白）
             ctx.font = '14px Courier New';
             ctx.fillStyle = '#ededed';
-            ctx.fillText('  ' + e.name, sx + _symW, y);
-            // 詳細（同じ明るさ）
+            ctx.fillText('  ' + e.name, ex + _symW, y);
+            // 詳細
             ctx.font = '12px Courier New';
             ctx.fillStyle = '#ededed';
-            ctx.fillText(e.level !== null ? `Lv ${e.level}  ${e.desc}` : e.desc, sx + 16, y + 16);
+            ctx.fillText(e.level !== null ? `Lv ${e.level}  ${e.desc}` : e.desc, ex + 16, y + 16);
             ctx.fillStyle = '#bbb';
-            ctx.fillText(e.subDesc, sx + 16, y + 30);
-            y += ROW + 36;
+            ctx.fillText(e.subDesc, ex + 16, y + 30);
         });
+        y += ROW + 36;
+
+        // ── KILLS CHART ──────────────────────────────────────
+        const _kcCx = WX + WW / 2;
+        y += 32;
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 14px Courier New';
+        ctx.fillStyle = '#ededed';
+        ctx.fillText('Hunted Typography', _kcCx, y);
+        y += 22;
+        const _kcSteps = [14, 20];
+        const _kcFonts = [11, 13];
+        _KILL_CHART_ROWS.forEach((row, ri) => {
+            const _kcStep = _kcSteps[ri] ?? 20;
+            const _kcSz  = _kcFonts[ri] ?? 13;
+            let kx = _kcCx - (row.length * _kcStep) / 2;
+            row.forEach(entry => {
+                const killed = entry.types.some(t => _killedEnemyTypes.has(t));
+                if (!killed) { kx += _kcStep; return; }
+                const _needsFallback = 'λΩφ'.includes(entry.char);
+                ctx.font = _needsFallback
+                    ? `${_kcSz}px "Courier New", "DejaVu Sans Mono", monospace`
+                    : `${_kcSz}px "Courier New"`;
+                ctx.textAlign = 'left';
+                ctx.fillStyle = '#ededed';
+                ctx.fillText(entry.char, kx, y + ri * 20);
+                kx += _kcStep;
+            });
+        });
+        y += _KILL_CHART_ROWS.length * 20 + 6;
+        if (kingKillCount > 0) {
+            ctx.fillStyle = '#fbbf24';
+            ctx.font = 'bold 14px Courier New';
+            ctx.textAlign = 'center';
+            const _ktStr = kingKillCount <= 5 ? '♛'.repeat(kingKillCount) : `♛ ×${kingKillCount}`;
+            ctx.fillText(_ktStr, _kcCx, y);
+            y += 24;
+        }
 
         // ── BESTIARY ─────────────────────────────────────────
-        y += 80;
+        y += 16;
         const _bColW = 48;
         const _bDrawRow = (defs, killMap, cols) => {
             defs.forEach((g, i) => {
@@ -24351,11 +25184,12 @@ function drawStatusScreen() {
         _bDrawRow(LATIN_ENEMIES, latinKillCounts, 13);
 
     } else {
+        const sx = WX + 80; const valX = sx + 200;
         // ── Page 3: Settings ───────────────────────────────────
-        const optY = CY + 40;
-        const opt2Y = CY + 75;
-        const opt3Y = CY + 110;
-        const opt4Y = CY + 145;
+        const optY = CY + 76;
+        const opt2Y = CY + 111;
+        const opt3Y = CY + 146;
+        const opt4Y = CY + 181;
         ctx.textAlign = 'left';
 
         // BGM ON/OFF row
@@ -24587,7 +25421,7 @@ function drawShopScreen() {
     if (shopMode === 'SELECT') {
         const sw = 280, sh = 120;
         const sx = (CANVAS_W - sw) / 2, sy = (CANVAS_H - sh) / 2;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.90)';
+        ctx.fillStyle = '#000';
         ctx.fillRect(sx, sy, sw, sh);
         ctx.strokeStyle = '#ededed';
         ctx.lineWidth = 2;
@@ -24597,15 +25431,15 @@ function drawShopScreen() {
         ctx.font = 'bold 12px Courier New';
         ctx.fillText('-- Stranded Adventurer --', CANVAS_W / 2, sy + 20);
         const midX = CANVAS_W / 2;
-        const midY = sy + 58;
+        const midY = sy + sh / 2 + 10;
         if (_gameLang === 'en') {
-            ctx.font = 'bold 16px Courier New';
+            ctx.font = 'bold 14px Courier New';
             ctx.fillStyle = shopModeSelection === 0 ? '#ededed' : '#444';
             ctx.fillText(shopModeSelection === 0 ? '> BUY <' : '  BUY  ', midX - 68, midY);
             ctx.fillStyle = shopModeSelection === 1 ? '#ededed' : '#444';
             ctx.fillText(shopModeSelection === 1 ? '> SELL <' : '  SELL  ', midX + 68, midY);
         } else {
-            ctx.font = `bold 14px ${MINCHO}`;
+            ctx.font = `bold 12px ${MINCHO}`;
             ctx.fillStyle = shopModeSelection === 0 ? '#ededed' : '#444';
             ctx.fillText(shopModeSelection === 0 ? '＞ 買う ＜' : '　買う　', midX - 68, midY);
             ctx.fillStyle = shopModeSelection === 1 ? '#ededed' : '#444';
@@ -24617,10 +25451,10 @@ function drawShopScreen() {
         return;
     }
 
-    const pad = 30;
+    const pad = 15;
     const w = CANVAS_W - pad * 2;
-    const h = CANVAS_H - pad * 2;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    const h = CANVAS_H_FULL - HUD_BOT_H - pad * 2;
+    ctx.fillStyle = '#000';
     ctx.fillRect(pad, pad, w, h);
     ctx.strokeStyle = '#ededed';
     ctx.lineWidth = 2;
@@ -24638,10 +25472,10 @@ function drawShopScreen() {
     ctx.fillText(`Gold: ${player.gold}G`, pad + w - 15, pad + 55);
     ctx.textAlign = 'left';
 
-    const startY = pad + 80;
+    const startY = pad + 100;
     const lineH = 45;
     const GAP_H = 12;
-    const maxVisible = 8;
+    const maxVisible = Math.max(1, Math.floor((h - 150) / lineH));
     const listAreaH = maxVisible * lineH;
 
     // スクロール位置を選択に合わせてクランプ
@@ -24659,21 +25493,28 @@ function drawShopScreen() {
 
     const visibleItems = shopStock.slice(shopScrollOffset, shopScrollOffset + maxVisible);
     let cumOffsetY = 0;
+    let lastItemYPos = -1;
+    // 買いアイテムのアイコン色: 指輪はRINGS定義の色、魔導書は取得時の色に対応
+    const _TOME_BUY_COLORS = {
+        [SYMBOLS.HEAL_TOME]:    '#4ade80',
+        [SYMBOLS.SPEED]:        '#38bdf8',
+        [SYMBOLS.STEALTH]:      '#94a3b8',
+        [SYMBOLS.CHARM]:        '#60a5fa',
+        [SYMBOLS.BREAKER_TOME]: '#f59e0b',
+        [SYMBOLS.EXPLOSION]:    '#ef4444',
+        [SYMBOLS.ESCAPE]:       '#c084fc',
+        [SYMBOLS.GUARDIAN]:     '#facc15',
+    };
     visibleItems.forEach((item, vi) => {
         const i = shopScrollOffset + vi;
         const yPos = startY + cumOffsetY;
 
         if (item.type === 'gap') {
-            ctx.strokeStyle = '#2a2a2a';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(pad + 20, yPos + GAP_H / 2);
-            ctx.lineTo(pad + w - 20, yPos + GAP_H / 2);
-            ctx.stroke();
             cumOffsetY += GAP_H;
             return;
         }
 
+        lastItemYPos = yPos;
         cumOffsetY += lineH;
         const isSelected = shopSelection === i;
         const isSellItem = item.type === 'sell_sword' || item.type === 'sell_armor' || item.type === 'sell_ring' || item.type === 'sell_tome' || item.type === 'sell_fairy';
@@ -24701,7 +25542,7 @@ function drawShopScreen() {
             symbol = SYMBOLS.ARMOR;
         } else if (item.type === 'tome') {
             name = item.name; nameJa = item.nameJa; descJa = item.descJa; desc = item.desc || item.descJa;
-            symbol = SYMBOLS.TOME;
+            symbol = item.symbol || SYMBOLS.TOME;
         } else if (item.type === 'sell_sword') {
             name = 'Fallen Blade'; nameJa = '遺品の剣'; descJa = `所持数: ${player.swordCount}個`; desc = `Owned: ${player.swordCount}`;
             symbol = SYMBOLS.SWORD;
@@ -24732,46 +25573,51 @@ function drawShopScreen() {
             ? ((boughtTome || boughtRing) ? '  ×0' : '  ×1') : '';
 
         // アイコン + 名前（売りは全アイコン水色、買いは全アイコン黄色）
-        ctx.font = '14px Courier New';
+        ctx.font = '12px Courier New';
         const _nameColor = isSelected ? '#ededed' : '#ccc';
         const _nc = !canAfford ? '#555' : _nameColor;
         const _pfxW = ctx.measureText('  ').width;
         const _symW = ctx.measureText(symbol).width;
         ctx.fillStyle = _nc;
         ctx.fillText('  ', pad + 30, yPos + 5);
-        ctx.font = 'bold 14px Courier New';
+        ctx.font = 'bold 12px Courier New';
         let _iconColor;
         if (!canAfford) _iconColor = '#555';
-        else if (isSellItem) _iconColor = '#38bdf8';  // 売り: 水色
+        else if (item.type === 'sell_ring') _iconColor = RINGS[item.ringIndex].color;
+        else if (item.type === 'sell_tome') _iconColor = _TOME_BUY_COLORS[item.sym] || '#fbbf24';
+        else if (isSellItem) _iconColor = '#38bdf8';  // 売り(剣・鎧・妖精): 水色
         else if (symbol === SYMBOLS.SWORD || symbol === SYMBOLS.ARMOR) _iconColor = '#38bdf8'; // 遺品の剣・鎧: 水色
+        else if (item.type === 'ring') _iconColor = RINGS[item.ringIndex].color;
+        else if (item.type === 'tome') _iconColor = _TOME_BUY_COLORS[item.symbol] || '#fbbf24';
         else _iconColor = '#fbbf24';                   // 買い: 黄色
         ctx.fillStyle = _iconColor;
         ctx.fillText(symbol, pad + 30 + _pfxW, yPos + 5);
         if (_gameLang === 'en') {
-            ctx.font = '14px Courier New';
+            ctx.font = '12px Courier New';
             ctx.fillStyle = _nc;
             const _nameStr = ` ${name}`;
             ctx.fillText(_nameStr, pad + 30 + _pfxW + _symW, yPos + 5);
             if (countStr) {
                 const _nameStrW = ctx.measureText(_nameStr).width;
-                ctx.font = '12px Courier New';
+                ctx.font = '11px Courier New';
                 ctx.fillStyle = '#888';
                 ctx.fillText(countStr, pad + 30 + _pfxW + _symW + _nameStrW, yPos + 5);
             }
         } else {
-            ctx.font = `14px ${MINCHO}`;
+            ctx.font = `12px ${MINCHO}`;
             ctx.fillStyle = _nc;
             const _jaNameStr = ` ${nameJa}`;
             ctx.fillText(_jaNameStr, pad + 30 + _pfxW + _symW, yPos + 5);
             if (countStr) {
                 const _jaNameStrW = ctx.measureText(_jaNameStr).width;
-                ctx.font = '12px Courier New';
+                ctx.font = '11px Courier New';
                 ctx.fillStyle = '#888';
                 ctx.fillText(countStr, pad + 30 + _pfxW + _symW + _jaNameStrW, yPos + 5);
             }
         }
 
         // コスト / 売値
+        ctx.font = '12px Courier New';
         ctx.textAlign = 'right';
         if (isSellItem) {
             ctx.fillStyle = isSelected ? '#ededed' : '#aaa';
@@ -24806,6 +25652,12 @@ function drawShopScreen() {
         }
     });
 
+    // 下に続きがある場合: 最後の実アイテム行をフェード
+    if (hasBelow && lastItemYPos >= 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(pad + 1, lastItemYPos - 12, w - 2, lineH);
+    }
+
     // 下に続きがある場合、ギャップを飛ばして最初の実アイテムを薄く表示
     if (hasBelow) {
         let peekIdx = shopScrollOffset + maxVisible;
@@ -24834,16 +25686,17 @@ function drawShopScreen() {
 
     ctx.restore();
 
-    // スクロールインジケーター
+    // スクロールインジケーター（リスト中央上下に配置）
     ctx.font = '11px Courier New';
     ctx.textAlign = 'center';
+    const _indX = pad + w / 2;
     if (shopScrollOffset > 0) {
         ctx.fillStyle = '#888';
-        ctx.fillText('▲', pad + w - 20, startY + 4);
+        ctx.fillText('▲', _indX, startY - 6);
     }
     if (shopScrollOffset + maxVisible < shopStock.length) {
         ctx.fillStyle = '#888';
-        ctx.fillText('▼', pad + w - 20, startY + listAreaH - 4);
+        ctx.fillText('▼', _indX, startY + listAreaH + 14);
     }
 
     // 操作ガイド
@@ -24876,8 +25729,6 @@ function drawRingsScreen() {
             const isSel = ringSlotSelection === s;
 
             if (isSel) {
-                ctx.fillStyle = 'rgba(237,237,237,0.08)';
-                ctx.fillRect(SX + 10, sy - 2, SW - 20, ROW_H - 8);
                 ctx.fillStyle = '#ededed';
                 ctx.font = 'bold 14px Courier New';
                 ctx.textAlign = 'left';
@@ -24887,9 +25738,9 @@ function drawRingsScreen() {
             ctx.textAlign = 'left';
             ctx.font = 'bold 13px Courier New';
             ctx.fillStyle = isSel ? '#ededed' : '#666';
-            ctx.fillText('Slot ' + (s + 1), SX + 30, sy + 16);
+            ctx.fillText('Slot ' + (s + 1), SX + 30, sy + 20);
 
-            const boxX = SX + 86, boxY = sy - 2;
+            const boxX = SX + 110, boxY = sy - 2;
 
             const RX = SX + SW - 20; // 右端基準
             if (ring) {
@@ -24976,9 +25827,9 @@ function drawRingsScreen() {
             ctx.textAlign = 'left';
             ctx.font = 'bold 13px Courier New';
             ctx.fillStyle = isSel ? 'rgba(237,237,237,0.45)' : 'rgba(237,237,237,0.18)';
-            ctx.fillText('Slot ' + (s + 1), SL_X + 30, sy + 16);
+            ctx.fillText('Slot ' + (s + 1), SL_X + 30, sy + 20);
 
-            const boxX = SL_X + 86, boxY = sy - 2, boxW = SL_W - 100, boxH = ROW_H_SLOT - 8;
+            const boxX = SL_X + 110, boxY = sy - 2, boxW = SL_W - 124, boxH = ROW_H_SLOT - 8;
             ctx.fillStyle = 'rgba(0,0,0,0.5)';
             ctx.fillRect(boxX, boxY, boxW, boxH);
             ctx.strokeStyle = isSel ? 'rgba(237,237,237,0.22)' : 'rgba(237,237,237,0.07)';
@@ -25603,6 +26454,21 @@ function spawnXFromWall(x, y) {
     setScreenShake(4, 150);
 }
 
+// 大きな数字を短く表示する（10万以上は「5.1×10⁷」のようなべき乗表記）
+// 1階の特殊個体Eのように成長が2倍ずつ続く仲間で、文字が画面からはみ出さないようにするため
+function formatBigNumber(n) {
+    if (!Number.isFinite(n)) return '∞';
+    const sign = n < 0 ? '-' : '';
+    n = Math.abs(n);
+    if (n < 100000) return sign + Math.round(n);
+    const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+    let exp = Math.floor(Math.log10(n));
+    let mant = Math.round(n / Math.pow(10, exp) * 10) / 10;
+    if (mant >= 10) { mant = 1; exp += 1; } // 9.96 → 10.0 になる丸めの補正
+    const expStr = String(exp).split('').map(d => SUP[+d]).join('');
+    return `${sign}${mant}×10${expStr}`;
+}
+
 function spawnFloatingText(x, y, text, color, duration = 400) {
     damageTexts.push({ x, y, text, color, startTime: performance.now(), duration });
 }
@@ -25682,6 +26548,285 @@ function _applyCrumbleAura(px, py, ox, oy) {
     }
 }
 
+// ===== CANVAS HUD DRAWING =====
+function _drawCanvasHUDTop() {
+    // Draws stats bar at y=0..HUD_TOP_H in current translate context
+    // (Called from within translate(0, HUD_TOP_H), so draw at y = -HUD_TOP_H)
+    const Y0 = -HUD_TOP_H;
+    const H = HUD_TOP_H;
+    ctx.save();
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, Y0, CANVAS_W, H);
+    // Bottom border
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, Y0 + H - 0.5);
+    ctx.lineTo(CANVAS_W, Y0 + H - 0.5);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const FONT = "12px 'Courier New', Courier, monospace";
+    ctx.font = FONT;
+
+    // y-positions (absolute within HUD_TOP_H=55, 12px uniform gap):
+    //   ly1=5(floor), ly2=17(gold/LV), ly3=29(equip/HP), lyR=41(rings/STAMINA)
+    const lx = 20;
+    const lyR = Y0 + H - 14;  // bottom row: rings (right) + STAMINA (left)
+    const ly3 = lyR - 12;     // equipment (right) + HP (left)
+    const ly2 = lyR - 24;     // gold (right) + LV (left)
+    const ly1 = lyR - 36;     // floor (right)
+
+    // === LEFT COLUMN: LV / HP / STAMINA ===
+    // LV (at ly2, same row as gold)
+    ctx.fillStyle = '#ededed'; ctx.fillText('LV: ', lx, ly2);
+    const lvW = ctx.measureText('LV: ').width;
+    ctx.fillText(String(_hudLV), lx + lvW, ly2);
+
+    // HP (at ly3, same row as equipment)
+    ctx.fillStyle = '#ededed'; ctx.fillText('HP: ', lx, ly3);
+    const hpW = ctx.measureText('HP: ').width;
+    ctx.fillStyle = _hudHPColor; ctx.fillText(_hudHP, lx + hpW, ly3);
+
+    // STAMINA (at lyR, same row as ring names)
+    ctx.fillStyle = '#ededed';
+    ctx.fillText('STAMINA', lx, lyR);
+    const gx = lx + ctx.measureText('STAMINA ').width + 2;
+    const gw = 55, gh = 5, gy = lyR - gh / 2;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(gx, gy, gw, gh);
+    const barW = Math.round((_hudStaminaInfinite ? 100 : _hudStamina) / 100 * gw);
+    ctx.fillStyle = _hudStaminaInfinite ? '#fbbf24' : (_hudStamina < 30 ? '#f87171' : '#38bdf8');
+    ctx.fillRect(gx, gy, barW, gh);
+    if (_hudStaminaInfinite) {
+        ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 6;
+        ctx.fillRect(gx, gy, barW, gh);
+        ctx.shadowBlur = 0;
+    }
+
+    // === RIGHT COLUMN: FLOOR / GOLD / WEAPON+ARMOR / RINGS ===
+    const rx = CANVAS_W - 20;
+    ctx.textAlign = 'right';
+    ctx.font = FONT;
+
+    // Floor (ly1)
+    ctx.fillStyle = '#ededed';
+    if (_hudFloorPrefix) {
+        const floorTextW = ctx.measureText(_hudFloor).width;
+        ctx.fillText(_hudFloorPrefix, rx - floorTextW, ly1);
+    }
+    ctx.fillText(_hudFloor, rx, ly1);
+
+    // Gold (ly2)
+    if (_hudGold > 0) {
+        ctx.fillStyle = '#ededed';
+        ctx.fillText(`${_hudGold}G`, rx, ly2);
+    }
+
+    // Equipment: key / sword / armor (ly3, right-to-left)
+    const eqBot = [];
+    if (_hudHasKey) eqBot.push({ text: 'k', color: '#fbbf24', preGap: 6 });
+    if (_hudSwordCount > 0) eqBot.push({ text: '†', color: '#38bdf8' }, { text: `×${_hudSwordCount}`, color: '#ededed' });
+    if (_hudArmorCount > 0) eqBot.push({ text: '▼', color: '#38bdf8' }, { text: `×${_hudArmorCount}`, color: '#ededed' });
+    let eBotX = rx;
+    for (let i = eqBot.length - 1; i >= 0; i--) {
+        const seg = eqBot[i];
+        const w = ctx.measureText(seg.text).width;
+        if (seg.preGap) eBotX -= seg.preGap;
+        ctx.fillStyle = seg.color;
+        ctx.fillText(seg.text, eBotX, ly3);
+        eBotX -= w + 5;
+    }
+
+    // Ring names (lyR)
+    if (_hudRingNames.length > 0) {
+        ctx.fillStyle = '#ededed';
+        ctx.textAlign = 'right';
+        ctx.fillText(_hudRingNames.join('  /  '), rx, lyR);
+    }
+
+    ctx.restore();
+}
+
+function _drawCanvasHUDMinimap(Y0, H) {
+    const mm = _hudMinimapData;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const CX = CANVAS_W / 2;
+
+    if (mm.type === 'escape') {
+        // 2x5 escape room minimap
+        const CW = 16, CH = 9;
+        const startX = CX - 5 * CW / 2;
+        for (let r = 0; r < 2; r++) {
+            for (let c = 0; c < 5; c++) {
+                const p = r * 5 + c;
+                ctx.font = "8px 'Courier New', Courier, monospace";
+                ctx.fillStyle = '#ededed';
+                ctx.fillText(p === mm.current ? '■' : '□', startX + c * CW + CW / 2, Y0 + r * CH + (H - CH * 2) / 2 + CH / 2 + 4);
+            }
+        }
+    } else if (mm.type === 'corridor') {
+        const CW = 16;
+        const startX = CX - (mm.winEnd - mm.winStart + 1) * CW / 2;
+        ctx.font = "8px 'Courier New', Courier, monospace";
+        let dx = 0;
+        if (mm.winStart > 0) {
+            ctx.fillStyle = '#555'; ctx.fillText('…', startX - CW / 2, Y0 + H / 2);
+        }
+        for (let sx = mm.winStart; sx <= mm.winEnd; sx++) {
+            const isCurrent = sx === mm.current;
+            const isVisited = mm.visited[0][sx];
+            ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#ededed');
+            ctx.fillText(isCurrent ? '■' : (isVisited ? '■' : '□'), startX + dx * CW + CW / 2, Y0 + H / 2);
+            dx++;
+        }
+        if (mm.winEnd < mm.total - 1) {
+            ctx.fillStyle = '#555'; ctx.fillText('…', startX + dx * CW + CW / 2, Y0 + H / 2);
+        }
+    } else if (mm.type === 'grid') {
+        const CW = 16, CH = 9;
+        const startX = CX - mm.cols * CW / 2;
+        const startY = Y0 + (H - mm.rows * CH) / 2;
+        ctx.font = "8px 'Courier New', Courier, monospace";
+        for (let sy = 0; sy < mm.rows; sy++) {
+            for (let sx = 0; sx < mm.cols; sx++) {
+                const active = !mm.active || mm.active[sy][sx];
+                if (!active) continue;
+                const isCurrent = sx === mm.current.x && sy === mm.current.y;
+                const isVisited = mm.visited[sy][sx];
+                ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#ededed');
+                ctx.fillText(isCurrent ? '■' : (isVisited ? '■' : '□'), startX + sx * CW + CW / 2, startY + sy * CH + CH / 2);
+            }
+        }
+    }
+    ctx.restore();
+}
+
+function _drawCanvasMinimapOverlay() {
+    if (!_hudMinimapData) return;
+    const mm = _hudMinimapData;
+    const CX = CANVAS_W / 2;
+    const PAD = 8;
+
+    let cols, rows;
+    if (mm.type === 'escape') { cols = 5; rows = 2; }
+    else if (mm.type === 'corridor') { cols = (mm.winEnd - mm.winStart + 1) + (mm.winStart > 0 ? 1 : 0) + (mm.winEnd < mm.total - 1 ? 1 : 0); rows = 1; }
+    else if (mm.type === 'grid') { cols = mm.cols; rows = mm.rows; }
+    else return;
+
+    const maxDim = Math.max(cols, rows);
+    const CH = maxDim <= 5 ? 8 : 7;
+    const CW = CH * 2; // 2:1 cell ratio → overall 16:9 for 10×10 (136/76≈1.79)
+
+    const totalW = cols * CW + PAD * 2;
+    const totalH = rows * CH + PAD * 2;
+    const bgX = CX - totalW / 2;
+    const bgY = -HUD_TOP_H + Math.round((HUD_TOP_H - totalH) / 2);
+
+    ctx.save();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = "7.8px 'Courier New', Courier, monospace";
+
+    if (mm.type === 'escape') {
+        const sx = CX - cols * CW / 2;
+        for (let r = 0; r < 2; r++) {
+            for (let c = 0; c < 5; c++) {
+                const p = r * 5 + c;
+                const isCurrent = p === mm.current;
+                ctx.fillStyle = isCurrent ? '#ededed' : '#555';
+                ctx.fillText(isCurrent ? '■' : '□', sx + c * CW + CW / 2, bgY + PAD + r * CH + CH / 2);
+            }
+        }
+    } else if (mm.type === 'corridor') {
+        let drawX = bgX + PAD;
+        if (mm.winStart > 0) {
+            ctx.fillStyle = '#555'; ctx.fillText('…', drawX + CW / 2, bgY + PAD + CH / 2); drawX += CW;
+        }
+        for (let s = mm.winStart; s <= mm.winEnd; s++) {
+            const isCurrent = s === mm.current;
+            const isVisited = mm.visited[0][s];
+            ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#555');
+            ctx.fillText(isCurrent ? '■' : (isVisited ? '■' : '□'), drawX + CW / 2, bgY + PAD + CH / 2);
+            drawX += CW;
+        }
+        if (mm.winEnd < mm.total - 1) {
+            ctx.fillStyle = '#555'; ctx.fillText('…', drawX + CW / 2, bgY + PAD + CH / 2);
+        }
+    } else if (mm.type === 'grid') {
+        const sx = CX - mm.cols * CW / 2;
+        for (let sy = 0; sy < mm.rows; sy++) {
+            for (let sc = 0; sc < mm.cols; sc++) {
+                const active = !mm.active || mm.active[sy][sc];
+                if (!active) continue;
+                const isCurrent = sc === mm.current.x && sy === mm.current.y;
+                const isVisited = mm.visited[sy][sc];
+                ctx.fillStyle = isCurrent ? '#ededed' : (isVisited ? '#666' : '#555');
+                ctx.fillText(isCurrent ? '■' : (isVisited ? '■' : '□'), sx + sc * CW + CW / 2, bgY + PAD + sy * CH + CH / 2);
+            }
+        }
+    }
+    ctx.restore();
+}
+
+function _drawCanvasHUDBot() {
+    // Draw log area below game canvas (at y = CANVAS_H..CANVAS_H+HUD_BOT_H in current translate)
+    const Y0 = CANVAS_H;
+    const H = HUD_BOT_H;
+    ctx.save();
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, Y0, CANVAS_W, H);
+    // Top border
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, Y0 + 0.5);
+    ctx.lineTo(CANVAS_W, Y0 + 0.5);
+    ctx.stroke();
+
+    // Log lines (last 3, fading gradient)
+    const FONT = "12px 'Courier New', Courier, monospace";
+    const LH = 16;
+    const show = window._mHideCanvasLog ? [] : _logLines.slice(-3); // スマホのログ枠表示中は描かない（二重表示防止）
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    for (let i = 0; i < show.length; i++) {
+        const entry = show[i];
+        const fy = Y0 + 10 + i * LH;
+        const alpha = i === show.length - 1 ? 1 : 0.3 + (i / show.length) * 0.5;
+        ctx.globalAlpha = alpha;
+        if (entry.segments) {
+            let sx = 20;
+            ctx.font = FONT;
+            for (const seg of entry.segments) {
+                ctx.fillStyle = seg.color;
+                ctx.fillText(seg.text + ' ', sx, fy);
+                sx += ctx.measureText(seg.text + ' ').width;
+            }
+        } else {
+            ctx.fillStyle = '#ededed';
+            ctx.font = FONT;
+            ctx.fillText(entry.text, 20, fy);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // BEST (bottom-right of log area)
+    ctx.font = "12px 'Courier New', Courier, monospace";
+    ctx.fillStyle = '#ededed';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.globalAlpha = 0.5;
+    ctx.fillText(`BEST B${formatFloor(_hudBestFloor)}F`, CANVAS_W - 8, Y0 + H - 4);
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+}
+
 // Main canvas render loop. Draws tiles, enemies, player, effects, and overlays
 // for the current screen. Called from the game loop on every animation frame.
 function draw(now) {
@@ -25717,7 +26862,13 @@ function draw(now) {
     }
     // 期限切れの爆風エフェクトを除去
     blastEffects = blastEffects.filter(b => now < b.endTime);
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H_FULL);
+
+    // ===== CANVAS HUD: persistent Y-offset so game tiles appear below the stats bar =====
+    ctx.save(); // [HUD-A] — wraps entire game draw + post-shake overlays
+    ctx.translate(0, HUD_TOP_H);
+    const _hudVisible = !['TITLE','LANG_SELECT','FIXED_STAGE_SELECT','ROOM_TYPE_SELECT','OPENING','GAMEOVER','GAMEOVER_SEQ','ENDING','ENDING_SEQ'].includes(gameState) && floorLevel !== -1;
+    if (_hudVisible) { _drawCanvasHUDTop(); _drawCanvasHUDBot(); }
 
     ctx.save();
     ctx.shadowBlur = 0;
@@ -25982,13 +27133,34 @@ function draw(now) {
                     }
                 } else if (char === SYMBOLS.BLUE_BLOCK) {
                     ctx.save();
+                    // 塗りつぶし（濃い青）
                     ctx.fillStyle = '#1e3a5f';
                     ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+                    // 中央の記号
                     ctx.fillStyle = '#38bdf8';
                     ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 4;
                     ctx.fillText(SYMBOLS.BLUE_BLOCK, px + TILE_SIZE / 2, py + TILE_SIZE / 2);
                     ctx.shadowBlur = 0;
+                    // 白い枠線
+                    ctx.strokeStyle = '#ededed';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
                     ctx.restore();
+                } else if (char === SYMBOLS.BLUE_HOLE) {
+                    const _bhAbsorbing = wisps.some(w => w._absorbingInHole && w.x === x && w.y === y);
+                    const _bhBlinkOn = !_bhAbsorbing || Math.floor(now / 110) % 2 === 0;
+                    if (_bhBlinkOn) {
+                        ctx.save();
+                        const _bhcx = px + TILE_SIZE / 2, _bhcy = py + TILE_SIZE / 2;
+                        const _bhR = TILE_SIZE * 0.26;
+                        const _bhPulse = (Math.sin(now / 500) + 1) / 2;
+                        ctx.fillStyle = '#001830';
+                        ctx.beginPath(); ctx.arc(_bhcx, _bhcy, _bhR, 0, Math.PI * 2); ctx.fill();
+                        ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 6 + _bhPulse * 14;
+                        ctx.strokeStyle = '#7dd3fc'; ctx.lineWidth = 1.5 + _bhPulse * 0.8;
+                        ctx.beginPath(); ctx.arc(_bhcx, _bhcy, _bhR, 0, Math.PI * 2); ctx.stroke();
+                        ctx.restore();
+                    }
                 } else if ([SYMBOLS.WAND, SYMBOLS.KEY, SYMBOLS.SWORD, SYMBOLS.ARMOR, SYMBOLS.SPEED, SYMBOLS.CHARM, SYMBOLS.STEALTH, SYMBOLS.HEAL_TOME, SYMBOLS.EXPLOSION, SYMBOLS.ESCAPE, SYMBOLS.BREAKER_TOME, SYMBOLS.GUARDIAN, SYMBOLS.TOME].includes(char)) {
                     // 敵が乗っている場合はアイテムを描画しない（KEYは後段で敵の上に重ねて描画）
                     if (!enemies.some(e => e.hp > 0 && e.x === x && e.y === y)) {
@@ -26047,7 +27219,8 @@ function draw(now) {
                     if (!(char === SYMBOLS.FLOOR && floorLevel === -1) &&
                         !(char === SYMBOLS.FLOOR && isRoomTestMode && forcedLayoutType === 'NOVEL_CORRIDOR') &&
                         char !== SYMBOLS.ICICLE) {
-                        ctx.fillStyle = tileColor; ctx.fillText(drawChar, px + TILE_SIZE / 2, py + TILE_SIZE / 2);
+                        const _dotXOff = (drawChar === SYMBOLS.FLOOR) ? -2 : 0;
+                        ctx.fillStyle = tileColor; ctx.fillText(drawChar, px + TILE_SIZE / 2 + _dotXOff, py + TILE_SIZE / 2);
                     }
                 }
 
@@ -26557,7 +27730,7 @@ function draw(now) {
                     eChar = 'Q';
                     // 色変更なし。グローと点滅は派閥オーバーライド後に処理
                 }
-                else if (e.type === 'TURRET') { eColor = '#ef4444'; eChar = SYMBOLS.TURRET; }
+                else if (e.type === 'TURRET') { eColor = '#f87171'; eChar = SYMBOLS.TURRET; }
                 else if (e.type === 'HOPPER_TURRET') {
                     // 移動タレット: オレンジと黄色の間で点滅
                     eChar = SYMBOLS.TURRET;
@@ -26714,8 +27887,8 @@ function draw(now) {
                                 eColor = '#94a3b8';
                                 ctx.shadowColor = '#94a3b8'; ctx.shadowBlur = 3;
                             } else {
-                                eColor = '#ef4444';
-                                ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 16;
+                                eColor = '#f87171';
+                                ctx.shadowColor = '#f87171'; ctx.shadowBlur = 16;
                             }
                         } else {
                             ctx.globalAlpha = 0.18;
@@ -27052,6 +28225,33 @@ function draw(now) {
                         ctx.fillText(eChar, px, py);
                     }
                 }
+                // 仲間(isAlly): 右下にレベルを小さく表示
+                if (e.isAlly && e.level && e.level >= 1) {
+                    const _lvFont = ctx.font;
+                    ctx.font = `bold 7px 'Courier New'`;
+                    ctx.shadowColor = '#1e3a5f';
+                    ctx.shadowBlur = 2;
+                    ctx.fillStyle = '#bfdbfe';
+                    ctx.textAlign = 'right';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText('lv' + e.level, px + 9, py + 9);
+                    ctx.font = _lvFont;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                }
+                // 仲間(isAlly): メニュー画面を開いている時だけ全員の HP/MaxHP を上に小さく表示
+                if (e.isAlly && gameState === 'MENU') {
+                    const _hpFont = ctx.font;
+                    ctx.font = `bold 7px 'Courier New'`;
+                    ctx.shadowColor = '#052e16';
+                    ctx.shadowBlur = 2;
+                    ctx.fillStyle = '#bfdbfe';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(`${e.hp}/${e.maxHp}`, px, py - 9);
+                    ctx.font = _hpFont;
+                    ctx.textBaseline = 'middle';
+                }
                 // KEY_RUNNER: 移動前の位置に追従する小さなkを描画
                 if (e.type === 'KEY_RUNNER' && e.trailX != null && (e.trailX !== e.x || e.trailY !== e.y)) {
                     const tkx = e.trailX * TILE_SIZE + TILE_SIZE / 2;
@@ -27139,13 +28339,15 @@ function draw(now) {
 
         // 4. ウィスプ（※ 記号で描画）
         wisps.forEach(w => {
+            if (w._absorbingInHole && Math.floor(now / 110) % 2 !== 0) return; // 点滅オフフェーズはスキップ
             ctx.save();
             const _wx = w.x * TILE_SIZE + TILE_SIZE / 2;
             const _wy = w.y * TILE_SIZE + TILE_SIZE / 2;
             ctx.font = `bold 14px 'Courier New', Courier, monospace`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.shadowColor = '#ededed'; ctx.shadowBlur = 12;
-            ctx.fillStyle = '#e2e8f0';
+            const _wBlur = w._absorbingInHole ? 20 : 12;
+            ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = _wBlur;
+            ctx.fillStyle = '#7dd3fc';
             ctx.fillText('※', _wx, _wy);
             ctx.restore();
         });
@@ -27214,6 +28416,24 @@ function draw(now) {
             const _wc = _webShotVis.red ? '#ef4444' : '#ededed';
             ctx.fillStyle = _wc; ctx.shadowColor = _wc; ctx.shadowBlur = 8;
             ctx.fillText('×', _webShotVis.x * TILE_SIZE + TILE_SIZE / 2, _webShotVis.y * TILE_SIZE + TILE_SIZE / 2);
+            ctx.restore();
+        }
+
+        // 4.8. BLUE_HOLE ↔ ウィスプ接続ライン（プレイヤーがBLUE_HOLEに重なっている時のみ）
+        if (map[player.y] && map[player.y][player.x] === SYMBOLS.BLUE_HOLE && wisps.length > 0) {
+            const _blhx = player.x * TILE_SIZE + TILE_SIZE / 2;
+            const _blhy = player.y * TILE_SIZE + TILE_SIZE / 2;
+            const _blAlpha = 0.45 + Math.sin(now / 180) * 0.25;
+            ctx.save();
+            ctx.strokeStyle = '#7dd3fc';
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = _blAlpha;
+            wisps.forEach(w => {
+                ctx.beginPath();
+                ctx.moveTo(_blhx, _blhy);
+                ctx.lineTo(w.x * TILE_SIZE + TILE_SIZE / 2, w.y * TILE_SIZE + TILE_SIZE / 2);
+                ctx.stroke();
+            });
             ctx.restore();
         }
 
@@ -27518,7 +28738,7 @@ function draw(now) {
     });
 
     // ゲームオーバーの赤色オーバーレイ
-    if (gameOverAlpha > 0) { ctx.fillStyle = `rgba(255, 0, 0, ${gameOverAlpha})`; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H); }
+    if (gameOverAlpha > 0) { ctx.fillStyle = `rgba(255, 0, 0, ${gameOverAlpha})`; ctx.fillRect(0, -HUD_TOP_H, CANVAS_W, CANVAS_H_FULL); }
 
     // トランジション（ホワイトアウト、暗転、星空、落下）
     if (transition.active) {
@@ -27530,7 +28750,7 @@ function draw(now) {
         } else {
             ctx.fillStyle = isWhiteTr ? '#ededed' : transition.mode === 'RED_OUT' ? '#b00' : '#000';
         }
-        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        ctx.fillRect(0, -HUD_TOP_H, CANVAS_W, CANVAS_H_FULL);
 
         if (transition.mode === 'FALLING') {
             transition.particles.forEach(p => { ctx.fillStyle = '#444'; ctx.beginPath(); ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2); ctx.fill(); });
@@ -27550,7 +28770,7 @@ function draw(now) {
             const _tFontSz = transition.fontSize || ((transition.mode === 'BLACK_OUT' || transition.mode === 'STARS' || transition.mode === 'RED_OUT') ? '48px' : '32px');
             ctx.font = `bold ${_tFontSz} 'Courier New', Courier, monospace`;
             ctx.textAlign = 'center';
-            ctx.fillText(transition.text, CANVAS_W / 2, CANVAS_H / 2);
+            ctx.fillText(transition.text, CANVAS_W / 2, CANVAS_H_FULL / 2 - HUD_TOP_H);
         }
         ctx.restore();
     }
@@ -27560,12 +28780,13 @@ function draw(now) {
         ctx.save();
         ctx.globalAlpha = transition.flashAlpha;
         ctx.fillStyle = transition.flashColor || '#ededed';
-        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        ctx.fillRect(0, -HUD_TOP_H, CANVAS_W, CANVAS_H_FULL);
         ctx.restore();
     }
 
     // 物語のメッセージ（storyMessage）
-    if (storyMessage) {
+    // スマホのズーム中はHTMLのストーリー枠（#zoom-dialog）に出すので、キャンバスには描かない（二重表示防止）
+    if (storyMessage && !window._mHideCanvasStory) {
         const lines = storyMessage.lines;
         const _isJP = s => /[\u3000-\u9FFF\uFF00-\uFFEF]/.test(s);
         const FONT_EN = "13px 'Courier New', Courier, monospace";
@@ -27669,7 +28890,7 @@ function draw(now) {
 
     // エンドクレジット画面
     if (gameState === 'ENDING') {
-        ctx.save(); ctx.fillStyle = 'black'; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        ctx.save(); ctx.fillStyle = 'black'; ctx.fillRect(0, -HUD_TOP_H, CANVAS_W, CANVAS_H_FULL);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         const credits = ["STAFF", "", "GAME DESIGN", "HIROTAKA ADACHI", "", "PROGRAMMING", "Claude Code", "", "GRAPHICS", "HIROTAKA ADACHI", "", "MUSIC", "SUNO AI", "", "SPECIAL THANKS", "YOU", "", "THANK YOU FOR PLAYING!", "", "THE END"];
         credits.forEach((txt, i) => {
@@ -27680,19 +28901,56 @@ function draw(now) {
         ctx.fillStyle = '#888'; ctx.font = "12px 'Courier New'"; ctx.fillText("Press [Enter] to return to Title", CANVAS_W / 2, CANVAS_H / 2 + 220);
         ctx.restore();
     }
+    // ミニマップをゲームタイル上に重ねて描画
+    if (_hudVisible && _hudMinimapData) _drawCanvasMinimapOverlay();
+
+    ctx.restore(); // [HUD-A] — close HUD offset
 }
 
 // ===== SECTION: LOGGING & BOMB SYSTEM =====
 function addLog(msg) { /* suppressed — use addKeyLog for important messages */ }
 function addKeyLog(msg) {
-    const div = document.createElement('div'); div.innerText = msg; logElement.appendChild(div);
-    while (logElement.childNodes.length > 10) { logElement.removeChild(logElement.firstChild); }
-    logElement.scrollTop = logElement.scrollHeight;
+    _logLines.push({ text: String(msg) });
+    if (_logLines.length > 10) _logLines.shift();
+}
+function _getEnemyCharForLog(type) {
+    for (const row of _KILL_CHART_ROWS) {
+        for (const entry of row) {
+            if (entry.types.includes(type)) return entry.char;
+        }
+    }
+    return type[0] || '?';
+}
+function _addAllyStatusLog() {
+    const allies = enemies.filter(e => e.isAlly && e.hp > 0 && !e._dead);
+    if (allies.length === 0) return;
+    const shown = allies.slice(0, 8);
+    for (let line = 0; line < 2; line++) {
+        const chunk = shown.slice(line * 4, (line + 1) * 4);
+        if (chunk.length === 0) break;
+        const segs = [];
+        for (let i = 0; i < chunk.length; i++) {
+            const a = chunk[i];
+            if (i > 0) segs.push({ text: ' · ', color: '#555' });
+            segs.push({ text: _getEnemyCharForLog(a.type), color: '#60a5fa' });
+            segs.push({ text: ` Lv${a.level || 1}  ${a.hp}/${a.maxHp}`, color: '#bfdbfe' });
+        }
+        _logLines.push({ text: '', segments: segs });
+        if (_logLines.length > 10) _logLines.shift();
+    }
 }
 function addLogHTML(html) {
-    const div = document.createElement('div'); div.innerHTML = html; logElement.appendChild(div);
-    while (logElement.childNodes.length > 10) { logElement.removeChild(logElement.firstChild); }
-    logElement.scrollTop = logElement.scrollHeight;
+    const segs = [];
+    const re = /<span[^>]*color:\s*([^;'">\s]+)[^>]*>([^<]*)<\/span>/g;
+    let last = 0, m;
+    while ((m = re.exec(html)) !== null) {
+        if (m.index > last) segs.push({ text: html.slice(last, m.index).replace(/<[^>]+>/g, '').trim(), color: '#888' });
+        segs.push({ text: m[2], color: m[1] });
+        last = re.lastIndex;
+    }
+    if (last < html.length) segs.push({ text: html.slice(last).replace(/<[^>]+>/g, '').trim(), color: '#888' });
+    _logLines.push({ text: '', segments: segs.filter(s => s.text) });
+    if (_logLines.length > 10) _logLines.shift();
 }
 function _showRouletteLog(cycle) {
     const _cyc = cycle || _SUMMON_COLOR_CYCLE;
@@ -28010,6 +29268,37 @@ function tryPlaceBlock(dx, dy) {
     if (!player.hasWand) return false;
     const bx = player.x + dx, by = player.y + dy;
     if (bx < 0 || bx >= COLS || by < 0 || by >= ROWS) return false;
+
+    // 部屋作りの指輪: 向いた先の通常WALLを消す / 床に通常WALLを設置する
+    if (hasRing('WALL_RING')) {
+        const _wrt = map[by][bx];
+        // 通常WALL → 除去（外周は除く。BLUE_BLOCKや設置ブロックは除去不可）
+        if (_wrt === SYMBOLS.WALL && bx >= 1 && bx < COLS - 1 && by >= 1 && by < ROWS - 1) {
+            map[by][bx] = SYMBOLS.FLOOR;
+            SOUNDS.CRUMBLE_WALL();
+            addLog("Removed the wall!");
+            return true;
+        }
+        // 床・毒沼・氷に通常WALLを設置（外周・敵・ウィスプ・ブロックなし・自分の上には置けない）
+        const _wrPlaceable = (_wrt === SYMBOLS.FLOOR || _wrt === SYMBOLS.POISON || _wrt === SYMBOLS.ICE);
+        if (_wrPlaceable && (bx !== player.x || by !== player.y)
+            && bx >= 1 && bx < COLS - 1 && by >= 1 && by < ROWS - 1
+            && !enemies.some(e => {
+                if (e.type === 'LEECH' && e._attached) return false;
+                if (e.x === bx && e.y === by) return true;
+                if ((e.type === 'SNAKE' || e.type === 'SUMMONER') && e.body) return e.body.some(seg => seg.x === bx && seg.y === by);
+                return false;
+            })
+            && !wisps.some(w => w.x === bx && w.y === by)
+            && !tempWalls.some(w => w.x === bx && w.y === by)
+            && !bombs.some(b => b.x === bx && b.y === by)) {
+            map[by][bx] = SYMBOLS.WALL;
+            SOUNDS.PLACE_BLOCK();
+            addLog("Built a wall!");
+            return true;
+        }
+        return false;
+    }
 
     // 召喚の指輪: 敵（味方）を召喚
     // 通常ダンジョン・狭間の階層ともに: 倒した敵のみ召喚可
@@ -29614,6 +30903,32 @@ async function advanceVScrollWalls() {
 }
 
 async function windGustSlide() {
+    // WALL_RING 設置ロック: 移動完了後にプレイヤー新位置+ロック方向に壁を設置
+    if (_wallRingPlacePending) {
+        _wallRingPlacePending = false;
+        const _ppx = player.x + _wallRingLockDx;
+        const _ppy = player.y + _wallRingLockDy;
+        // 絶対にプレイヤーの現在地に壁を置かない（安全チェック）
+        if (_ppx !== player.x || _ppy !== player.y) {
+            if (_ppx >= 1 && _ppx < COLS - 1 && _ppy >= 1 && _ppy < ROWS - 1) {
+                const _ppt = map[_ppy][_ppx];
+                if (_ppt !== SYMBOLS.WALL && _ppt !== SYMBOLS.BLUE_BLOCK
+                    && !enemies.some(e => {
+                        if (e.type === 'LEECH' && e._attached) return false;
+                        if (e.x === _ppx && e.y === _ppy) return true;
+                        if ((e.type === 'SNAKE' || e.type === 'SUMMONER') && e.body)
+                            return e.body.some(seg => seg.x === _ppx && seg.y === _ppy);
+                        return false;
+                    })
+                    && !wisps.some(w => w.x === _ppx && w.y === _ppy)
+                    && !tempWalls.some(w => w.x === _ppx && w.y === _ppy)
+                    && !bombs.some(b => b.x === _ppx && b.y === _ppy)) {
+                    map[_ppy][_ppx] = SYMBOLS.WALL;
+                    SOUNDS.PLACE_BLOCK();
+                }
+            }
+        }
+    }
     if (isScrollWallFloor) { await advanceScrollWalls(); if (gameState !== 'PLAYING') return; }
     if (isVScrollWallFloor) { await advanceVScrollWalls(); if (gameState !== 'PLAYING') return; }
     if (!isWindFloor || windTimer < 5) return;
@@ -30193,8 +31508,8 @@ async function triggerEnding() {
     transition.text = "";
 
     // 7. エンドクレジット部屋へ移行
-    localStorage.removeItem('floor100_story_seen');
-    localStorage.setItem('deep_unlocked', '1');
+    safeStorageRemove('floor100_story_seen');
+    safeStorageSet('deep_unlocked', '1');
     saveGame();
 
     // --- フロアをクレジット部屋にリセット ---
@@ -30492,11 +31807,43 @@ async function performWarpTeleport() {
         }
 
         // 別画面をランダム選択
-        const _wpScreens = [];
+        let _wpScreens = [];
         for (let _sy = 0; _sy < screenGridRows; _sy++)
             for (let _sx = 0; _sx < screenGridCols; _sx++)
                 if (_sx !== currentScreen.x || _sy !== currentScreen.y)
                     _wpScreens.push({ sx: _sx, sy: _sy });
+
+        // Blue Division が有効な場合、封鎖済み向こう側へのワープを禁止
+        if (_blueDivCol !== null) {
+            // 通路にBlue Blockがまだ残っているか確認
+            const _divCheckX = _blueDivSealRight ? [COLS-2, COLS-3] : [1, 2];
+            let _divStillActive = false;
+            for (let _dsy = 0; _dsy < screenGridRows && !_divStillActive; _dsy++) {
+                if (!screenGrid.active[_dsy][_blueDivCol]) continue;
+                const _dm = screenGrid.maps[_dsy][_blueDivCol];
+                if (!_dm) continue;
+                for (const _dpy of [11, 12, 13]) {
+                    for (const _dpx of _divCheckX) {
+                        if (_dm[_dpy][_dpx] === SYMBOLS.BLUE_BLOCK) { _divStillActive = true; break; }
+                    }
+                    if (_divStillActive) break;
+                }
+            }
+            if (_divStillActive) {
+                // プレイヤーの現在ゾーン（アクセス可能側）
+                const _playerOnAccessSide = _blueDivSealRight
+                    ? currentScreen.x <= _blueDivCol   // 右封鎖: 左ゾーン(≤divCol)がアクセス可
+                    : currentScreen.x >= _blueDivCol;  // 左封鎖: 右ゾーン(≥divCol)がアクセス可
+                const _filtered = _wpScreens.filter(({sx}) => {
+                    const _destOnAccess = _blueDivSealRight ? sx <= _blueDivCol : sx >= _blueDivCol;
+                    return _destOnAccess === _playerOnAccessSide;
+                });
+                if (_filtered.length > 0) _wpScreens = _filtered;
+                // filterで0件になった場合は制限なし（フォールバック）
+            } else {
+                _blueDivCol = null; // Blue Block解除済み → 制限を解放
+            }
+        }
 
         if (_wpScreens.length > 0) {
             const _wpDest = _wpScreens[Math.floor(Math.random() * _wpScreens.length)];
@@ -30509,8 +31856,13 @@ async function performWarpTeleport() {
             isXWallStage = screenGrid.xWallScreens ? screenGrid.xWallScreens[currentScreen.y][currentScreen.x] : false;
             windTimer = 0;
             tempWalls = screenGrid.tempWalls ? [...(screenGrid.tempWalls[currentScreen.y][currentScreen.x] || [])] : [];
-            infernoProjectiles = []; // ワープ画面遷移で炎弾をリセット
+            infernoProjectiles = []; // ワープ画面遷移で全飛翔体・エフェクトをリセット
             _phantomProjectiles = [];
+            flameProjectiles = [];
+            bombProjectiles = [];
+            attackLines = [];
+            _webShotVis = null;
+            damageTexts = [];
             const _wpSwLoad = screenGrid.scrollWallState ? screenGrid.scrollWallState[currentScreen.y][currentScreen.x] : null;
             isScrollWallFloor    = !!_wpSwLoad;
             scrollWalls          = _wpSwLoad ? [..._wpSwLoad.scrollWalls]      : [];
@@ -30785,31 +32137,75 @@ async function handleAction(dx, dy) {
 
     // ブロック設置モード（杖を持っている時のみ）
     if (player.hasWand && isSpacePressed && (dx !== 0 || dy !== 0)) {
-        if (tryPlaceBlock(dx, dy)) {
-            player.isDefending = false; // ブロック設置ターンはGuard解除
-            spaceUsedForBlock = true;
-            isProcessing = true;
-            turnCount++;
-            updateUI();
-            try {
-                if (_webShotPending) { await _fireWebShot(_webShotPending); _webShotPending = null; }
-                await windGustSlide();
-                await enemyTurn();
-            } catch(err) {
-                console.error('[block turn ERROR]', err);
-            } finally {
-                try { await moveWisps(); } catch(we) { console.error('[wisp ERROR]', we); }
-                moveFairies();
-                moveMadmen();
-                isProcessing = false;
+        const _wrLocked = hasRing('WALL_RING') && spaceUsedForBlock
+            && (_wallRingLockDx !== 0 || _wallRingLockDy !== 0);
+
+        // WALL_RING 設置ロック: ロック方向と異なる方向 → 移動後に壁を設置してから移動
+        if (_wrLocked && _wallRingMode === 'place'
+            && (dx !== _wallRingLockDx || dy !== _wallRingLockDy)) {
+            // 壁設置は移動完了後に windGustSlide() 冒頭で実行（ギャップなし）
+            _wallRingPlacePending = true;
+            if (_wallRingLockDx > 0) player.facing = 'RIGHT';
+            else if (_wallRingLockDx < 0) player.facing = 'LEFT';
+            // return しない → 下の移動コードで dx/dy 方向に移動
+
+        // WALL_RING 除去ロック: ロック方向と同じ方向 → 直前の壁を除去して前進
+        } else if (_wrLocked && _wallRingMode === 'remove'
+            && dx === _wallRingLockDx && dy === _wallRingLockDy) {
+            // 初回除去後にプレイヤーが1歩進んでいるため、先読みは+1でよい
+            const _wlx = player.x + dx;
+            const _wly = player.y + dy;
+            if (_wlx >= 1 && _wlx < COLS - 1 && _wly >= 1 && _wly < ROWS - 1
+                && map[_wly][_wlx] === SYMBOLS.WALL) {
+                map[_wly][_wlx] = SYMBOLS.FLOOR;
+                SOUNDS.CRUMBLE_WALL();
             }
-            if (isInEscapeRoom) {
-                _escapeRoomPageTempWalls[_escapeRoomPage] = [...tempWalls];
-                saveEscapeRoomData();
+            if (_wallRingLockDx > 0) player.facing = 'RIGHT';
+            else if (_wallRingLockDx < 0) player.facing = 'LEFT';
+            // return しない → 下の移動コードで dx/dy 方向に移動
+
+        } else {
+            // 通常ブロック設置 / WALL_RING 初回（設置か除去かを記録）
+            const _wrTargetIsWall = hasRing('WALL_RING')
+                && map[player.y + dy]?.[player.x + dx] === SYMBOLS.WALL;
+            if (tryPlaceBlock(dx, dy)) {
+                if (hasRing('WALL_RING') && !spaceUsedForBlock) {
+                    _wallRingLockDx = dx; _wallRingLockDy = dy;
+                    _wallRingMode = _wrTargetIsWall ? 'remove' : 'place';
+                }
+                player.isDefending = false; // ブロック設置ターンはGuard解除
+                spaceUsedForBlock = true;
+                isProcessing = true;
+                turnCount++;
+                updateUI();
+                try {
+                    if (_webShotPending) { await _fireWebShot(_webShotPending); _webShotPending = null; }
+                    await windGustSlide();
+                    await enemyTurn();
+                } catch(err) {
+                    console.error('[block turn ERROR]', err);
+                } finally {
+                    try { await moveWisps(); } catch(we) { console.error('[wisp ERROR]', we); }
+                    moveFairies();
+                    moveMadmen();
+                    isProcessing = false;
+                }
+                // 部屋作りの指輪で壁削除後: 直後に1マス前進（敵がいなければ）
+                if (_wrTargetIsWall) {
+                    const _wrAdvX = player.x + dx, _wrAdvY = player.y + dy;
+                    if (!enemies.some(e => !e._dead && e.hp > 0 && e.x === _wrAdvX && e.y === _wrAdvY)) {
+                        player.x = _wrAdvX;
+                        player.y = _wrAdvY;
+                    }
+                }
+                if (isInEscapeRoom) {
+                    _escapeRoomPageTempWalls[_escapeRoomPage] = [...tempWalls];
+                    saveEscapeRoomData();
+                }
+                if (bufferedInput) { const b = bufferedInput; bufferedInput = null; handleAction(b.dx, b.dy); }
             }
-            if (bufferedInput) { const b = bufferedInput; bufferedInput = null; handleAction(b.dx, b.dy); }
+            return;
         }
-        return;
     }
 
     // 杖なしでスペース+方向キー：移動しない（方向を無視してその場で防御）
@@ -30872,7 +32268,7 @@ async function handleAction(dx, dy) {
                 leavingMadmen.forEach(m => movingMadmen.push({ ...m, screenX: currentScreen.x, screenY: currentScreen.y }));
                 // isAlly な仲間を画面遷移でプレイヤーに追従させる
                 // 固定砲台・ブロック・擬態系は連れていかず、その場に残す（仲間蜘蛛は追従する）
-                const leavingAllies = enemies.filter(e => e.isAlly && !ENEMY_NO_CARRY_TYPES.has(e.type));
+                const leavingAllies = enemies.filter(e => e.isAlly && !ENEMY_NO_CARRY_TYPES.has(e.type) && e.hp > 0 && !e._dead);
                 leavingAllies.forEach(a => travelingAllies.push({ ...a }));
                 // 寄生中のLEECHも画面遷移で持ち越す
                 const _leavingLeech = enemies.find(e => e.type === 'LEECH' && e._attached);
@@ -30929,8 +32325,13 @@ async function handleAction(dx, dy) {
                 isXWallStage = screenGrid.xWallScreens ? screenGrid.xWallScreens[newScreenY][newScreenX] : false;
                 windTimer = 0;
                 tempWalls = screenGrid.tempWalls ? [...(screenGrid.tempWalls[newScreenY][newScreenX] || [])] : [];
-                infernoProjectiles = []; // 画面遷移で炎弾をリセット
+                infernoProjectiles = []; // 画面遷移で全飛翔体・エフェクトをリセット
                 _phantomProjectiles = [];
+                flameProjectiles = [];
+                bombProjectiles = [];
+                attackLines = [];
+                _webShotVis = null;
+                damageTexts = [];
                 // スクロール壁状態を復元
                 const _swLoad = screenGrid.scrollWallState ? screenGrid.scrollWallState[newScreenY][newScreenX] : null;
                 isScrollWallFloor = !!_swLoad;
@@ -31233,7 +32634,7 @@ async function handleAction(dx, dy) {
 
         if (block.type === 'FIRE_BLOCK') {
             // 星ブロック: 攻撃方向に炎を発射 + HP減少（2回で破壊）
-            if (block.fired) return; // 発射済みは無反応
+            if (block.fired) { isProcessing = false; return; } // 発射済みは無反応（入力ロックは必ず解除）
             block.fired = true;
             block.hp--;
             SOUNDS.DART_FIRE();
@@ -31507,6 +32908,10 @@ async function handleAction(dx, dy) {
             map[ny][nx] = SYMBOLS.FLOOR;
             SOUNDS.GET_KEY(); SOUNDS.GET_ITEM();
             player.hasBlueKey = true; addKeyLog("You got the Blue Key! Blue blocks can now be destroyed."); spawnFloatingText(nx, ny, "BLUE KEY!", '#38bdf8');
+        } else if (nextTile === SYMBOLS.BLUE_HOLE) {
+            // プレイヤーがブルーホールに重なった瞬間: 高音を鳴らす
+            playSound(2200, 'sine', 0.18, 0.07);
+            setTimeout(() => playSound(3100, 'sine', 0.10, 0.06), 60);
         } else if (nextTile === SYMBOLS.WAND) {
             map[ny][nx] = SYMBOLS.FLOOR; await animateItemGet(SYMBOLS.WAND); SOUNDS.GET_ITEM();
             player.hasWand = true; addKeyLog("You picked up the Magic Wand.");
@@ -31669,7 +33074,7 @@ async function handleAction(dx, dy) {
                     { tomeType: 'charmTomes',   symbol: SYMBOLS.CHARM,        name: 'Charm Tome',   nameJa: '魅了の魔導書',   desc: 'Tame enemies within 5 tiles.',            descJa: '周囲の敵を仲間にする',       cost: 105 },
                 ];
                 const shuffledTomes = cheapTomePool.slice().sort(() => Math.random() - 0.5);
-                const tomeItems = shuffledTomes.slice(0, 2).map(t => ({ type: 'tome', ...t }));
+                const tomeItems = shuffledTomes.slice(0, 3).map(t => ({ type: 'tome', ...t }));
                 shopBuyStock = [
                     ...ringItems,
                     { type: 'gap' },
@@ -31924,6 +33329,7 @@ async function handleAction(dx, dy) {
                 map = screenGrid.maps[1][0]; enemies = screenGrid.enemies[1][0] || [];
                 tempWalls = screenGrid.tempWalls ? [...(screenGrid.tempWalls[1][0] || [])] : [];
                 wisps = screenGrid.wisps ? (screenGrid.wisps[1][0] || []) : [];
+                infernoProjectiles = []; _phantomProjectiles = []; flameProjectiles = []; bombProjectiles = []; attackLines = []; _webShotVis = null; damageTexts = [];
                 player.x = 20; player.y = 1; player.offsetX = 0; player.offsetY = 0;
                 visitedScreens[1][0] = true;
                 updateMinimap(); draw(); isProcessing = false; return;
@@ -32004,6 +33410,7 @@ async function handleAction(dx, dy) {
                 map = screenGrid.maps[1][0]; enemies = screenGrid.enemies[1][0] || [];
                 tempWalls = screenGrid.tempWalls ? [...(screenGrid.tempWalls[1][0] || [])] : [];
                 wisps = screenGrid.wisps ? (screenGrid.wisps[1][0] || []) : [];
+                infernoProjectiles = []; _phantomProjectiles = []; flameProjectiles = []; bombProjectiles = []; attackLines = []; _webShotVis = null; damageTexts = [];
                 player.x = 20; player.y = 1; player.offsetX = 0; player.offsetY = 0;
                 visitedScreens[1][0] = true;
                 updateMinimap(); draw(); isProcessing = false; return;
@@ -32174,6 +33581,7 @@ async function handleAction(dx, dy) {
                 map = screenGrid.maps[1][0]; enemies = screenGrid.enemies[1][0] || [];
                 tempWalls = screenGrid.tempWalls ? [...(screenGrid.tempWalls[1][0] || [])] : [];
                 wisps = screenGrid.wisps ? (screenGrid.wisps[1][0] || []) : [];
+                infernoProjectiles = []; _phantomProjectiles = []; flameProjectiles = []; bombProjectiles = []; attackLines = []; _webShotVis = null; damageTexts = [];
                 player.x = 20; player.y = 1; player.offsetX = 0; player.offsetY = 0;
                 visitedScreens[1][0] = true;
                 updateMinimap(); draw(); isProcessing = false; return;
@@ -32806,11 +34214,11 @@ async function handleAction(dx, dy) {
 
     // 回復床: 乗っている間、毎ターン少量HP回復
     if (map[player.y][player.x] === SYMBOLS.HEAL_FLOOR) {
+        // HP+1 を短時間（350ms）だけ表示（HP満タンでも表示、音なし）
+        damageTexts.push({ x: player.x, y: player.y, text: 'HP+1', color: '#fde68a',
+            duration: 350, startTime: performance.now(), rise: true });
         if (player.hp < player.maxHp) {
-            const _hfAmt = Math.min(1, player.maxHp - player.hp);
-            player.hp += _hfAmt;
-            SOUNDS.HEAL_WARM && SOUNDS.HEAL_WARM();
-            spawnFloatingText(player.x, player.y, `+${_hfAmt}`, '#fde68a', 800);
+            player.hp += Math.min(1, player.maxHp - player.hp);
             updateUI();
         }
     }
@@ -32902,6 +34310,8 @@ async function moveWisps() {
     ];
 
     for (const w of wisps) {
+        if (w._absorbingInHole) continue; // BLUE_HOLE吸収中は凍結
+
         // 移動前の接触判定
         await checkWispDamage(w);
 
@@ -32949,7 +34359,39 @@ async function moveWisps() {
         }
         // 移動後の接触判定
         await checkWispDamage(w);
+
+        // BLUE_HOLE: ウィスプが入ると点滅1秒後にBlueBlockを全消去するスイッチ
+        if (map[w.y] && map[w.y][w.x] === SYMBOLS.BLUE_HOLE && !w._absorbingInHole) {
+            w._absorbingInHole = true;
+            SOUNDS.GET_KEY(); // 入った瞬間にキー取得音
+            // 1秒間点滅（draw()のrAFループが自動で描画する）
+            await new Promise(r => setTimeout(r, 1000));
+            // 消滅イベント
+            map[w.y][w.x] = SYMBOLS.FLOOR;
+            w._absorbedByHole = true;
+            // カレント画面のBlueBlockを消去
+            for (let _by = 0; _by < ROWS; _by++)
+                for (let _bx = 0; _bx < COLS; _bx++)
+                    if (map[_by][_bx] === SYMBOLS.BLUE_BLOCK) map[_by][_bx] = SYMBOLS.FLOOR;
+            // マルチスクリーン: 全画面のBlueBlockも消去
+            if (multiScreenMode && screenGrid) {
+                for (let _sy = 0; _sy < screenGridRows; _sy++)
+                    for (let _sx = 0; _sx < screenGridCols; _sx++) {
+                        const _sm = screenGrid.maps[_sy][_sx];
+                        if (!_sm) continue;
+                        for (let _by = 0; _by < ROWS; _by++)
+                            for (let _bx = 0; _bx < COLS; _bx++)
+                                if (_sm[_by][_bx] === SYMBOLS.BLUE_BLOCK) _sm[_by][_bx] = SYMBOLS.FLOOR;
+                    }
+            }
+            addKeyLog('The wisp entered the Blue Hole! All blue blocks collapsed!');
+            SOUNDS.WALL_BREAK();
+            setScreenShake(6, 250);
+        }
     }
+
+    // BLUE_HOLEに吸収されたウィスプを除去
+    wisps = wisps.filter(w => !w._absorbedByHole);
 
     // 死亡判定とクリーンアップを一括で行う
     // filterは非同期関数を待てないため、ループで処理する
@@ -33165,7 +34607,7 @@ function _madmanBFS(startX, startY, targetX, targetY) {
 function fairyBFS(fMap, startX, startY, targetX, targetY) {
     if (startX === targetX && startY === targetY) return { dx: 0, dy: 0 };
     // 妖精が通過できない「壁扱い」タイルのセット（壁・設置ブロックは通過不可）
-    const fairyWall = new Set([SYMBOLS.WALL]);
+    const fairyWall = new Set([SYMBOLS.WALL, SYMBOLS.BLUE_BLOCK]);
     const tempWallSet = new Set(tempWalls.map(w => `${w.x},${w.y}`));
     const visited = new Uint8Array(ROWS * COLS);
     visited[startY * COLS + startX] = 1;
@@ -33309,7 +34751,7 @@ function moveFairies() {
                 for (const d of dirs4f) {
                     const nx = f.x + d.x, ny = f.y + d.y;
                     if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
-                    if (map[ny][nx] === SYMBOLS.WALL) continue;
+                    if (map[ny][nx] === SYMBOLS.WALL || map[ny][nx] === SYMBOLS.BLUE_BLOCK) continue;
                     if (tempWalls.some(w => w.x === nx && w.y === ny)) continue;
                     if (enemies.some(e => e.x === nx && e.y === ny)) continue;
                     // ドラゴンからの距離（大きいほど良い）
@@ -33705,6 +35147,36 @@ function scheduleEnemyFall(enemy, msg, killedByPlayer = false) {
     setTimeout(() => { handleEnemyDeath(enemy, killedByPlayer); }, 400);
 }
 
+const SPECIAL_E_MAX_LEVEL = 50; // 1階の特殊個体E（_growthDoubling）のレベル上限
+
+function _grantAllyExp(ally, exp) {
+    ally.exp     = (ally.exp     || 0) + exp;
+    ally.level   =  ally.level   || 1;
+    ally.nextExp =  ally.nextExp || (ally.level * 10);
+    if (ally._growthDoubling && ally.level >= SPECIAL_E_MAX_LEVEL) { ally.exp = 0; return; } // 上限到達後は経験値をためない
+    while (ally.exp >= ally.nextExp) {
+        if (ally._hpGrowth  === undefined) ally._hpGrowth  = Math.floor(Math.random() * 48) + 3;
+        if (ally._atkGrowth === undefined) ally._atkGrowth = Math.floor(Math.random() * 8)  + 1;
+        ally.exp      -= ally.nextExp;
+        ally.level    += 1;
+        ally.nextExp   = ally.level * 10;
+        ally.maxHp    += ally._hpGrowth;
+        ally.hp        = Math.min(ally.maxHp, ally.hp + ally._hpGrowth); // 増えた分だけ回復（満タンにはしない）
+        ally._atkBonus = (ally._atkBonus || 0) + ally._atkGrowth;
+        spawnFloatingText(ally.x, ally.y, `LV UP! HP+${formatBigNumber(ally._hpGrowth)} ATK+${formatBigNumber(ally._atkGrowth)}`, '#fbbf24', 1400);
+        // 1階の特殊個体E: 次のレベルアップの成長量は今回の2倍（必要経験値は他の仲間と同じ）
+        if (ally._growthDoubling) {
+            ally._hpGrowth  *= 2;
+            ally._atkGrowth *= 2;
+            if (ally.level >= SPECIAL_E_MAX_LEVEL) {
+                ally.exp = 0;
+                spawnFloatingText(ally.x, ally.y - 1, 'MAX LEVEL', '#fbbf24', 1800);
+                break;
+            }
+        }
+    }
+}
+
 async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = false, _skipAnimWait = false, suppressDeathSound = false) {
     if (enemy._dead) return; // 二重処理防止
     // LEECHが寄生中にダメージを受けた → 起動 or 即爆発
@@ -33846,7 +35318,7 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
         const _kingTrophyTest = false;
         if (!isInEscapeRoom || _kingTrophyTest) {
             kingKillCount++;
-            localStorage.setItem('king_kill_count', kingKillCount);
+            safeStorageSet('king_kill_count', kingKillCount);
             saveGame();
             updateUI();
         }
@@ -34074,6 +35546,25 @@ async function handleEnemyDeath(enemy, killedByPlayer = false, killedByWisp = fa
     } else {
         if (enemy.type === 'GOLD') {
             addKeyLog("The Golden E escaped or was lost...");
+        }
+    }
+
+    // 仲間が敵を倒した場合: EXP を仲間に付与し、レベルアップ時に HP 全回復
+    if (enemy._killedByAlly) {
+        const _allyKiller = enemy._killedByAlly;
+        delete enemy._killedByAlly;
+        if (_allyKiller && !_allyKiller._dead && _allyKiller.hp > 0) {
+            _grantAllyExp(_allyKiller, (enemy.expValue || 5) * 4);
+        }
+    }
+
+    // HEALER仲間: 8タイル以内で敵が倒されたらEXP付与（倒した仲間との二重取り防止済み）
+    if (!enemy.isAlly) {
+        const _heaExp = (enemy.expValue || 5) * 4;
+        for (const _he of enemies) {
+            if (!_he.isAlly || _he._dead || _he.hp <= 0 || _he.type !== 'HEALER') continue;
+            if (Math.abs(_he.x - enemy.x) + Math.abs(_he.y - enemy.y) > 8) continue;
+            _grantAllyExp(_he, _heaExp);
         }
     }
 
@@ -35069,7 +36560,7 @@ async function knockbackPlayer(kx, ky, baseDamage, destroyIcicles = false, damag
     const isRealWall = (tx, ty) => {
         if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return true;
         if (_amKnockback) return (tx === 0 || tx === COLS-1 || ty === 0 || ty === ROWS-1);
-        return (map[ty][tx] === SYMBOLS.WALL || map[ty][tx] === SYMBOLS.DOOR || map[ty][tx] === SYMBOLS.CORE);
+        return (map[ty][tx] === SYMBOLS.WALL || map[ty][tx] === SYMBOLS.DOOR || map[ty][tx] === SYMBOLS.CORE || map[ty][tx] === SYMBOLS.BLUE_BLOCK);
     };
 
     // 背後が壁の場合、空いている方向をランダムに探して吹き飛ぶ
@@ -35501,9 +36992,11 @@ async function enemyTurn() {
             continue;
         }
         // 敵との衝突: 先端・胴体いずれかに重なった敵にダメージ（発射元VULCAN自身は除外）
+        // 味方VULCANの炎弾は同陣営の仲間には当たらない
         const _iHitEnemy = enemies.find(oe =>
             !oe._dead && oe.hp > 0 && oe !== _proj.owner &&
             !ALL_COLLECTOR_TYPES.has(oe.type) &&
+            !(_proj.owner?.isAlly && oe.isAlly) &&
             ((oe.x === _proj.x && oe.y === _proj.y) || (oe.x === _prevX && oe.y === _prevY))
         );
         if (_iHitEnemy) {
@@ -35556,9 +37049,9 @@ async function enemyTurn() {
             infernoProjectiles.splice(_ip, 1);
             continue;
         }
-        // プレイヤーとの衝突: 先端・胴体どちらに重なっていてもダメージ
+        // プレイヤーとの衝突: 先端・胴体どちらに重なっていてもダメージ（味方VULCANの炎弾は除外）
         const _playerHit =
-            (!player.isShielded && !hasRing('FIRE_RING')) &&
+            (!player.isShielded && !hasRing('FIRE_RING') && !_proj.owner?.isAlly) &&
             ((_proj.x === player.x && _proj.y === player.y) ||
              (_prevX === player.x && _prevY === player.y));
         if (_playerHit) {
@@ -35632,6 +37125,26 @@ async function enemyTurn() {
             addKeyLog("🔥 VULCAN launches a fireball!");
             _ie._shotFlash = 2; // 今ターン+次ターンまで白（1ターン継続）
             _ie._infRestLeft = 5;
+        }
+    }
+
+    // 味方VULCAN: 同じ行または列に敵がいれば炎弾発射
+    for (const _ie of enemies) {
+        if (_ie.type !== 'VULCAN' || !_ie.isAlly || _ie._dead || _ie.hp <= 0 || _ie.stunTurns > 0) continue;
+        if ((_ie._infRestLeft || 0) > 0) continue;
+        for (const _tgt of enemies) {
+            if (_tgt === _ie || _tgt._dead || _tgt.hp <= 0 || _tgt.isAlly) continue;
+            const _iaOnRow = _tgt.y === _ie.y, _iaOnCol = _tgt.x === _ie.x;
+            if (!_iaOnRow && !_iaOnCol) continue;
+            const _iaDx = _iaOnRow ? Math.sign(_tgt.x - _ie.x) : 0;
+            const _iaDy = _iaOnCol ? Math.sign(_tgt.y - _ie.y) : 0;
+            if (_iaDx === 0 && _iaDy === 0) continue;
+            infernoProjectiles.push({ x: _ie.x, y: _ie.y, dx: _iaDx, dy: _iaDy, life: 40, owner: _ie });
+            SOUNDS.IGNITE();
+            addKeyLog('🔥 Ally V fires a fireball!');
+            _ie._shotFlash = 2;
+            _ie._infRestLeft = 5;
+            break;
         }
     }
 
@@ -35893,6 +37406,7 @@ async function enemyTurn() {
                 e.type === 'SPAWNER' || e.type === 'WISP_SPAWNER' ||
                 (e.type === 'LEECH' && e._leechArmed) ||
                 ALL_COLLECTOR_TYPES.has(e.type)) continue; // コレクター敵は溶岩免疫
+            if (e.isAlly && hasRing('FIRE_RING')) continue; // 炎の指輪装備中は仲間も溶岩免疫
 
             if (!_lavaPlayedThisFullTurn) { SOUNDS.LAVA_BURN(); _lavaPlayedThisFullTurn = true; }
             e.flashUntil = _now + 100;
@@ -35928,6 +37442,30 @@ async function enemyTurn() {
         }
         for (const e of _burnDeathQueue) {
             await handleEnemyDeath(e, true);
+        }
+    }
+
+    // === 蜘蛛の巣もがきアニメ 一括プレパス ===
+    // 巣にひっかかった全敵のオフセットをまとめてセットし、1回のdraw+awaitで処理する。
+    {
+        const _wbDirs = [{x:0,y:-1},{x:1,y:0},{x:0,y:1},{x:-1,y:0}];
+        const _wbStrugglers = [];
+        for (const e of enemies) {
+            if (!e || e.hp <= 0 || e._dead) continue;
+            const _wbImmune2 = e.type === 'SPIDER' || e.type === 'GREEK_OMEGA' || (e.type === 'DRAGON' && e._bossDragon);
+            if (_wbImmune2 || !map[e.y] || map[e.y][e.x] !== SYMBOLS.WEB) continue;
+            if (e._webLaserOffUntilNextAction) continue; // 解放ターンはスキップ
+            if (e._webStuck === undefined || !(e._webStuckAtX === e.x && e._webStuckAtY === e.y)) continue;
+            if (e._webStuck > 0) _wbStrugglers.push(e);
+        }
+        if (_wbStrugglers.length > 0) {
+            for (const e of _wbStrugglers) {
+                const wd = _wbDirs[Math.floor(Math.random() * 4)];
+                e.offsetX = wd.x * 5; e.offsetY = wd.y * 5;
+            }
+            draw(performance.now());
+            await _w(50);
+            for (const e of _wbStrugglers) { e.offsetX = 0; e.offsetY = 0; }
         }
     }
 
@@ -36015,7 +37553,7 @@ async function enemyTurn() {
         // 毒沼（溶岩はプレパスで処理済み）
         const tile = map[e.y][e.x];
         if (tile === SYMBOLS.POISON) {
-            if (e.type !== 'KEY_RUNNER' && e.type !== 'MIASMA') { // KEY_RUNNER/MIASMAは毒免疫
+            if (e.type !== 'KEY_RUNNER' && e.type !== 'MIASMA' && !(e.isAlly && hasRing('POISON_RING'))) { // KEY_RUNNER/MIASMA・POISON_RING装備中の仲間は毒免疫
                 const damage = 1;
                 e.hp -= damage; e.flashUntil = performance.now() + 100;
                 spawnDamageText(e.x, e.y, damage, '#a855f7');
@@ -36119,15 +37657,7 @@ async function enemyTurn() {
             } else if (e._webStuck > 0) {
                 e._webStuck--;
                 if (e._webStuck === 0) e._webLaserOffUntilNextAction = true;
-                // 自分のターン中だけ一瞬もがく: ランダム方向に少し動いて戻る
-                const wDirs = [{x:0,y:-1},{x:1,y:0},{x:0,y:1},{x:-1,y:0}];
-                const wd = wDirs[Math.floor(Math.random() * 4)];
-                e.offsetX = wd.x * 5;
-                e.offsetY = wd.y * 5;
-                draw(performance.now());
-                await _w(50);
-                e.offsetX = 0;
-                e.offsetY = 0;
+                // もがきアニメはプレパスで一括済み
                 continue; // ターン終了、停止状態に戻る
             }
             // _webStuck === 0: 次の行動判定で解放される
@@ -36215,6 +37745,7 @@ async function enemyTurn() {
                     await new Promise(r => setTimeout(r, 120));
                     if (target.hp <= 0) {
                         // 仕留めた: 蜘蛛は獲物のマスへ移動して留まる
+                        if (e.isAlly) target._killedByAlly = e;
                         handleEnemyDeath(target, false);
                         e.x = targetX;
                         e.y = targetY;
@@ -36535,9 +38066,10 @@ async function enemyTurn() {
                 }
             }
             // 軌跡ダメージ: 軌跡タイルに乗っているエンティティに毎ターンダメージ
+            // 味方WEAVERの場合はプレイヤー・味方敵への軌跡ダメージ・スタンなし
             if (e.trail.length > 0) {
                 const trailSet = new Set(e.trail.map(t => `${t.x},${t.y}`));
-                if (trailSet.has(`${player.x},${player.y}`)) {
+                if (!e.isAlly && trailSet.has(`${player.x},${player.y}`)) {
                     const dmg = 5;
                     player.hp -= dmg;
                     player.trailStunned = true;
@@ -36552,9 +38084,11 @@ async function enemyTurn() {
                     if (other === e || other._dead || other.hp <= 0) continue;
                     if (other.type === 'WEAVER') continue;
                     if (other.type === 'KEY_RUNNER') continue; // KEY_RUNNERはWEAVER軌跡免疫
+                    if (e.isAlly && other.isAlly) continue; // 味方同士は軌跡ダメージなし
                     if (trailSet.has(`${other.x},${other.y}`)) {
                         other.hp -= 5;
-                        other.stunTurns = Math.max(other.stunTurns || 0, 1);
+                        // 味方WEAVERの軌跡はスタンなし（敵のみスタン）
+                        if (!e.isAlly) other.stunTurns = Math.max(other.stunTurns || 0, 1);
                         spawnDamageText(other.x, other.y, 5, '#22d3ee');
                         animateBounce(other);
                         if (other.hp <= 0 && !other._dead) _wDying.push(other);
@@ -38842,9 +40376,19 @@ async function enemyTurn() {
                             + (a.allyNearby - b.allyNearby)
                             + (aAx - bAx);
                     });
+                    // BLAZE: BLUE_HOLEの周囲2マス以内には侵入しない（溶岩でブロック設置が詰むのを防ぐ）
+                    const _blazeAvoid = (nx, ny) => {
+                        if (e.type !== 'BLAZE') return false;
+                        for (let _dy = -2; _dy <= 2; _dy++)
+                            for (let _dx = -2; _dx <= 2; _dx++) {
+                                const _ty = ny+_dy, _tx = nx+_dx;
+                                if (_ty>=0&&_ty<ROWS&&_tx>=0&&_tx<COLS&&map[_ty][_tx]===SYMBOLS.BLUE_HOLE) return true;
+                            }
+                        return false;
+                    };
                     let fwMoved = false;
                     for (const { d, nx, ny } of scored) {
-                        if (!isRealHole(nx, ny) && canEnemyMove(nx, ny, e) && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
+                        if (!isRealHole(nx, ny) && canEnemyMove(nx, ny, e) && !_blazeAvoid(nx, ny) && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
                             e.x = nx; e.y = ny;
                             e._lastMoveAxis = d.x !== 0 ? 'X' : 'Y';
                             fwMoved = true; break;
@@ -38860,7 +40404,7 @@ async function enemyTurn() {
                         const tryOrder = [rotR(cur), cur, rotL(cur), rotB(cur)];
                         for (const d of tryOrder) {
                             const nx = e.x + d.x, ny = e.y + d.y;
-                            if (!isRealHole(nx, ny) && canEnemyMove(nx, ny, e) && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
+                            if (!isRealHole(nx, ny) && canEnemyMove(nx, ny, e) && !_blazeAvoid(nx, ny) && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === nx && o.y === ny)) {
                                 e.x = nx; e.y = ny;
                                 e._fwLastDir = d;
                                 fwMoved = true;
@@ -40437,7 +41981,7 @@ async function enemyTurn() {
                             }
                             spawnFloatingText(e.x,e.y,"CRUSH!",'#ef4444',1000);
                             for(const _p of _aPushed){
-                                if(_p._dead||_p.hp<=0){await handleEnemyDeath(_p,true);continue;} // BOAR巻き込み = プレイヤー討伐扱い
+                                if(_p._dead||_p.hp<=0){if(e.isAlly)_p._killedByAlly=e; await handleEnemyDeath(_p,true);continue;} // BOAR巻き込み = プレイヤー討伐扱い
                                 _p.offsetY=-Math.round(TILE_SIZE/2);draw();await _w(130);
                                 let _land=null;
                                 for(const[_px,_py]of _aPerp){const lx=e.x+_px,ly=e.y+_py;if(lx<1||lx>=COLS-1||ly<1||ly>=ROWS-1)continue;if(map[ly][lx]!==SYMBOLS.FLOOR&&!isRealHole(lx,ly))continue;if(_aUsed.some(s=>s.x===lx&&s.y===ly))continue;if(enemies.some(oe=>oe!==_p&&!oe._dead&&oe.hp>0&&oe.x===lx&&oe.y===ly))continue;_land={x:lx,y:ly};break;}
@@ -40771,8 +42315,8 @@ async function enemyTurn() {
                                 spawnDamageText(e.x, e.y, _cDmg, '#ef4444');
                                 SOUNDS.DAMAGE();
                             } else {
-                                if (_p.type === 'NORMAL') {
-                                    // E は即死
+                                if (_p.type === 'NORMAL' && !_p.isAlly) {
+                                    // E は即死（仲間Eは除外）
                                     const _killDmg = _p.hp;
                                     _p.hp = 0; _p.flashUntil = performance.now() + 400;
                                     spawnDamageText(e.x, e.y, _killDmg, '#ef4444');
@@ -40927,7 +42471,7 @@ async function enemyTurn() {
 
         // ===== AI: HEALER (main) =====
         if (e.type === 'HEALER' && !e._betrayed) {
-            const healAmount = 5 + floorLevel;
+            const healAmount = 5 + floorLevel + (e.isAlly ? (e._atkBonus || 0) : 0);
             const adj = [{x:0,y:1},{x:1,y:0},{x:0,y:-1},{x:-1,y:0},
                          {x:1,y:1},{x:-1,y:1},{x:1,y:-1},{x:-1,y:-1}];
             let healedAny = false;
@@ -41031,6 +42575,13 @@ async function enemyTurn() {
                 // 周囲が安全な時だけ治療対象へ近づく
                 sx = e.x < healTarget.x ? 1 : (e.x > healTarget.x ? -1 : 0);
                 sy = e.y < healTarget.y ? 1 : (e.y > healTarget.y ? -1 : 0);
+            } else if (e.isAlly) {
+                // 敵なし・治療対象なし → 主人公に追従
+                const _hpd = Math.max(Math.abs(player.x - e.x), Math.abs(player.y - e.y));
+                if (_hpd > 1) {
+                    sx = e.x < player.x ? 1 : (e.x > player.x ? -1 : 0);
+                    sy = e.y < player.y ? 1 : (e.y > player.y ? -1 : 0);
+                }
             }
 
             // --- 移動適用 ---
@@ -41464,8 +43015,8 @@ async function enemyTurn() {
             continue;
         }
         if (e.isAlly && e.type !== 'AMBULATOR') {
-            // ドラゴンが近くにいる場合はおびえて逃げる
-            const nearDragon = floorLevel === 100
+            // ドラゴンが近くにいる場合はおびえて逃げる（1階の特殊個体Eはおびえない）
+            const nearDragon = floorLevel === 100 && !e._growthDoubling
                 ? enemies.find(t => t._bossDragon && t.hp > 0 &&
                     Math.abs((t.x + 5) - e.x) + Math.abs(t.y - e.y) <= 7)
                 : null;
@@ -41497,7 +43048,7 @@ async function enemyTurn() {
             const dPlayerNow = Math.abs(player.x - e.x) + Math.abs(player.y - e.y);
             const shouldFollowPlayer = dPlayerNow > 8;
 
-            if (allyBestTarget && allyMinDist <= 8 && !shouldFollowPlayer) {
+            if (allyBestTarget && allyMinDist <= 8 && (!shouldFollowPlayer || allyMinDist === 1)) {
                 // 敵を優先して行動
                 if (allyMinDist === 1) {
                     // 攻撃
@@ -41515,8 +43066,8 @@ async function enemyTurn() {
                         setScreenShake(8, 200);
                     }
 
-                    // 味方の攻撃力計算 (オークなら強い)
-                    let dmg = (e.type === 'ORC' ? 15 : (e.type === 'BREAKER' ? 12 : (e.type === 'LAYER' ? 6 : (e.type === 'SNAKE' ? 10 : (e.type === 'MIMIC' ? 12 : (e.type === 'SUMMONER' ? 8 : 5)))))) + Math.floor(floorLevel / 2);
+                    // 味方の攻撃力計算 (オークなら強い、レベルアップで成長タイプ分増加)
+                    let dmg = (e.type === 'ORC' ? 15 : (e.type === 'BREAKER' ? 12 : (e.type === 'LAYER' ? 6 : (e.type === 'SNAKE' ? 10 : (e.type === 'MIMIC' ? 12 : (e.type === 'SUMMONER' ? 8 : 5)))))) + Math.floor(floorLevel / 2) + (e._atkBonus || 0);
                     // NECRO_RING 二重装備で蘇生された味方は攻撃力+3
                     if (e._necroBoosted) dmg += 3;
                     allyBestTarget.hp -= dmg;
@@ -41526,7 +43077,7 @@ async function enemyTurn() {
                     SOUNDS.HIT();
                     attackOccurred = true;
 
-                    if (allyBestTarget.hp <= 0) handleEnemyDeath(allyBestTarget);
+                    if (allyBestTarget.hp <= 0) { allyBestTarget._killedByAlly = e; handleEnemyDeath(allyBestTarget); }
                     else if (e.type === 'ORC' && allyBestTarget.type !== 'DRAGON' && allyBestTarget.type !== 'SUMMONER') {
                         // 味方オークによる突き飛ばし（ドラゴン・サモナーは吹き飛ばせない）
                         addLog("Ally Orc's mighty blow sends the enemy flying!");
@@ -41590,7 +43141,7 @@ async function enemyTurn() {
                                 allyBestTarget.hp = 0; break;
                             }
                         }
-                        if (allyBestTarget.hp <= 0) handleEnemyDeath(allyBestTarget);
+                        if (allyBestTarget.hp <= 0) { allyBestTarget._killedByAlly = e; handleEnemyDeath(allyBestTarget); }
                     }
                     await _w(40);
                     e.offsetX = 0; e.offsetY = 0;
@@ -41687,6 +43238,29 @@ async function enemyTurn() {
                     }
                 }
             } else {
+                // ダメージあり かつ 回復床が近く（12タイル以内）にある → 先に回復しに向かう
+                if (e.hp < e.maxHp && map[e.y] && map[e.y][e.x] !== SYMBOLS.HEAL_FLOOR) {
+                    let _hfBest = null, _hfBestDist = 13;
+                    for (let _hy = Math.max(0, e.y - 12); _hy <= Math.min(ROWS - 1, e.y + 12); _hy++) {
+                        for (let _hx = Math.max(0, e.x - 12); _hx <= Math.min(COLS - 1, e.x + 12); _hx++) {
+                            if (map[_hy][_hx] !== SYMBOLS.HEAL_FLOOR) continue;
+                            const _hd = Math.abs(_hx - e.x) + Math.abs(_hy - e.y);
+                            if (_hd < _hfBestDist) { _hfBestDist = _hd; _hfBest = { x: _hx, y: _hy }; }
+                        }
+                    }
+                    if (_hfBest) {
+                        const _hfStep = enemyGroundBFS(e.x, e.y, _hfBest.x, _hfBest.y);
+                        if (_hfStep) {
+                            const _hnx = e.x + _hfStep.dx, _hny = e.y + _hfStep.dy;
+                            if (canEnemyMove(_hnx, _hny, e)
+                                && !(_hnx === player.x && _hny === player.y)
+                                && !enemies.some(o => o !== e && !o._dead && o.hp > 0 && o.x === _hnx && o.y === _hny)) {
+                                e.x = _hnx; e.y = _hny;
+                                continue;
+                            }
+                        }
+                    }
+                }
                 // 敵がいない or プレイヤーが遠い → プレイヤーを追いかける
                 const dP = Math.abs(player.x - e.x) + Math.abs(player.y - e.y);
                 if (dP > 1) { // 隣接していなければ近づく
@@ -41740,6 +43314,14 @@ async function enemyTurn() {
                         const fallbacks = [[sx, 0], [0, sy], [-sy, sx], [sy, -sx]].filter(([fx, fy]) => fx !== 0 || fy !== 0);
                         for (const [fx, fy] of fallbacks) {
                             if (tryFollowMove(e.x + fx, e.y + fy)) { e.x += fx; e.y += fy; moved = true; break; }
+                        }
+                    }
+                    // BFS fallback: 欲張り法で全方向詰まった場合、BFSで壁を迂回する経路を探す
+                    if (!moved) {
+                        const bfsStep = enemyGroundBFS(e.x, e.y, player.x, player.y);
+                        if (bfsStep.dx !== 0 || bfsStep.dy !== 0) {
+                            const bnx = e.x + bfsStep.dx, bny = e.y + bfsStep.dy;
+                            if (tryFollowMove(bnx, bny)) { e.x = bnx; e.y = bny; moved = true; }
                         }
                     }
                     if (moved) {
@@ -41902,7 +43484,30 @@ async function enemyTurn() {
         if (e.type === 'VULCAN' && !_factionIgnorePlayer && !e._betrayed) {
             if (e._moveTick === undefined) { e._moveTick = 0; e._infRestLeft = 0; e._shotFlash = 0; }
             if (e._shotFlash > 0) e._shotFlash--;
-            e._moveTick--; // カウントダウン式: 0以下になったら移動し次のインターバルをランダム設定
+            e._moveTick--;
+
+            // 味方VULCAN: 主人公に追従（溶岩制限なし・炎弾発射は別ブロックで処理済み）
+            if (e.isAlly) {
+                const _vaCheb = Math.max(Math.abs(player.x - e.x), Math.abs(player.y - e.y));
+                if (_vaCheb > 1) {
+                    const _vaDirs = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y)
+                        ? [{dx:Math.sign(player.x-e.x),dy:0},{dx:0,dy:Math.sign(player.y-e.y)}]
+                        : [{dx:0,dy:Math.sign(player.y-e.y)},{dx:Math.sign(player.x-e.x),dy:0}];
+                    // lavaBoundを無視して通常フロアも移動可能にする
+                    const _vaCanStep = (nx, ny) =>
+                        nx >= 1 && nx < COLS-1 && ny >= 1 && ny < ROWS-1 &&
+                        !isRealHole(nx, ny) &&
+                        map[ny][nx] !== SYMBOLS.WALL && map[ny][nx] !== SYMBOLS.DOOR &&
+                        map[ny][nx] !== SYMBOLS.BLOCK && map[ny][nx] !== SYMBOLS.BLOCK_CRACKED &&
+                        !(nx === player.x && ny === player.y) &&
+                        !enemies.some(oe => oe !== e && !oe._dead && oe.hp > 0 && oe.x === nx && oe.y === ny);
+                    for (const {dx, dy} of _vaDirs) {
+                        const _nx = e.x + dx, _ny = e.y + dy;
+                        if (_vaCanStep(_nx, _ny)) { e.x = _nx; e.y = _ny; break; }
+                    }
+                }
+                continue;
+            }
 
             // 溶岩の外にいる場合は即死（全VULCAN共通）
             if (map[e.y][e.x] !== SYMBOLS.LAVA) {
@@ -42521,6 +44126,97 @@ async function enemyTurn() {
                 }
             }
             if (isRealHole(e.x, e.y)) { scheduleEnemyFall(e, "R fell into the hole!"); continue; }
+            continue;
+        }
+
+        // ===== AI: YONDER (ally) — 8方向移動で敵を追跡・攻撃、敵がいなければ主人公に追従 =====
+        if (e.isAlly && e.type === 'YONDER') {
+            if (e._ydRandMove) {
+                e._ydRandMove = false;
+                const _yaRPreX = e.x, _yaRPreY = e.y;
+                const _yaRDirs = [
+                    [1,0],[-1,0],[0,1],[0,-1],
+                    [1,1],[-1,1],[1,-1],[-1,-1]
+                ].sort(() => Math.random() - 0.5);
+                for (const [mx, my] of _yaRDirs) {
+                    const nx = e.x + mx, ny = e.y + my;
+                    if (nx < 1 || nx >= COLS - 1 || ny < 1 || ny >= ROWS - 1) continue;
+                    if (!canEnemyMove(nx, ny, e)) continue;
+                    if (nx === player.x && ny === player.y) continue;
+                    if (enemies.some(oe => oe !== e && oe.hp > 0 && !oe._dead && oe.x === nx && oe.y === ny)) continue;
+                    if (mx !== 0 && my !== 0) { e.offsetY = -12; await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); e.offsetY = 0; }
+                    e.x = nx; e.y = ny; break;
+                }
+                await _iceSlide(e, _yaRPreX, _yaRPreY);
+                if (isRealHole(e.x, e.y)) scheduleEnemyFall(e, "Y stumbled into a hole!");
+                continue;
+            }
+            // 最も近い敵（非味方・非死亡）を探す
+            let _yaTarget = null, _yaTargetDist = Infinity;
+            for (const o of enemies) {
+                if (o === e || o._dead || o.hp <= 0 || o.isAlly) continue;
+                const d = Math.max(Math.abs(o.x - e.x), Math.abs(o.y - e.y));
+                if (d < _yaTargetDist) { _yaTargetDist = d; _yaTarget = o; }
+            }
+            if (_yaTarget) {
+                const _yaDx = _yaTarget.x - e.x, _yaDy = _yaTarget.y - e.y;
+                const _yaCheb = Math.max(Math.abs(_yaDx), Math.abs(_yaDy));
+                if (_yaCheb === 1) {
+                    const _yaDmg = Math.max(1, Math.floor(floorLevel / 3) + 2 + (e._atkBonus || 0));
+                    e.offsetX = _yaDx * 8; e.offsetY = _yaDy * 8;
+                    spawnSlash(_yaTarget.x, _yaTarget.y);
+                    SOUNDS.ENEMY_ATTACK();
+                    _yaTarget.hp -= _yaDmg;
+                    spawnDamageText(_yaTarget.x, _yaTarget.y, _yaDmg, '#86efac');
+                    _yaTarget.flashUntil = performance.now() + 200;
+                    addKeyLog(`Ally Y strikes diagonally! (-${_yaDmg})`);
+                    attackOccurred = true;
+                    await _w(150); e.offsetX = 0; e.offsetY = 0;
+                    if (_yaTarget.hp <= 0) { _yaTarget._killedByAlly = e; handleEnemyDeath(_yaTarget, false); }
+                    continue;
+                }
+                // 敵に向かって8方向移動（斜め優先）
+                const _yamx = Math.sign(_yaDx), _yamy = Math.sign(_yaDy);
+                const _yaMvDirs = [];
+                if (_yamx !== 0 && _yamy !== 0) _yaMvDirs.push([_yamx, _yamy]);
+                if (_yamx !== 0) _yaMvDirs.push([_yamx, 0]);
+                if (_yamy !== 0) _yaMvDirs.push([0, _yamy]);
+                const _yaPreX = e.x, _yaPreY = e.y;
+                for (const [mx, my] of _yaMvDirs) {
+                    const nx = e.x + mx, ny = e.y + my;
+                    if (nx < 1 || nx >= COLS - 1 || ny < 1 || ny >= ROWS - 1) continue;
+                    if (!canEnemyMove(nx, ny, e)) continue;
+                    if (nx === player.x && ny === player.y) continue;
+                    if (enemies.some(oe => oe !== e && oe.hp > 0 && !oe._dead && oe.x === nx && oe.y === ny)) continue;
+                    if (mx !== 0 && my !== 0) { e.offsetY = -12; await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); e.offsetY = 0; }
+                    e.x = nx; e.y = ny; break;
+                }
+                await _iceSlide(e, _yaPreX, _yaPreY);
+                if (isRealHole(e.x, e.y)) { scheduleEnemyFall(e, "Y fell into a hole!"); }
+            } else {
+                // 敵がいない → 主人公に8方向で追従
+                const _yapDx = player.x - e.x, _yapDy = player.y - e.y;
+                const _yapCheb = Math.max(Math.abs(_yapDx), Math.abs(_yapDy));
+                if (_yapCheb > 1) {
+                    const _yapmx = Math.sign(_yapDx), _yapmy = Math.sign(_yapDy);
+                    const _yapDirs = [];
+                    if (_yapmx !== 0 && _yapmy !== 0) _yapDirs.push([_yapmx, _yapmy]);
+                    if (_yapmx !== 0) _yapDirs.push([_yapmx, 0]);
+                    if (_yapmy !== 0) _yapDirs.push([0, _yapmy]);
+                    const _yapPreX = e.x, _yapPreY = e.y;
+                    for (const [mx, my] of _yapDirs) {
+                        const nx = e.x + mx, ny = e.y + my;
+                        if (nx < 1 || nx >= COLS - 1 || ny < 1 || ny >= ROWS - 1) continue;
+                        if (!canEnemyMove(nx, ny, e)) continue;
+                        if (nx === player.x && ny === player.y) continue;
+                        if (enemies.some(oe => oe !== e && oe.hp > 0 && !oe._dead && oe.x === nx && oe.y === ny)) continue;
+                        if (mx !== 0 && my !== 0) { e.offsetY = -12; await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); await new Promise(r => requestAnimationFrame(r)); e.offsetY = 0; }
+                        e.x = nx; e.y = ny; break;
+                    }
+                    await _iceSlide(e, _yapPreX, _yapPreY);
+                    if (isRealHole(e.x, e.y)) { scheduleEnemyFall(e, "Y fell into a hole!"); }
+                }
+            }
             continue;
         }
 
@@ -43283,8 +44979,8 @@ async function enemyTurn() {
                             spawnFloatingText(dropX, dropY, "FOUND!", '#fbbf24');
                             addLog("Something was buried in the wall!");
                         }
-                    } else if (dropRoll < 0.04) {
-                        // 敵出現（2%）: 壊した壁の元の位置に敵を出す
+                    } else if (dropRoll < 0.04 && floorLevel !== 29) {
+                        // 敵出現（2%）: 壊した壁の元の位置に敵を出す（29Fは除外）
                         const dropX = nx - d.x, dropY = ny - d.y;
                         if (dropX >= 1 && dropX < COLS - 1 && dropY >= 1 && dropY < ROWS - 1 &&
                             map[dropY][dropX] === SYMBOLS.FLOOR && !(dropX === player.x && dropY === player.y) &&
@@ -44148,24 +45844,26 @@ async function enemyTurn() {
         if (fireFloors[i].life < 0) fireFloors.splice(i, 1);
     }
 
-    // 回復床: プレイヤーと敵を毎ターン回復（+10 HP）
+    // 回復床: 敵を毎ターン回復（短時間テキストのみ、ラグ防止のため350ms）
     for (const e of enemies) {
         if (e._dead || e.hp <= 0) continue;
-        if (map[e.y] && map[e.y][e.x] === SYMBOLS.HEAL_FLOOR && e.hp < e.maxHp) {
-            const _ea = Math.min(10, e.maxHp - e.hp);
-            e.hp += _ea;
-            e.healGlowUntil = performance.now() + 600;
-            spawnFloatingText(e.x, e.y, `+${_ea}`, '#fde68a', 700);
+        if (map[e.y] && map[e.y][e.x] === SYMBOLS.HEAL_FLOOR) {
+            damageTexts.push({ x: e.x, y: e.y, text: '+', color: '#fde68a',
+                duration: 350, startTime: performance.now(), rise: true });
+            if (e.hp < e.maxHp) e.hp += Math.min(10, e.maxHp - e.hp);
         }
     }
 
     // 罠の進行処理
+    let _trapPlayerHit = false;
+    let _trapAnyFired = false;
     for (let i = dragonTraps.length - 1; i >= 0; i--) {
         const trap = dragonTraps[i];
         if (trap.stage === 'CIRCLE') {
             trap.stage = 'READY';
         } else if (trap.stage === 'READY') {
             dragonTraps.splice(i, 1);
+            _trapAnyFired = true;
 
             let hitTarget = false;
             if (player.x === trap.x && player.y === trap.y) {
@@ -44174,9 +45872,8 @@ async function enemyTurn() {
                 player.flashUntil = performance.now() + 200;
                 if (player.hp > 0) animateBounce(player); // ダメージで跳ねる
                 spawnDamageText(player.x, player.y, dmg, '#38bdf8');
-                SOUNDS.DAMAGE();
                 addLog("Rock spikes burst from the ground! Sharp rock pierces your body!");
-                setScreenShake(15, 300);
+                _trapPlayerHit = true;
                 hitTarget = true;
                 if (player.hp <= 0) { player.hp = 0; updateUI(); triggerGameOver(); return; }
             }
@@ -44193,12 +45890,18 @@ async function enemyTurn() {
 
             if (!hitTarget) {
                 addLog("Rock spikes burst from the ground!");
-                SOUNDS.EXPLODE();
-                setScreenShake(10, 200);
             }
             // つららを耐久度2の障害物として配置
             tempWalls.push({ x: trap.x, y: trap.y, hp: 2, type: 'ICICLE' });
         }
+    }
+    // 棘の音とシェイクはループ外で1回だけ
+    if (_trapPlayerHit) {
+        SOUNDS.DAMAGE();
+        setScreenShake(15, 300);
+    } else if (_trapAnyFired) {
+        SOUNDS.EXPLODE();
+        setScreenShake(10, 200);
     }
 
     // 注: processFairyCharm() は元々あった関数だが定義が失われていたため削除
@@ -44473,18 +46176,19 @@ async function applyLaserDamage() {
                             if (oe.type === 'BOMBER') {
                                 oe.hp = 0; oe.flashUntil = performance.now() + 100;
                                 spawnFloatingText(oe.x, oe.y, "ZAP!", "#f87171");
+                                if (e.isAlly) oe._killedByAlly = e;
                                 handleEnemyDeath(oe);
                             } else {
                                 oe.hp -= enemyLaserDmg; oe.flashUntil = performance.now() + 100;
                                 spawnDamageText(oe.x, oe.y, enemyLaserDmg, '#f87171');
                                 SOUNDS.DAMAGE();
-                                if (oe.hp <= 0) handleEnemyDeath(oe);
+                                if (oe.hp <= 0) { if (e.isAlly) oe._killedByAlly = e; handleEnemyDeath(oe); }
                             }
                         } else if ((oe.type === 'SNAKE' || oe.type === 'SUMMONER') && oe.body && oe.body.some(s => s.x === lx && s.y === ly)) {
                             oe.hp -= enemyLaserDmg; oe.flashUntil = performance.now() + 100;
                             spawnDamageText(lx, ly, enemyLaserDmg, '#f87171');
                             SOUNDS.DAMAGE();
-                            if (oe.hp <= 0) handleEnemyDeath(oe);
+                            if (oe.hp <= 0) { if (e.isAlly) oe._killedByAlly = e; handleEnemyDeath(oe); }
                         }
                     }
                 });
@@ -44989,13 +46693,13 @@ function canEnemyMove(x, y, mover = null) {
     const tile = map[y][x];
     const isObstacle = [
         SYMBOLS.WALL, SYMBOLS.DOOR, SYMBOLS.BLOCK, SYMBOLS.BLOCK_CRACKED, SYMBOLS.LAVA,
-        SYMBOLS.MERCHANT, SYMBOLS.CORE
+        SYMBOLS.MERCHANT, SYMBOLS.CORE, SYMBOLS.BLUE_BLOCK
     ].includes(tile);
     // ミミックが擬態中の穴には敵が移動できない（本物の穴には落ちてOK）
     if (tile === SYMBOLS.STAIRS && enemies.some(e => e.type === 'MIMIC' && e.disguised && e.x === x && e.y === y)) return false;
     // ブレイズとオークは溶岩を障害物と見なさない。SLIDERはブロックを通過できる
     if (isObstacle) {
-        if (tile === SYMBOLS.LAVA && mover && (mover.type === 'BLAZE' || mover.type === 'VULCAN' || mover.type === 'ORC' || mover.type === 'KEY_RUNNER' || mover.type === 'WEAVER' || mover.type === 'PAUPER_SHADE' || mover.lavaSync)) {
+        if (tile === SYMBOLS.LAVA && mover && (mover.type === 'BLAZE' || mover.type === 'VULCAN' || mover.type === 'ORC' || mover.type === 'KEY_RUNNER' || mover.type === 'WEAVER' || mover.type === 'PAUPER_SHADE' || mover.lavaSync || (mover.isAlly && hasRing('FIRE_RING')))) {
             // 移動を許可
         } else if ((tile === SYMBOLS.BLOCK || tile === SYMBOLS.BLOCK_CRACKED) && mover && mover.type === 'SLIDER') {
             // SLIDER はブロックを通過・停止できる
@@ -45100,11 +46804,14 @@ async function triggerGameOver() {
     try {
         const _deathSave = safeStorageGetJSON('minimal_rogue_save', {});
         _deathSave.gold = 0;
+        _deathSave.savedAllies = [];        // 死亡時は仲間も消える
+        _deathSave.liminalSavedAllies = [];
         safeStorageSetJSON('minimal_rogue_save', _deathSave);
     } catch(e) {}
     updateUI();
     bufferedInput = null; // ゲームオーバー後のバッファ入力を捨てる
     travelingAllies = []; // 死亡時に仲間をリセット（リトライ時に引き継がないよう）
+    _liminalSavedAllies = [];
     // 死亡回数を記録
     const prevDeaths = safeStorageGetInt('minimal_rogue_deaths', 0, 0);
     safeStorageSet('minimal_rogue_deaths', String(prevDeaths + 1));
@@ -45156,6 +46863,7 @@ function isTileInLaser(x, y, ignoreEnemy = null) {
 }
 
 async function startGame(startFloor = 1, isTestMode = false) {
+    _testStartFloor = isTestMode ? startFloor : null;
     if (startFloor === 1 && !isTestMode && gameState !== 'OPENING') {
         await playOpeningSequence();
         return;
@@ -45494,9 +47202,28 @@ async function startDeepRun() {
 // Prevent accidental browser zoom (Ctrl+wheel / pinch) from changing the game layout
 window.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
 
+// オープニング中: マウスの左クリックで1行進める（キー入力と同じ扱い。全スキップは従来どおり Escape）
+// ※スマホのタップは document の touchend で既に進む
+window.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (gameState === 'OPENING' && isTutorialInputActive) isTutorialInputActive = false;
+});
+
 window.addEventListener('keydown', async e => {
     // エンディング演出中は全入力をブロック
     if (endingSkipLock) {
+        e.preventDefault();
+        return;
+    }
+
+    // オープニング中: Escape で全スキップ、他キーで1行進める
+    if (gameState === 'OPENING') {
+        if (e.key === 'Escape') {
+            _openingSkipRequested = true;
+            isTutorialInputActive = false;
+        } else if (isTutorialInputActive) {
+            isTutorialInputActive = false;
+        }
         e.preventDefault();
         return;
     }
@@ -45592,7 +47319,7 @@ window.addEventListener('keydown', async e => {
             if (testModeVisible) {
                 e.preventDefault();
                 const _num = parseInt(_dk);
-                const _duD = localStorage.getItem('deep_unlocked') === '1';
+                const _duD = safeStorageGet('deep_unlocked', null) === '1';
                 const _dtiD = _duD ? 4 : 3;
                 if (titleSelection === _dtiD) {
                     let nf = (deepTestFloor * 10) % 1000 + _num;
@@ -45613,7 +47340,7 @@ window.addEventListener('keydown', async e => {
     if (e.key === 'ArrowUp' || e.key === 'w') {
         e.preventDefault();
         if (gameState === 'TITLE') {
-            { const _duU = localStorage.getItem('deep_unlocked') === '1'; const _baseU = _duU ? 3 : 2; const count = testModeVisible ? _baseU + 4 : _baseU; titleSelection = (titleSelection + count - 1) % count; }
+            { const _duU = safeStorageGet('deep_unlocked', null) === '1'; const _baseU = _duU ? 3 : 2; const count = testModeVisible ? _baseU + 4 : _baseU; titleSelection = (titleSelection + count - 1) % count; }
             SOUNDS.SELECT(); return;
         }
         if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 3) % 4; SOUNDS.SELECT(); return; }
@@ -45636,7 +47363,7 @@ window.addEventListener('keydown', async e => {
         if (gameState === 'SHOP') {
             if (shopMode === 'SELECT') { shopModeSelection = shopModeSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
             { let _ns = shopSelection; do { _ns--; } while (_ns >= 0 && shopStock[_ns]?.type === 'gap'); if (_ns >= 0) shopSelection = _ns; }
-            { const _mv = 7; if (shopSelection < shopScrollOffset) shopScrollOffset = shopSelection; if (shopSelection >= shopScrollOffset + _mv) shopScrollOffset = shopSelection - _mv + 1; }
+            { const _mv = Math.max(1, Math.floor((CANVAS_H_FULL - HUD_BOT_H - 180) / 45)); if (shopSelection < shopScrollOffset) shopScrollOffset = shopSelection; if (shopSelection >= shopScrollOffset + _mv) shopScrollOffset = shopSelection - _mv + 1; }
             SOUNDS.SELECT(); return;
         }
         if (gameState === 'RINGS') {
@@ -45664,7 +47391,7 @@ window.addEventListener('keydown', async e => {
     if (e.key === 'ArrowDown' || e.key === 's') {
         e.preventDefault();
         if (gameState === 'TITLE') {
-            { const _duD2 = localStorage.getItem('deep_unlocked') === '1'; const _baseD2 = _duD2 ? 3 : 2; const count = testModeVisible ? _baseD2 + 4 : _baseD2; titleSelection = (titleSelection + 1) % count; }
+            { const _duD2 = safeStorageGet('deep_unlocked', null) === '1'; const _baseD2 = _duD2 ? 3 : 2; const count = testModeVisible ? _baseD2 + 4 : _baseD2; titleSelection = (titleSelection + 1) % count; }
             SOUNDS.SELECT(); return;
         }
         if (gameState === 'STATUS' && statusPage === 2) { settingsRow = (settingsRow + 1) % 4; SOUNDS.SELECT(); return; }
@@ -45687,7 +47414,7 @@ window.addEventListener('keydown', async e => {
         if (gameState === 'SHOP') {
             if (shopMode === 'SELECT') { shopModeSelection = shopModeSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
             { let _ns = shopSelection; do { _ns++; } while (_ns < shopStock.length && shopStock[_ns]?.type === 'gap'); if (_ns < shopStock.length) shopSelection = _ns; }
-            { const _mv = 7; if (shopSelection < shopScrollOffset) shopScrollOffset = shopSelection; if (shopSelection >= shopScrollOffset + _mv) shopScrollOffset = shopSelection - _mv + 1; }
+            { const _mv = Math.max(1, Math.floor((CANVAS_H_FULL - HUD_BOT_H - 180) / 45)); if (shopSelection < shopScrollOffset) shopScrollOffset = shopSelection; if (shopSelection >= shopScrollOffset + _mv) shopScrollOffset = shopSelection - _mv + 1; }
             SOUNDS.SELECT(); return;
         }
         if (gameState === 'RINGS') {
@@ -45715,17 +47442,17 @@ window.addEventListener('keydown', async e => {
     if (e.key === 'ArrowLeft' || e.key === 'a') {
         if (['TITLE', 'STATUS'].includes(gameState)) e.preventDefault();
         if (gameState === 'SHOP' && shopMode === 'SELECT') { shopModeSelection = shopModeSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
-        if (gameState === 'TITLE') { const _du2 = localStorage.getItem('deep_unlocked') === '1'; const _tpi = _du2 ? 3 : 2; const _dti = _du2 ? 4 : 3;
+        if (gameState === 'TITLE') { const _du2 = safeStorageGet('deep_unlocked', null) === '1'; const _tpi = _du2 ? 3 : 2; const _dti = _du2 ? 4 : 3;
             if (titleSelection === _tpi) { testFloor = (testFloor - 2 + 100) % 100 + 1; SOUNDS.SELECT(); return; }
             if (titleSelection === _dti) { deepTestFloor = deepTestFloor > 101 ? deepTestFloor - 1 : 999; SOUNDS.SELECT(); return; }
         }
         if (gameState === 'STATUS') {
             if (statusPage === 2 && settingsRow === 1) {
-                if (bgmVolumeLevel > 1) { bgmVolumeLevel--; if (bgmActive) bgmAudio.volume = getBGMVolume(); localStorage.setItem('rogue_bgm_vol', bgmVolumeLevel); }
+                if (bgmVolumeLevel > 1) { bgmVolumeLevel--; if (bgmActive) bgmAudio.volume = getBGMVolume(); safeStorageSet('rogue_bgm_vol', bgmVolumeLevel); }
                 SOUNDS.SELECT(); return;
             }
             if (statusPage === 2 && settingsRow === 2) {
-                if (sfxVolumeLevel > 0) { sfxVolumeLevel--; sfxMasterGain.gain.value = getSFXVolume(); localStorage.setItem('rogue_sfx_vol', sfxVolumeLevel); }
+                if (sfxVolumeLevel > 0) { sfxVolumeLevel--; sfxMasterGain.gain.value = getSFXVolume(); safeStorageSet('rogue_sfx_vol', sfxVolumeLevel); }
                 SOUNDS.SELECT(); return;
             }
             if (statusPage > 0) { statusPage--; SOUNDS.SELECT(); } return;
@@ -45734,17 +47461,17 @@ window.addEventListener('keydown', async e => {
     if (e.key === 'ArrowRight' || e.key === 'd') {
         if (['TITLE', 'STATUS'].includes(gameState)) e.preventDefault();
         if (gameState === 'SHOP' && shopMode === 'SELECT') { shopModeSelection = shopModeSelection === 0 ? 1 : 0; SOUNDS.SELECT(); return; }
-        if (gameState === 'TITLE') { const _du3 = localStorage.getItem('deep_unlocked') === '1'; const _tpi2 = _du3 ? 3 : 2; const _dti2 = _du3 ? 4 : 3;
+        if (gameState === 'TITLE') { const _du3 = safeStorageGet('deep_unlocked', null) === '1'; const _tpi2 = _du3 ? 3 : 2; const _dti2 = _du3 ? 4 : 3;
             if (titleSelection === _tpi2) { testFloor = (testFloor % 100) + 1; SOUNDS.SELECT(); return; }
             if (titleSelection === _dti2) { deepTestFloor = deepTestFloor < 999 ? deepTestFloor + 1 : 101; SOUNDS.SELECT(); return; }
         }
         if (gameState === 'STATUS') {
             if (statusPage === 2 && settingsRow === 1) {
-                if (bgmVolumeLevel < 5) { bgmVolumeLevel++; if (bgmActive) bgmAudio.volume = getBGMVolume(); localStorage.setItem('rogue_bgm_vol', bgmVolumeLevel); }
+                if (bgmVolumeLevel < 5) { bgmVolumeLevel++; if (bgmActive) bgmAudio.volume = getBGMVolume(); safeStorageSet('rogue_bgm_vol', bgmVolumeLevel); }
                 SOUNDS.SELECT(); return;
             }
             if (statusPage === 2 && settingsRow === 2) {
-                if (sfxVolumeLevel < 5) { sfxVolumeLevel++; sfxMasterGain.gain.value = getSFXVolume(); localStorage.setItem('rogue_sfx_vol', sfxVolumeLevel); }
+                if (sfxVolumeLevel < 5) { sfxVolumeLevel++; sfxMasterGain.gain.value = getSFXVolume(); safeStorageSet('rogue_sfx_vol', sfxVolumeLevel); }
                 SOUNDS.SELECT(); return;
             }
             if (statusPage < 2) { statusPage++; SOUNDS.SELECT(); } return;
@@ -45946,7 +47673,7 @@ window.addEventListener('keydown', async e => {
         }
         if (gameState === 'TITLE') {
             const hasSave = safeStorageGet('minimal_rogue_save') !== null;
-            const _duE = localStorage.getItem('deep_unlocked') === '1';
+            const _duE = safeStorageGet('deep_unlocked', null) === '1';
             const _tpiE = _duE ? 3 : 2;
             const _dtiE = _duE ? 4 : 3;
             const _fsiE = _duE ? 5 : 4;
@@ -45995,8 +47722,8 @@ window.addEventListener('keydown', async e => {
             if (t) {
                 isRoomTestMode = true;
                 forcedLayoutType = t.id;
-                // latin_test / catacombs は単画面固定レイアウトのため floor 1 で起動
-                const _rtFloor = (t.id === 'latin_test' || t.id === 'catacombs') ? 1
+                // latin_test / catacombs / blue_key_room は単画面固定レイアウトのため floor 1 で起動
+                const _rtFloor = (t.id === 'latin_test' || t.id === 'catacombs' || t.id === 'blue_key_room') ? 1
                     : (t.prob === 'テスト専用' || t.prob === '深層のみ' || t.prob === 'マルチ専用') ? 101
                     : 49;
                 startGame(_rtFloor, true);
@@ -46086,14 +47813,10 @@ window.addEventListener('keydown', async e => {
                     }
                 }
                 // 装備変更後すぐに表示を更新
-                hpElement.innerText = `${player.hp}/${getPlayerMaxHp()}`;
-                const _ringNode = document.getElementById('ring-status');
-                if (_ringNode) {
-                    const _names = player.equippedRings
-                        .map(id => id ? (RINGS.find(r => r.id === id)?.name || '') : '')
-                        .filter(n => n);
-                    _ringNode.innerText = _names.length ? _names.join('  /  ') : '';
-                }
+                _hudHP = `${player.hp}/${getPlayerMaxHp()}`;
+                _hudRingNames = player.equippedRings
+                    .map(id => id ? (RINGS.find(r => r.id === id)?.name || '') : '')
+                    .filter(n => n);
                 // 装備変更をセーブ
                 saveGame();
                 // スロット選択に戻る
@@ -46250,7 +47973,7 @@ window.addEventListener('keydown', async e => {
     }
 
     if (e.key.toLowerCase() === 'x' || e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'i') {
-        if (gameState === 'PLAYING' && !isProcessing) { gameState = 'MENU'; menuSelection = 0; SOUNDS.SELECT(); }
+        if (gameState === 'PLAYING' && !isProcessing) { gameState = 'MENU'; menuSelection = 0; SOUNDS.SELECT(); _addAllyStatusLog(); }
         else if (gameState === 'MENU') { gameState = 'PLAYING'; SOUNDS.SELECT(); }
         else if (gameState === 'STATUS' || gameState === 'INVENTORY') { gameState = 'MENU'; SOUNDS.SELECT(); }
         else if (gameState === 'SHOP') {
@@ -46378,6 +48101,8 @@ window.addEventListener('keyup', e => {
         }
         isSpacePressed = false;
         spaceUsedForBlock = false;
+        _wallRingLockDx = 0; _wallRingLockDy = 0; _wallRingMode = 'place';
+        _wallRingPlacePending = false;
         e.preventDefault();
     }
 });
@@ -46453,6 +48178,7 @@ async function tryCharmEnemy() {
                     enemy._solarFree = true;
                 }
                 enemy.isAlly = true;
+                if (enemy.lavaBound) enemy.lavaBound = false; // 仲間になったら溶岩拘束を解除
                 // 擬態中のミミックをチャームした場合、擬態解除してSTAIRSタイルを除去
                 if (enemy.type === 'MIMIC' && enemy.disguised) {
                     enemy.disguised = false;
@@ -46704,6 +48430,16 @@ async function useHealTome() {
     SOUNDS.HEAL();
     addKeyLog("Recited the Heal Tome! HP fully restored!");
     spawnFloatingText(player.x, player.y, "FULL HEAL!!", "#4ade80");
+    // 仲間も全員全回復
+    let allyCount = 0;
+    enemies.forEach(e => {
+        if (e.isAlly && e.hp > 0 && !e._dead) {
+            e.hp = e.maxHp;
+            e.flashUntil = performance.now() + 300;
+            allyCount++;
+        }
+    });
+    if (allyCount > 0) spawnFloatingText(player.x, player.y - 1, `+${allyCount} ALLIES HEALED`, "#4ade80", 1200);
     updateUI();
 }
 
@@ -46725,19 +48461,20 @@ requestAnimationFrame(gameLoop);
 addLog("Game Ready.");
 
 // 縦持ち画面のオフセット（スワイプで調整、localStorageに保存）
-let _portraitOffsetY = parseInt(localStorage.getItem('portrait_offset_y') || '40', 10);
+let _portraitOffsetY = parseInt(safeStorageGet('portrait_offset_y', null) || '40', 10);
 // 横持ち標準画面のオフセット（スワイプで上下調整、localStorageに保存）
-let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '0', 10);
+let _landscapeOffsetY = parseInt(safeStorageGet('landscape_offset_y', null) || '0', 10);
 
 // ウィンドウサイズに合わせてゲーム全体をスケーリング（タッチコントロールはオーバーレイなので余白不要）
 (function initScale() {
     const wrapper = document.querySelector('.game-wrapper');
     if (!wrapper) return;
     const baseW = COLS * TILE_SIZE + 42;
-    const baseH = ROWS * TILE_SIZE + 217;
+    const baseH = CANVAS_H_FULL + 42;
     const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     function applyScale() {
-        const isPortrait = isMobile && window.innerHeight > window.innerWidth;
+        // スマホは縦持ちのみ対応：横にしても縦持ちレイアウトを使う
+        const isPortrait = isMobile;
         const MARGIN_V = isMobile ? 8 : 50;
         const MARGIN_H = isMobile ? 4 : 20;
         const scale = Math.min(
@@ -46773,7 +48510,6 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     document.head.insertAdjacentHTML('beforeend', `<style id="tc-style">
 /* ── キャンバスビューポート（ズームclip用） ── */
 #canvas-viewport {
-    overflow: hidden;
     border: 1px solid var(--border-color);
     background: #000;
     display: block;
@@ -46802,35 +48538,15 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
 }
 /* ── 縦向き: 半透明オーバーレイ（下部） ── */
 #tc-wrap {
-    position: fixed; bottom: 8px; left: 0; right: 0; z-index: 1000;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
     display: flex; flex-direction: row;
     justify-content: space-around; align-items: center;
-    padding: 8px 16px env(safe-area-inset-bottom, 8px);
-    background: rgba(0,0,0,0.38);
+    padding: 8px 16px calc(env(safe-area-inset-bottom, 8px) + 8px); /* 旧: bottom 8px + 下余白。ボタン位置は同じ */
+    background: #000; /* 不透明（ズーム中もマップが透けない） */
     user-select: none; -webkit-user-select: none;
     pointer-events: none;
 }
 #tc-wrap > * { pointer-events: auto; }
-/* ── 横向き: 全画面overlay・Dパッド左下・その他ボタン右側 ── */
-@media (orientation: landscape) {
-    #tc-wrap {
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: transparent;
-        display: block; padding: 0;
-    }
-    #tc-dpad {
-        position: absolute; bottom: 12px; left: 12px;
-    }
-    #tc-actions {
-        position: absolute; right: 12px; top: 50%;
-        transform: translateY(-50%);
-        display: flex; flex-direction: column; gap: 8px;
-    }
-    #tc-block-btn {
-        position: absolute; bottom: 12px; right: 12px;
-    }
-    .tc-act { width: 50px; height: 50px; font-size: 11px; }
-}
 #tc-dpad {
     display: grid;
     grid-template-columns: repeat(3, 64px);
@@ -46838,14 +48554,15 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     gap: 3px;
     padding: 18px 20px; margin: -18px -20px;
 }
-@media (orientation: portrait) {
-    #tc-wrap { justify-content: center; }
-    #tc-dpad { position: relative; z-index: 10; margin-right: 16px; }
-    #tc-block-btn {
-        position: absolute; right: 16px;
-        top: 50%; transform: translateY(-50%);
-    }
+/* 縦持ちレイアウト（スマホは横にしてもこのレイアウトのまま） */
+/* 十字キーは左寄せ、＠ボタンは右端から離す（＠のまわりにブロック設置ガイドの□を出す空きを作る） */
+#tc-wrap { justify-content: flex-start; }
+#tc-dpad { position: relative; z-index: 10; margin-left: -46px; margin-right: 0; }
+#tc-block-btn {
+    position: absolute; right: 36px;
+    top: 50%; transform: translateY(-50%);
 }
+@media (max-width: 340px) { #tc-block-btn { right: 14px; } } /* 幅の狭いスマホ: 左の□が十字キーに重ならないように */
 .tc-btn {
     background: rgba(26,26,26,0.7); border: 1px solid #2e2e2e; color: #bbb;
     font-size: 22px; border-radius: 8px;
@@ -46924,12 +48641,96 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     -webkit-tap-highlight-color: transparent; touch-action: none;
 }
 .tc-act:active { background: #2e2e2e; color: #fff; }
+/* ── ズームモード ストーリーダイアログ オーバーレイ（スマホ専用） ── */
+/* ── ＠ボタン長押し中のブロック設置ガイド（ボタンのまわりに矢印＋□） ── */
+#tc-block-guide { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 1001; pointer-events: none; display: none; }
+#tc-block-guide .tc-bg-item {
+    position: absolute; transform: translate(-50%, -50%);
+    width: 18px; height: 18px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(237,237,237,0.75);
+    background: rgba(0,0,0,0.6); border-radius: 4px; /* ズーム中もマップと区別できるように */
+    transition: color 0.08s, transform 0.08s;
+}
+#tc-block-guide .tc-bg-item svg { display: block; overflow: visible; }
+#tc-block-guide .tc-bg-item.tc-bg-block { width: 26px; height: 26px; }
+#tc-block-guide .tc-bg-item.tc-bg-on { color: #fff; transform: translate(-50%, -50%) scale(1.35); }
+/* ── ズームモード用 DQ風プレート（黒地・白枠。drawDQWindow と同じ見た目） ── */
+.m-plate {
+    background: #000; color: #ededed;
+    border: 3px solid #ededed; border-radius: 6px;
+    box-shadow: inset 0 0 0 3px #000, inset 0 0 0 4px rgba(237,237,237,0.20);
+    font: 15px 'Courier New', monospace; line-height: 1.45;
+    box-sizing: border-box;
+}
+.m-plate.m-ja, .m-plate .m-ja { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif; }
+/* ── ズーム中の英語ログ: 画面左下（十字キーの下）に小さく3行 ── */
+#m-log-mini {
+    position: fixed; left: 8px; width: 64%; z-index: 1002;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 1px);
+    display: none; pointer-events: none;
+    font: 10px 'Courier New', monospace; line-height: 11px; color: #bbb;
+}
+#m-log-mini div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#m-log-mini div.m-old1 { opacity: 0.7; }
+#m-log-mini div.m-old2 { opacity: 0.45; }
+#m-log-mini div.m-new { animation: m-log-in 0.25s ease-out; }
+@keyframes m-log-in { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* ── ズーム切替ボタン（虫めがね＋／−。操作エリア左上。idは tc-camera のまま） ── */
+#tc-camera {
+    position: absolute; left: 10px; top: 10px; z-index: 20;
+    width: 36px; height: 36px; padding: 0; box-sizing: border-box;
+    border-radius: 50%; border: 1px solid #333; background: rgba(26,26,26,0.9); color: #999;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+#tc-camera.tc-on { border-color: #c8a000; color: #ffd700; }
+#tc-camera svg { display: block; }
+#m-shop-plate {
+    position: fixed; left: 8px; right: 8px; z-index: 1060;
+    display: none; flex-direction: column; gap: 8px;
+    touch-action: none;
+    font-family: 'Courier New', monospace;
+    background: rgba(0,0,0,0.95); /* 後ろのズームされたキャンバス文字を隠す */
+}
+#m-shop-plate > * { flex: 0 0 auto; }
+#m-shop-plate .m-plate { padding: 10px 14px; }
+#m-shop-plate .m-head { display: flex; justify-content: space-between; align-items: baseline; }
+#m-shop-plate .m-title { font-weight: bold; font-size: 17px; }
+#m-shop-plate .m-list { flex: 1 1 auto; min-height: 0; display: flex; }
+#m-shop-plate .m-scroll { flex: 1 1 auto; overflow: hidden; position: relative; }
+#m-shop-plate .m-row { display: flex; align-items: baseline; gap: 6px; padding: 5px 0; font-size: 16px; }
+#m-shop-plate .m-row .m-cur { width: 1.1em; flex: 0 0 auto; }
+#m-shop-plate .m-row .m-name { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#m-shop-plate .m-row .m-price { flex: 0 0 auto; }
+#m-shop-plate .m-gap { height: 8px; }
+#m-shop-plate .m-desc { min-height: 3.2em; color: #bbb; white-space: pre-line; }
+#m-shop-plate .m-guide { text-align: center; font-size: 12px; color: #777; }
+#m-shop-plate .m-choice { display: flex; justify-content: space-around; font-size: 18px; padding: 10px 0 4px; }
+#m-shop-confirm {
+    position: absolute; left: 10%; right: 10%; top: 35%;
+    padding: 16px 12px 12px; text-align: center;
+}
+#zoom-dialog {
+    position: fixed; left: 5%; right: 5%; z-index: 1100;
+    display: none;
+    background: #000;
+    border: 3px solid #ededed; border-radius: 6px;
+    box-shadow: inset 0 0 0 3px #000, inset 0 0 0 4px rgba(237,237,237,0.20);
+    color: #ddd;
+    font: 17px 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', serif;
+    line-height: 1.8;
+    text-align: center;
+    padding: 12px 16px;
+    pointer-events: none;
+}
 </style>`);
 
     // DOM（縦向き: MENU → Dパッド → BLOCK）
     const _tcWrap = document.createElement('div');
     _tcWrap.id = 'tc-wrap';
     _tcWrap.innerHTML = `
+        <button id="tc-camera" aria-label="Zoom"></button>
         <div id="tc-actions">
             <button class="tc-act" id="tc-menu">MENU</button>
         </div>
@@ -46953,7 +48754,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     const _zoomVP = document.createElement('div');
     _zoomVP.id = 'canvas-viewport';
     _zoomVP.style.width  = CANVAS_W + 'px';
-    _zoomVP.style.height = CANVAS_H + 'px';
+    _zoomVP.style.height = CANVAS_H_FULL + 'px';
     _zoomCanvas.parentNode.insertBefore(_zoomVP, _zoomCanvas);
     _zoomVP.appendChild(_zoomCanvas);
     // ズームOFF時にviewportを元の場所に戻すための参照
@@ -46971,13 +48772,191 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     _zoomMinimap.id = 'zoom-minimap';
     document.body.appendChild(_zoomMinimap);
 
+    // ── ズームモード ストーリーダイアログ オーバーレイ ──
+    const _zoomDlg = document.createElement('div');
+    _zoomDlg.id = 'zoom-dialog';
+    document.body.appendChild(_zoomDlg);
+
+    // ── ズームモード DQ風プレート（ログ・商人の買い物） ──
+    // ズーム中はキャンバスの一部しか見えず、文字が画面外に切れるため、
+    // 読む必要のある文字だけをHTMLのプレートに大きく出し直す（表示専用。操作は従来のボタン）
+    const _mLogMini = document.createElement('div');
+    _mLogMini.id = 'm-log-mini';
+    document.body.appendChild(_mLogMini);
+
+    const _mShopPlate = document.createElement('div');
+    _mShopPlate.id = 'm-shop-plate';
+    document.body.appendChild(_mShopPlate);
+    // プレート上のタップがキャンバスに届くとズームが切り替わってしまうので止める
+    ['touchstart', 'touchmove', 'touchend'].forEach(t =>
+        _mShopPlate.addEventListener(t, e => { e.stopPropagation(); e.preventDefault(); }, { passive: false }));
+
+    // drawShopScreen() の魔導書アイコン色と同じ
+    const _M_TOME_COLORS = {
+        [SYMBOLS.HEAL_TOME]:    '#4ade80',
+        [SYMBOLS.SPEED]:        '#38bdf8',
+        [SYMBOLS.STEALTH]:      '#94a3b8',
+        [SYMBOLS.CHARM]:        '#60a5fa',
+        [SYMBOLS.BREAKER_TOME]: '#f59e0b',
+        [SYMBOLS.EXPLOSION]:    '#ef4444',
+        [SYMBOLS.ESCAPE]:       '#c084fc',
+        [SYMBOLS.GUARDIAN]:     '#facc15',
+    };
+    const _mEsc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    // 商品1行分の表示情報（drawShopScreen() と同じ判定）
+    function _mShopItemInfo(item) {
+        const isSell = item.type === 'sell_sword' || item.type === 'sell_armor' || item.type === 'sell_ring' || item.type === 'sell_tome' || item.type === 'sell_fairy';
+        const boughtTome = item.type === 'tome' && shopPurchasedTomes.has(item.tomeType);
+        const boughtRing = item.type === 'ring' && shopPurchasedRings.has(item.ringIndex);
+        let name = '', nameJa = '', desc = '', descJa = '', symbol = '', sellable = false;
+        if (item.type === 'ring' || item.type === 'sell_ring') {
+            const r = RINGS[item.ringIndex];
+            name = r.name; nameJa = r.nameJa; desc = r.desc || ''; descJa = r.descJa; symbol = r.symbol;
+            if (isSell) sellable = player.ownedRings.includes(item.ringId);
+        } else if (item.type === 'sword' || item.type === 'sell_sword') {
+            name = 'Fallen Blade'; nameJa = '遺品の剣'; symbol = SYMBOLS.SWORD;
+            if (isSell) { desc = `Owned: ${player.swordCount}`; descJa = `所持数: ${player.swordCount}個`; sellable = player.swordCount > 0; }
+            else { desc = 'ATK +1'; descJa = '攻撃力+1'; }
+        } else if (item.type === 'armor' || item.type === 'sell_armor') {
+            name = 'Fallen Mail'; nameJa = '遺品の鎧'; symbol = SYMBOLS.ARMOR;
+            if (isSell) { desc = `Owned: ${player.armorCount}`; descJa = `所持数: ${player.armorCount}個`; sellable = player.armorCount > 0; }
+            else { desc = 'DEF +1'; descJa = '防御力+1'; }
+        } else if (item.type === 'tome') {
+            name = item.name; nameJa = item.nameJa; desc = item.desc || item.descJa; descJa = item.descJa; symbol = item.symbol || SYMBOLS.TOME;
+        } else if (item.type === 'sell_tome') {
+            name = item.name; nameJa = item.nameJa; symbol = item.sym;
+            desc = `Owned: ${player[item.field]}`; descJa = `所持数: ${player[item.field]}個`; sellable = player[item.field] > 0;
+        } else if (item.type === 'sell_fairy') {
+            name = 'Fairy'; nameJa = '妖精'; symbol = SYMBOLS.FAIRY;
+            desc = `Owned: ${player.fairyCount}`; descJa = `所持数: ${player.fairyCount}匹`; sellable = player.fairyCount > 0;
+        }
+        const canAfford = isSell ? sellable : (!boughtTome && !boughtRing && player.gold >= item.cost);
+        let iconColor;
+        if (!canAfford) iconColor = '#555';
+        else if (item.type === 'sell_ring' || item.type === 'ring') iconColor = RINGS[item.ringIndex].color;
+        else if (item.type === 'sell_tome') iconColor = _M_TOME_COLORS[item.sym] || '#fbbf24';
+        else if (item.type === 'tome') iconColor = _M_TOME_COLORS[item.symbol] || '#fbbf24';
+        else iconColor = '#38bdf8'; // 剣・鎧・妖精
+        const price = isSell ? `+${item.sellPrice}G` : ((boughtTome || boughtRing) ? 'SOLD OUT' : `${item.cost}G`);
+        const count = (item.type === 'tome' || item.type === 'ring') ? ((boughtTome || boughtRing) ? '×0' : '×1') : '';
+        return { isSell, name, nameJa, desc, descJa, symbol, canAfford, iconColor, price, count };
+    }
+
+    function _mShopHTML() {
+        const ja = _gameLang !== 'en';
+        const cls = ja ? 'm-plate m-ja' : 'm-plate';
+        const guide = ja ? '▲▼ えらぶ　＠ けってい　MENU もどる' : '▲▼ Select   @ Confirm   MENU Back';
+        if (shopMode === 'SELECT') {
+            const opt = (i, en, jp) => `<span style="color:${shopModeSelection === i ? '#ededed' : '#555'}">${shopModeSelection === i ? '▶' : '　'}${ja ? jp : en}</span>`;
+            return `<div class="${cls}" style="margin-top:auto;margin-bottom:auto">`
+                + `<div style="text-align:center;color:#999;font-size:13px">${ja ? '― 遭難した冒険者 ―' : '-- Stranded Adventurer --'}</div>`
+                + `<div class="m-choice">${opt(0, 'BUY', '買う')}${opt(1, 'SELL', '売る')}</div>`
+                + `<div class="m-guide">${ja ? '◀▶ えらぶ　＠ けってい　MENU とじる' : '◀▶ Select   @ Open   MENU Close'}</div></div>`;
+        }
+        let rows = '';
+        shopStock.forEach((item, i) => {
+            if (item.type === 'gap') { rows += '<div class="m-gap"></div>'; return; }
+            const f = _mShopItemInfo(item);
+            const sel = i === shopSelection;
+            const col = !f.canAfford ? '#555' : (sel ? '#ededed' : '#bbb');
+            rows += `<div class="m-row" data-i="${i}" style="color:${col}">`
+                + `<span class="m-cur">${sel ? '▶' : ''}</span>`
+                + `<span class="m-name"><b style="color:${f.iconColor}">${_mEsc(f.symbol)}</b> ${_mEsc(ja ? f.nameJa : f.name)}`
+                + (f.count ? ` <span style="color:#777;font-size:13px">${f.count}</span>` : '') + `</span>`
+                + `<span class="m-price">${f.price}</span></div>`;
+        });
+        const cur = shopStock[shopSelection];
+        const cf = cur && cur.type !== 'gap' ? _mShopItemInfo(cur) : null;
+        const title = shopMode === 'BUY' ? (ja ? '買う' : 'BUY LIST') : (ja ? '売る' : 'SELL LIST');
+        let html = `<div class="${cls}"><div class="m-head"><span class="m-title">━ ${title} ━</span><span>${player.gold}G</span></div></div>`
+            + `<div class="${cls} m-list"><div class="m-scroll">${rows}</div></div>`
+            + `<div class="${cls} m-desc">${cf ? _mEsc(ja ? cf.descJa : cf.desc) : ''}</div>`
+            + `<div class="m-guide">${guide}</div>`;
+        if (gameState === 'CONFIRM_BUY' && cf) {
+            const q = cf.isSell ? (ja ? `${cf.nameJa}を売る？` : `Sell ${cf.name}?`) : (ja ? `${cf.nameJa}を買う？` : `Buy ${cf.name}?`);
+            const yn = (i, t) => `<span style="color:${shopConfirmSelection === i ? '#ededed' : '#555'}">${shopConfirmSelection === i ? '▶' : '　'}${t}</span>`;
+            html += `<div id="m-shop-confirm" class="${cls}"><div style="font-weight:bold;font-size:17px">${_mEsc(q)}</div>`
+                + `<div style="color:#ccc;margin-top:4px">${cf.price}</div>`
+                + `<div class="m-choice">${yn(0, ja ? 'はい' : 'YES')}${yn(1, ja ? 'いいえ' : 'NO')}</div></div>`;
+        }
+        return html;
+    }
+
+    let _mShopLastHTML = '', _mShopLastSel = -1;
+    let _mLogLastRef = null, _mLogLastHTML = '';
+
+    // _zoomLoop から毎フレーム呼ぶ
+    function _updateMobilePlates(storyVisible) {
+        const zoomed = _tcZoomMode && _zoomModeActive;
+        // ズーム中はストーリー文をHTML枠に任せ、キャンバス側は描かない
+        window._mHideCanvasStory = zoomed;
+        const hudR = _mHud.getBoundingClientRect();
+        const tcR  = document.getElementById('tc-wrap')?.getBoundingClientRect();
+        const actR = document.getElementById('tc-actions')?.getBoundingClientRect(); // MENUボタン（tc-wrapより上に出ている）
+        const areaTop = (hudR.height > 0 ? hudR.bottom : 0) + 6;
+        let ctrlTop = (tcR && tcR.top > window.innerHeight * 0.3) ? tcR.top : window.innerHeight;
+        if (actR && actR.height > 0 && actR.top > window.innerHeight * 0.3) ctrlTop = Math.min(ctrlTop, actR.top);
+        const areaBottom = ctrlTop - 6;
+
+        // 商人の買い物
+        const inShop = zoomed && (gameState === 'SHOP' || gameState === 'CONFIRM_BUY');
+        if (inShop) {
+            _mShopPlate.style.top = areaTop + 'px';
+            _mShopPlate.style.height = Math.max(120, areaBottom - areaTop) + 'px';
+            const html = _mShopHTML();
+            if (html !== _mShopLastHTML) {
+                _mShopPlate.innerHTML = html;
+                _mShopLastHTML = html;
+                _mShopLastSel = -1;
+            }
+            if (_mShopLastSel !== shopSelection) {
+                _mShopLastSel = shopSelection;
+                const row = _mShopPlate.querySelector(`.m-row[data-i="${shopSelection}"]`);
+                const list = _mShopPlate.querySelector('.m-scroll');
+                if (row && list) {
+                    // 選択行がリスト内に見えるようにスクロール
+                    if (row.offsetTop < list.scrollTop + 8) list.scrollTop = Math.max(0, row.offsetTop - 8);
+                    else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight - 8)
+                        list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight + 8;
+                }
+            }
+            _mShopPlate.style.display = 'flex';
+        } else if (_mShopPlate.style.display !== 'none') {
+            _mShopPlate.style.display = 'none';
+            _mShopLastHTML = '';
+        }
+        window._mHideCanvasShop = inShop;
+
+        // ログ: ズーム中は画面左下に小さく最新3行（新しい行が下から流れてくる）。キャンバス下部のログは描かない
+        const showLog = zoomed && !['TITLE', 'LANG_SELECT', 'OPENING'].includes(gameState);
+        window._mHideCanvasLog = zoomed;
+        if (showLog) {
+            const lastLog = _logLines.length ? _logLines[_logLines.length - 1] : null;
+            const isNew = lastLog !== _mLogLastRef;
+            _mLogLastRef = lastLog;
+            const rows = _logLines.slice(-3);
+            const html = rows.map((l, i) => {
+                const cls = i === rows.length - 1 ? (isNew ? 'm-new' : '') : (i === rows.length - 2 ? 'm-old1' : 'm-old2');
+                const body = l.segments
+                    ? l.segments.map(sg => `<span style="color:${_mEsc(sg.color || '#bbb')}">${_mEsc(sg.text)}</span>`).join('')
+                    : _mEsc(l.text);
+                return `<div class="${cls}">${body || '&nbsp;'}</div>`;
+            }).join('');
+            if (html !== _mLogLastHTML || isNew) { _mLogMini.innerHTML = html; _mLogLastHTML = html; }
+            _mLogMini.style.display = 'block';
+        } else if (_mLogMini.style.display !== 'none') {
+            _mLogMini.style.display = 'none';
+        }
+    }
+
     // ── ズームモード ──
     let _tcZoomMode = false;      // ズームON/OFF
     let _zoomFreePan = false;     // 自由パンモード
     let _manualTx = 0, _manualTy = 0; // 自由パン時のカメラ位置
     let _lastTx = 0, _lastTy = 0;    // _applyZoom が最後に計算した実際のカメラ位置
     let _zoomModeActive = false;  // 実際に全画面になっているか
-    const _ZOOM_SCALE = 1.5;
+    const _ZOOM_SCALE = 1.4;
 
     function _applyZoom() {
         const shouldZoom = _tcZoomMode && ['PLAYING','MENU','STATUS','INVENTORY','SHOP','CONFIRM_BUY','RINGS','CONFIRM_ESCAPE','TITLE','LANG_SELECT','OPENING'].includes(gameState);
@@ -46989,6 +48968,10 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
                 // canvas-viewport を body直下に移動（game-wrapperのtransformの影響を受けないように）
                 document.body.insertBefore(_zoomVP, _mHud);
                 _zoomVP.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;overflow:hidden;background:#000;`;
+                // ズーム中はキャンバスをネイティブサイズ(800×652)に戻す
+                // （fit()によるCSS縮小が translate 座標系をずらすのを防ぐ）
+                _zoomCanvas.style.width  = CANVAS_W + 'px';
+                _zoomCanvas.style.height = CANVAS_H_FULL + 'px';
                 // TITLE/OPENING はゲームプレイHUDを非表示（HPや階層を表示しない）
                 const _isGameplayState = !['TITLE','LANG_SELECT','OPENING'].includes(gameState);
                 _mHud.style.display = _isGameplayState ? 'flex' : 'none';
@@ -46996,7 +48979,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             } else {
                 // canvas-viewport を元の位置（log-rowの前）に戻す
                 _zoomVPOrigParent.insertBefore(_zoomVP, _zoomVPOrigSibling);
-                _zoomVP.style.cssText = `width:${CANVAS_W}px;height:${CANVAS_H}px;overflow:hidden;border:1px solid var(--border-color);background:#000;display:block;`;
+                _zoomVP.style.cssText = `width:${CANVAS_W}px;height:${CANVAS_H_FULL}px;overflow:hidden;border:1px solid var(--border-color);background:#000;display:block;`;
                 _mHud.style.display = 'none';
                 _zoomMinimap.style.display = 'none';
                 _zoomCanvas.style.transform = '';
@@ -47010,18 +48993,18 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
 
         // HUD更新（TITLE/OPENINGはHUD非表示のためスキップ）
         if (!['TITLE','LANG_SELECT','OPENING'].includes(gameState)) {
-            const _hpEl = document.getElementById('hp');
-            const _flEl = document.getElementById('floor');
-            if (_hpEl) document.getElementById('mhud-hp').textContent = 'HP ' + _hpEl.textContent;
-            if (_flEl) document.getElementById('mhud-floor').textContent = 'F' + _flEl.textContent;
+            const _mhHp = document.getElementById('mhud-hp');
+            const _mhFl = document.getElementById('mhud-floor');
+            if (_mhHp) _mhHp.textContent = 'HP ' + _hudHP;
+            if (_mhFl) _mhFl.textContent = 'F' + _hudFloor;
             const _stBar = document.getElementById('mhud-st-bar');
             if (_stBar) {
-                if (player.isInfiniteStamina) {
+                if (_hudStaminaInfinite) {
                     _stBar.style.width = '100%';
                     _stBar.style.background = '#fbbf24';
                 } else {
-                    _stBar.style.width = player.stamina + '%';
-                    _stBar.style.background = player.stamina < 30 ? '#f87171' : '#38bdf8';
+                    _stBar.style.width = _hudStamina + '%';
+                    _stBar.style.background = _hudStamina < 30 ? '#f87171' : '#38bdf8';
                 }
             }
         }
@@ -47036,8 +49019,9 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             ty = _manualTy;
         } else if (typeof transition !== 'undefined' && transition.active && transition.mode === 'FALLING') {
             // 落下カットシーン中: キャンバス中央を構図中心に（フロア文字が見えるように）
+            // フロアテキストはキャンバス絶対座標 y=CANVAS_H_FULL/2 に描画される
             tx = CANVAS_W / 2 - vpW / (_ZOOM_SCALE * 2);
-            ty = CANVAS_H / 2 - vpH / (_ZOOM_SCALE * 2);
+            ty = CANVAS_H_FULL / 2 - vpH / (_ZOOM_SCALE * 2);
         } else if (gameState !== 'PLAYING') {
             // メニュー中心モード：最前面ウィンドウのキャンバス座標を中心に
             let focusX, focusY;
@@ -47069,52 +49053,21 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             }
             tx = Math.max(0, Math.min(focusX - vpW / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_W - vpW / _ZOOM_SCALE)));
             ty = Math.max(0, Math.min(focusY - vpH / (_ZOOM_SCALE * 2), Math.max(0, CANVAS_H - vpH / _ZOOM_SCALE)));
-        } else if (storyMessage && storyMessage.alpha > 0.05) {
-            // ダイアログ表示中: プレイヤー追従を基本にしつつ、コントローラー/HUDに隠れないよう ty をずらす
-            const _smPx = (player.x + 0.5) * TILE_SIZE;
-            const _smPy = (player.y + 0.5) * TILE_SIZE;
-            const _hudRectSM = document.getElementById('mobile-hud')?.getBoundingClientRect();
-            const _tcRectSM  = document.getElementById('tc-wrap')?.getBoundingClientRect();
-            const _hudBotSM  = _hudRectSM ? _hudRectSM.bottom : 0;
-            const _tcTopSM   = _tcRectSM  ? _tcRectSM.top    : vpH;
-            const _camCYSM   = (_tcTopSM > vpH * 0.3) ? (_hudBotSM + _tcTopSM) / 2 : vpH / 2;
-            // プレイヤー追従の通常 ty（＠を画面中央に置く位置）を起点にする
-            const _tyBase = _smPy - _camCYSM / _ZOOM_SCALE;
-            tx = Math.max(0, Math.min(_smPx - vpW / (_ZOOM_SCALE * 2), CANVAS_W - vpW / _ZOOM_SCALE));
-            if (storyMessage.useMiddlePos || storyMessage.splitBlocks) {
-                // 中央/2段ダイアログ: プレイヤー追従そのまま
-                ty = _tyBase;
-            } else {
-                const _smDlgH = 170;
-                const _smAtTop = storyMessage.useTopPos || (_smPy > CANVAS_H - _smDlgH - 30);
-                // 縦持ち（コントローラーが下部）のみずらす。横持ち（tc全画面）は追従維持
-                if (_tcTopSM > vpH * 0.3) {
-                    if (_smAtTop) {
-                        // 上端ダイアログ: HUD直下にダイアログ上端が来るよう ty を小さくする（カメラを上へ）
-                        const _tyMaxForDlg = 15 - (_hudBotSM + 8) / _ZOOM_SCALE;
-                        ty = Math.min(_tyBase, _tyMaxForDlg);
-                    } else {
-                        // 下端ダイアログ: コントローラー直上にダイアログ下端が来るよう ty を大きくする（カメラを下へ）
-                        const _tyMinForDlg = (CANVAS_H - 15) - (_tcTopSM - 8) / _ZOOM_SCALE;
-                        ty = Math.max(_tyBase, _tyMinForDlg);
-                    }
-                } else {
-                    ty = _tyBase;
-                }
-            }
-            // Y方向は標準クランプなし（ダイアログ優先、黒帯許容）
         } else {
             // プレイヤー追従モード：HUD下端とコントローラー上端の中間を構図中心にする
             const px = (player.x + 0.5) * TILE_SIZE;
-            const py = (player.y + 0.5) * TILE_SIZE;
+            // キャンバス絶対Y座標（HUD_TOP_H分を加算してズーム中心を正確に＠に合わせる）
+            const py = (player.y + 0.5) * TILE_SIZE + HUD_TOP_H;
             const _hudRect  = document.getElementById('mobile-hud')?.getBoundingClientRect();
             const _tcRect   = document.getElementById('tc-wrap')?.getBoundingClientRect();
             const _hudBottom = _hudRect ? _hudRect.bottom : 0;
             const _tcTop     = _tcRect  ? _tcRect.top    : vpH;
             // 横持ちはtc-wrapが全画面（tcTop≈0）のためvpH/2を使用
             const _camCY = (_tcTop > vpH * 0.3) ? (_hudBottom + _tcTop) / 2 : vpH / 2;
-            tx = px - vpW / (_ZOOM_SCALE * 2);
-            ty = py - _camCY / _ZOOM_SCALE;
+            const _maxTx = Math.max(0, CANVAS_W      - vpW / _ZOOM_SCALE);
+            const _maxTy = Math.max(0, CANVAS_H_FULL - vpH / _ZOOM_SCALE);
+            tx = Math.max(0, Math.min(px - vpW / (_ZOOM_SCALE * 2), _maxTx));
+            ty = Math.max(0, Math.min(py - _camCY / _ZOOM_SCALE, _maxTy));
         }
         _lastTx = tx;
         _lastTy = ty;
@@ -47208,6 +49161,48 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
                 }
             }
         }
+        // ── ズームダイアログオーバーレイ更新 ──
+        const _zdlg = document.getElementById('zoom-dialog');
+        if (_zdlg) {
+            if (_tcZoomMode && _zoomModeActive && typeof storyMessage !== 'undefined' && storyMessage && storyMessage.alpha > 0.05) {
+                // プレイヤーの画面Y座標を計算（_applyZoomと同じ _camCY ロジック）
+                const _dHud = document.getElementById('mobile-hud')?.getBoundingClientRect();
+                const _dTc  = document.getElementById('tc-wrap')?.getBoundingClientRect();
+                const _dHudBot = _dHud ? _dHud.bottom : 0;
+                const _dTcTop  = _dTc  ? _dTc.top    : window.innerHeight;
+                const _dCamCY  = (_dTcTop > window.innerHeight * 0.3)
+                    ? (_dHudBot + _dTcTop) / 2
+                    : window.innerHeight / 2;
+                // 2タイル分下 = プレイヤー中心Y + (0.5 + 2) × TILE_SIZE × zoom
+                const _dlgTop = _dCamCY + 2.5 * TILE_SIZE * _ZOOM_SCALE;
+
+                const _lines = storyMessage.lines || [];
+                const _parts = [];
+                _lines.forEach(line => {
+                    if (typeof line === 'object') {
+                        if (_gameLang !== 'ja' && line.en) line.en.split('\n').forEach(l => _parts.push(l));
+                        if (_gameLang !== 'en' && line.jp) line.jp.split('\n').forEach(l => _parts.push(l));
+                    } else if (line) {
+                        _parts.push(line);
+                    }
+                });
+                _zdlg.innerHTML = _parts.map(l => `<div>${l || '&nbsp;'}</div>`).join('');
+                _zdlg.style.top = Math.round(_dlgTop) + 'px';
+                _zdlg.style.opacity = storyMessage.alpha;
+                _zdlg.style.display = 'block';
+            } else {
+                _zdlg.style.display = 'none';
+            }
+        }
+        _updateMobilePlates(!!_zdlg && _zdlg.style.display === 'block');
+        const _cam = document.getElementById('tc-camera');
+        if (_cam && _cam._zoomShown !== _tcZoomMode) {
+            // 虫めがね: 通常表示のとき「＋」（押すと拡大）、ズーム中は「−」（押すと元に戻る）
+            _cam._zoomShown = _tcZoomMode;
+            _cam.classList.toggle('tc-on', _tcZoomMode);
+            _cam.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">'
+                + '<circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5 L17 17 M6 8.5 H11' + (_tcZoomMode ? '' : ' M8.5 6 V11') + '"/></svg>';
+        }
         requestAnimationFrame(_zoomLoop);
     })();
 
@@ -47237,15 +49232,8 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             if (totalDx * totalDx + totalDy * totalDy > 100) {
                 e.preventDefault();
                 _zoomIsPanning = true;
-                if (window.innerHeight > window.innerWidth) {
-                    // 縦持ち
-                    _portraitOffsetY = Math.max(-30, Math.min(window.innerHeight * 0.45,
-                        _portraitOffsetY + (cy - _zoomLastY)));
-                } else {
-                    // 横持ち
-                    _landscapeOffsetY = Math.max(-150, Math.min(150,
-                        _landscapeOffsetY + (cy - _zoomLastY)));
-                }
+                _portraitOffsetY = Math.max(-30, Math.min(window.innerHeight * 0.45,
+                    _portraitOffsetY + (cy - _zoomLastY)));
                 if (window._applyGameScale) window._applyGameScale();
             }
             _zoomLastX = cx; _zoomLastY = cy;
@@ -47275,11 +49263,7 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             _zoomIsPanning = false;
             // 画面位置をlocalStorageに保存
             if (!_tcZoomMode) {
-                if (window.innerHeight > window.innerWidth) {
-                    localStorage.setItem('portrait_offset_y', String(Math.round(_portraitOffsetY)));
-                } else {
-                    localStorage.setItem('landscape_offset_y', String(Math.round(_landscapeOffsetY)));
-                }
+                safeStorageSet('portrait_offset_y', String(Math.round(_portraitOffsetY)));
             }
             return;
         }
@@ -47293,29 +49277,33 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
         _zoomIsPanning = false;
     }, { passive: true });
 
+    // ズーム切替ボタン（虫めがね）: ズーム ⇔ 通常表示 の切り替え
+    const _tcCamera = document.getElementById('tc-camera');
+    _tcCamera.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    _tcCamera.addEventListener('touchend', e => {
+        e.preventDefault(); e.stopPropagation();
+        _tcZoomMode = !_tcZoomMode;
+        if (!_tcZoomMode) _zoomFreePan = false;
+        _zoomIsPanning = false;
+        SOUNDS.SELECT();
+    }, { passive: false });
+
     // ストーリーメッセージ待機中：画面タッチでページ送り（非ズームモード含む）
     document.addEventListener('touchend', () => {
         if (isTutorialInputActive) isTutorialInputActive = false;
     });
 
-    // 縦持ち時にMENUをGuardボタン右上に配置
+    // MENUをGuardボタン右上に配置（スマホは横持ちでも縦持ちレイアウト）
     function _applyPortraitMenu() {
         const _act = document.getElementById('tc-actions');
         const _blk = document.getElementById('tc-block-btn');
         if (!_act || !_blk) return;
-        if (window.innerHeight > window.innerWidth) {
-            const r = _blk.getBoundingClientRect();
-            _act.style.position = 'fixed';
-            _act.style.right = '12px';
-            // MENUをGuardボタン上端より60px+12px上に配置
-            _act.style.top  = Math.max(4, r.top - 72) + 'px';
-            _act.style.transform = '';
-        } else {
-            _act.style.position = '';
-            _act.style.right = '';
-            _act.style.top = '';
-            _act.style.transform = '';
-        }
+        const r = _blk.getBoundingClientRect();
+        _act.style.position = 'fixed';
+        _act.style.right = '12px';
+        // MENUをGuardボタン上端より60px+12px上に配置
+        _act.style.top  = Math.max(4, r.top - 72) + 'px';
+        _act.style.transform = '';
     }
     requestAnimationFrame(_applyPortraitMenu);
     window.addEventListener('resize', _applyPortraitMenu);
@@ -47338,7 +49326,10 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
         _tcBlockActive = false;
         isSpacePressed = false;
         spaceUsedForBlock = false;
+        _wallRingLockDx = 0; _wallRingLockDy = 0; _wallRingMode = 'place';
+        _wallRingPlacePending = false;
         _tcBlockBtn.classList.remove('tc-active');
+        _hideBlockGuide();
         const icon = _tcBlockIcon();
         // フリック解除後は向きを復元（rAFループが次フレームで上書きするが、過渡期のちらつき防止）
         if (icon) icon.style.transform = (typeof player !== 'undefined' && player.facing === 'RIGHT') ? 'scaleX(-1)' : '';
@@ -47411,6 +49402,80 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     // BLOCK ボタン（ホールド型）
     // 押している間: isSpacePressed = true（防御+ブロック設置モード、ボタン点灯）
     // 離した時: ブロック未設置なら handleAction(0,0) で防御発動、点灯解除
+    // ── ブロック設置ガイド: ＠を押している間、ボタンのまわりに「矢印＋□」を出す ──
+    // ＠ボタンの操作説明（押してスライド→離すとその方向にブロック）。スライド中の方向を明るく強調
+    // 矢印と□は文字ではなくSVGで描く（文字だと字形ごとに余白が違い、中心がずれて見えるため）
+    // 第3要素 = 右向き矢印を基準にした回転角
+    const _BG_DIRS = { up: [0, -1, -90], down: [0, 1, 90], left: [-1, 0, 180], right: [1, 0, 0] };
+    const _BG_ARROW_SVG = deg => `<svg width="16" height="16" viewBox="-8 -8 16 16" style="transform:rotate(${deg}deg)">`
+        + `<path d="M-6 0 H5 M1 -4 L5 0 L1 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const _BG_BLOCK_SVG = `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="1.5" y="1.5" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
+    const _tcBlockGuide = document.createElement('div');
+    _tcBlockGuide.id = 'tc-block-guide';
+    const _bgItems = {};
+    for (const k in _BG_DIRS) {
+        const a = document.createElement('span'); a.className = 'tc-bg-item'; a.innerHTML = _BG_ARROW_SVG(_BG_DIRS[k][2]);
+        const b = document.createElement('span'); b.className = 'tc-bg-item tc-bg-block'; b.innerHTML = _BG_BLOCK_SVG;
+        _tcBlockGuide.appendChild(a); _tcBlockGuide.appendChild(b);
+        _bgItems[k] = [a, b];
+    }
+    document.body.appendChild(_tcBlockGuide);
+
+    function _showBlockGuide() {
+        // 見た目の丸（#tc-block-visual, 88px）を基準にする（ボタン本体120pxはタッチ範囲）
+        const r = (document.getElementById('tc-block-visual') || _tcBlockBtn).getBoundingClientRect();
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const rad = r.width / 2;
+        const M = 12; // 画面端からの余白（狭い画面でも□が画面外に出ないように）
+        const _dpadRc = document.getElementById('tc-right')?.getBoundingClientRect();
+        const _dpadR = _dpadRc && _dpadRc.width > 0 ? _dpadRc.right : 0;
+        for (const k in _BG_DIRS) {
+            const [dx, dy] = _BG_DIRS[k];
+            let blockD = rad + 28;                // □：丸の外側
+            if (dx > 0) blockD = Math.min(blockD, window.innerWidth  - M - cx);
+            if (dx < 0) blockD = Math.min(blockD, cx - M);
+            if (dx < 0 && _dpadR) blockD = Math.min(blockD, cx - (_dpadR + 8 + 13)); // 狭い画面: 左の□を十字キーから8px離す
+            if (dy > 0) blockD = Math.min(blockD, window.innerHeight - M - cy);
+            if (dy < 0) blockD = Math.min(blockD, cy - M);
+            const arrowD = Math.min(rad + 8, blockD - 22); // 矢印：丸と□の間（矢印の下地9px＋□の下地13px 分あけて重ならないように）
+            const [a, b] = _bgItems[k];
+            a.style.left = (cx + dx * arrowD) + 'px'; a.style.top = (cy + dy * arrowD) + 'px';
+            b.style.left = (cx + dx * blockD) + 'px'; b.style.top = (cy + dy * blockD) + 'px';
+            a.classList.remove('tc-bg-on'); b.classList.remove('tc-bg-on');
+        }
+        _tcBlockGuide.style.display = 'block';
+    }
+    function _updateBlockGuide(fdx, fdy) {
+        if (_tcBlockGuide.style.display === 'none') return;
+        let on = null;
+        if (Math.sqrt(fdx * fdx + fdy * fdy) > 30) {
+            on = Math.abs(fdx) > Math.abs(fdy) ? (fdx > 0 ? 'right' : 'left') : (fdy > 0 ? 'down' : 'up');
+        }
+        for (const k in _bgItems) _bgItems[k].forEach(el => el.classList.toggle('tc-bg-on', k === on));
+    }
+    function _hideBlockGuide() { _tcBlockGuide.style.display = 'none'; }
+
+    // ── 十字キーを右へ寄せる（右手で操作しやすいように）──
+    // ＠ボタン左側のブロック設置ガイド（□）に重ならないぎりぎりまで。画面幅ごとに測って決める
+    const _DPAD_BASE_MARGIN = -46; // CSS の #tc-dpad margin-left と同じ値
+    function _layoutDpadNearCenter() {
+        const dpad = document.getElementById('tc-dpad');
+        const rightCell = document.getElementById('tc-right');
+        const vis = document.getElementById('tc-block-visual');
+        if (!dpad || !rightCell || !vis) return;
+        dpad.style.marginLeft = _DPAD_BASE_MARGIN + 'px';
+        const v = vis.getBoundingClientRect();
+        if (v.width === 0) return;
+        const cx = v.left + v.width / 2, rad = v.width / 2;
+        // _showBlockGuide() の左の□: 中心 cx-(rad+28)、幅26px → 左端 cx-rad-41。さらに8pxあける
+        const limit = cx - rad - 41 - 8;
+        const shift = Math.max(0, Math.floor(limit - rightCell.getBoundingClientRect().right));
+        dpad.style.marginLeft = (_DPAD_BASE_MARGIN + shift) + 'px';
+    }
+    requestAnimationFrame(_layoutDpadNearCenter);
+    window.addEventListener('resize', _layoutDpadNearCenter);
+    window.addEventListener('orientationchange', () => setTimeout(_layoutDpadNearCenter, 200));
+
     _tcBlockBtn.addEventListener('touchstart', e => {
         e.preventDefault();
         _tcBlockActive = true;
@@ -47420,6 +49485,8 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
             isSpacePressed = true;
             spaceUsedForBlock = false;
             _tcBlockBtn.classList.add('tc-active');
+            // ブロック設置ガイドは魔法の杖（2階）を手に入れてから。杖がないうちは＠は防御だけなので出さない
+            if (player.hasWand) _showBlockGuide();
         }
     }, { passive: false });
 
@@ -47438,7 +49505,10 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
         }
         const icon = _tcBlockIcon();
         if (icon) icon.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
+        _updateBlockGuide(fdx, fdy);
     }, { passive: false });
+
+    _tcBlockBtn.addEventListener('touchcancel', e => { e.preventDefault(); _tcResetBlock(); }, { passive: false });
 
     _tcBlockBtn.addEventListener('touchend', e => {
         e.preventDefault();
@@ -47466,10 +49536,79 @@ let _landscapeOffsetY = parseInt(localStorage.getItem('landscape_offset_y') || '
     }, { passive: false });
 
     // MENU ボタン
+    // MENUボタン長押しでテストモード解放 / 階数入力
+    let _menuLongTimer = null;
+    let _menuLongFired = false;
+
+    function _showMobileFloorInput(isDeep) {
+        const _curF = isDeep ? deepTestFloor : testFloor;
+        const _min  = isDeep ? 101 : 1;
+        const _max  = isDeep ? 999 : 100;
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:3000;display:flex;align-items:center;justify-content:center;';
+        const box = document.createElement('div');
+        box.style.cssText = 'background:#111;border:2px solid #fff;padding:20px 24px;text-align:center;color:#fff;font-family:"Courier New",monospace;min-width:220px;';
+        const lbl = document.createElement('div');
+        lbl.textContent = isDeep ? 'DEEP TEST FLOOR (101-999)' : 'TEST FLOOR (1-100)';
+        lbl.style.marginBottom = '12px';
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.min = _min; inp.max = _max; inp.value = _curF;
+        inp.style.cssText = 'font-size:26px;width:110px;text-align:center;background:#000;color:#fff;border:1px solid #666;padding:4px;';
+        const btn = document.createElement('button');
+        btn.textContent = 'START';
+        btn.style.cssText = 'display:block;margin:14px auto 0;padding:10px 24px;font-size:18px;font-family:"Courier New",monospace;background:#222;color:#fff;border:1px solid #aaa;cursor:pointer;';
+        btn.addEventListener('click', () => {
+            const val = parseInt(inp.value, 10);
+            if (!isNaN(val)) {
+                if (isDeep) { deepTestFloor = Math.max(101, Math.min(999, val)); startGame(deepTestFloor, true); }
+                else        { testFloor     = Math.max(1,   Math.min(100,  val)); startGame(testFloor,     true); }
+            }
+            document.body.removeChild(overlay);
+        });
+        box.appendChild(lbl); box.appendChild(inp); box.appendChild(btn);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        setTimeout(() => inp.focus(), 80);
+    }
+
     document.getElementById('tc-menu').addEventListener('touchstart', e => {
         e.preventDefault();
+        _menuLongFired = false;
+        if (gameState === 'OPENING') {
+            _openingSkipRequested = true;
+            isTutorialInputActive = false;
+            return;
+        }
+        // 長押し判定 (800ms)
+        _menuLongTimer = setTimeout(() => {
+            _menuLongFired = true;
+            if (gameState === 'TITLE') {
+                if (!testModeVisible && !_ITCH_RELEASE) {
+                    testModeVisible = true;
+                    SOUNDS.SELECT();
+                } else if (testModeVisible) {
+                    const _duLT = safeStorageGet('deep_unlocked', null) === '1';
+                    const _tpiLT = _duLT ? 3 : 2;
+                    const _dtiLT = _duLT ? 4 : 3;
+                    if (titleSelection === _tpiLT) _showMobileFloorInput(false);
+                    else if (titleSelection === _dtiLT) _showMobileFloorInput(true);
+                }
+            }
+        }, 800);
+    }, { passive: false });
+
+    document.getElementById('tc-menu').addEventListener('touchend', e => {
+        clearTimeout(_menuLongTimer);
+        if (_menuLongFired) return;
+        if (gameState === 'OPENING') return;
         _tcResetBlock();
         _tcSimKey('x');
+    }, { passive: false });
+
+    document.getElementById('tc-menu').addEventListener('touchcancel', () => {
+        clearTimeout(_menuLongTimer);
+        _menuLongFired = false;
     }, { passive: false });
 
 

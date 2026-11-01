@@ -3,39 +3,76 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     <title>Minimal Rogue</title>
-    <link rel="stylesheet" href="style.css">
+    <style>
+:root { --bg-color: #0a0a0a; --border-color: #333333; }
+body { margin: 0; padding: 0; background-color: var(--bg-color); overflow: hidden; user-select: none; -webkit-user-select: none; cursor: default; }
+.game-wrapper { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+#game-canvas { border: 1px solid var(--border-color); background-color: #000; cursor: default; display: block; }
+    </style>
 </head>
 
 <body>
     <div class="game-wrapper">
-        <div class="stats-bar">
-            <div class="stats-group">
-                <span>LV: <span id="lv">1</span></span>
-                <span>HP: <span id="hp">20/20</span></span>
-                <div class="stamina-container">STAMINA: <span class="stamina-gauge-bg"><span id="stamina-bar"></span></span>
-                </div>
-            </div>
-            <div class="stats-center">
-                <div id="minimap"></div>
-            </div>
-            <div class="stats-group stats-group-right">
-                <span><span id="floor-prefix">FLOOR </span><span id="floor">1/100</span></span>
-                <span class="equip-row"><span id="key-status"></span> <span id="sword-status"></span> <span id="armor-status"></span> <span id="fairy-status"></span> <span id="gold-status" style="color: #fff;"></span></span>
-                <span id="ring-status" style="color: #aaa; font-size: 11px;"></span>
-            </div>
-        </div>
         <canvas id="game-canvas"></canvas>
-        <div class="log-row">
-            <div id="log" class="game-log">
-                <div>Welcome to the Depths.</div>
-            </div>
-            <div id="room-type-label"></div>
-            <div class="best-floor-panel">BEST<br><span id="best-floor">B1F</span></div>
-        </div>
     </div>
-    <script src="script.js?v=550"></script>
+    <script src="script.js?v=726"></script>
+    <script>
+(function(){
+    // タッチデバイス（スマホ）のみカスタムfit()を適用。
+    // PCはscript.js内のinitScale()がそのまま機能する。
+    var isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (!isMobile) return;
+
+    // initScale() の transform と resize リスナーを無効化（モバイルのみ）
+    if (typeof window._applyGameScale === 'function') {
+        window.removeEventListener('resize', window._applyGameScale);
+    }
+    var gw = document.querySelector('.game-wrapper');
+    if (gw) { gw.style.transform = 'none'; gw.style.transformOrigin = ''; }
+    document.body.style.paddingTop = '';
+    document.body.style.alignItems = '';
+
+    var c = document.getElementById('game-canvas');
+
+    function fit(){
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+
+        // Dパッド分の高さを計測してその上にキャンバスを収める
+        // （スマホは縦持ちのみ対応：横にしても縦持ちレイアウトのまま）
+        var dpadH = 220;
+        var tc = document.getElementById('tc-wrap');
+        if (tc) {
+            var r = tc.getBoundingClientRect();
+            if (r.height > 0) dpadH = vh - r.top;
+        }
+
+        var availH = dpadH > 0 ? (vh - dpadH) : vh;
+        var s = Math.min(1, vw / CANVAS_W, availH / CANVAS_H_FULL);
+        var cw = Math.floor(CANVAS_W * s);
+        var ch = Math.floor(CANVAS_H_FULL * s);
+        c.style.width  = cw + 'px';
+        c.style.height = ch + 'px';
+
+        // Dパッドの上端とスクリーン上端の中間にキャンバスを配置
+        if (gw) gw.style.paddingBottom = dpadH > 0 ? dpadH + 'px' : '';
+
+        // _initTouchControls が追加する canvas-viewport にも同じサイズを適用
+        var vp = document.getElementById('canvas-viewport');
+        if (vp) { vp.style.width = cw + 'px'; vp.style.height = ch + 'px'; }
+    }
+
+    fit();
+    requestAnimationFrame(fit); // 初回レイアウト後に再測定
+
+    window.addEventListener('resize', fit);
+    window.addEventListener('orientationchange', function(){ setTimeout(fit, 300); });
+})();
+    </script>
 </body>
 
 </html>
